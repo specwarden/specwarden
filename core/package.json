@@ -1,0 +1,40 @@
+{
+  "name": "specwarden",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "description": "SpecWarden — a repository declares its rules; the warden proves which hold. Product zone (P): no knowledge of any host repository, its domain or its stack.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "specwarden": "./bin/warden.mjs",
+    "spw": "./bin/warden.mjs"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "lint": "eslint src --max-warnings=0",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:mutation": "stryker run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepare": "pnpm run build"
+  },
+  "devDependencies": {
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
+    "@types/node": "^22.10.7",
+    "esbuild": "^0.27.4",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9"
+  }
+}

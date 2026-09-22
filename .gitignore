@@ -1,0 +1,17 @@
+node_modules/
+
+# Build output. Every package's `build` reproduces it, and the CLI refuses to run a
+# dist whose fingerprint does not match its sources — so a committed one is a copy that
+# can only ever be stale.
+dist/
+
+# Stryker mutation-testing artefacts — a sandbox of copied source and the run's report.
+# Regenerated on every `test:mutation`.
+.stryker-tmp/
+reports/
+
+*.log
+.DS_Store
+
+# JetBrains project files — a workstation's state, not the repository's.
+.idea/

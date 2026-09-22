@@ -1,0 +1,285 @@
+import {
+  CHECK_CONTRACT_VERSION,
+  DEFAULT_SHELL,
+  shellArgv,
+  shellStartFailure,
+  type ICheckRule,
+  type IFinding,
+  type IProcessResult,
+  type IShell,
+  type ICheck,
+  type ICheckContext,
+  type IVerdict,
+  type TCapability,
+  type TTier,
+  type TZone,
+} from '../../../domain';
+import { type TWhen, resolveWhen } from '../../../primitives/_shared';
+
+/**
+ * A pattern the output must NOT contain, with the reason it is fatal. The reason is
+ * printed, because "output matched /no test files/" tells a reader what happened and
+ * not why a green exit code was a lie.
+ */
+export interface IOutputRefusal {
+  readonly pattern: RegExp;
+  readonly why?: string;
+}
+
+/** What a consumer states to wrap a shell command as a check. Everything but id,
+ * title, tier and cmd is optional. */
+export interface ICommandCheckSpec {
+  readonly id: string;
+  readonly title: string;
+  readonly tier: TTier;
+  /**
+   * How to invoke a shell. Defaults to `bash -c`, which is not universal: a checkout
+   * on a platform without it has no bash, some containers ship only `sh`, and a house
+   * may run everything through another shell entirely. None of those should require
+   * forking the engine, so the shell is a setting with a common default.
+   */
+  readonly shell?: IShell;
+  /** The shell command line. */
+  readonly cmd: string;
+  /** Relevance: a predicate over the changed set, or the declarative form. Absent
+   * means always relevant. */
+  readonly when?: TWhen;
+  readonly advisory?: boolean;
+  /** Run this command alone under `--jobs` — see `exclusive` on ICheck. */
+  readonly exclusive?: boolean;
+  readonly hint?: string;
+  /** The rule this gate enforces, declared beside it rather than in a register that
+   * has to be kept in step by hand. */
+  readonly rule?: ICheckRule;
+  /** Extra environment for the command (e.g. a flag that makes missing infrastructure
+   * fatal instead of skippable). */
+  readonly env?: Readonly<Record<string, string>>;
+  /** True for a suite that accepts `--shard=i/N`; the run's shard is appended. */
+  readonly shardable?: boolean;
+  /**
+   * Kill the command after this many seconds. EXECUTED, not merely recorded: this
+   * field sat in a consumer's registry on seven gates for a month while the engine
+   * ignored it, and a declaration nothing reads is a promise nobody keeps.
+   */
+  readonly timeoutSec?: number;
+  /**
+   * External services the command needs — a database, a cache. The engine does not
+   * start them; it carries the declaration so a CI-coverage check can place the gate
+   * in a job that offers what it needs, and so the report can say why one was skipped.
+   */
+  readonly needs?: readonly string[];
+  /** The zone the check is declared in — a wrapped repository gate is `consumer`. */
+  readonly zone?: TZone;
+
+  /**
+   * Files the command is pointed AT, which must exist before it is worth running.
+   *
+   * THE DEFECT THIS CLOSES, verbatim from the record: a test command was given a list
+   * of exact spec paths; one of those files moved; the runner treated the unmatched
+   * path as "no filter matched", ran the remaining suites and exited 0. The gate
+   * reported green for months while running 78 of the 86 tests it claimed. The same
+   * shape appears wherever a tool takes paths and shrugs at the ones it cannot find.
+   *
+   * Declared here, the paths are checked through the file port BEFORE the command is
+   * spawned, and a missing one is a failure that names the file. It costs a `read`
+   * capability, which is added automatically when this is present.
+   */
+  readonly paths?: readonly string[];
+  /**
+   * What the output must contain for a zero exit to be believed.
+   *
+   * A command's exit code answers "did I fail", never "did I do anything". Between
+   * those two questions live a package filter matching no package, a path filter
+   * matching no file, and a pipeline whose failure was swallowed mid-pipe — each of
+   * them exits 0, prints something inert, and passes.
+   *
+   * Only consulted on SUCCESS: a command that already failed needs no second opinion.
+   */
+  readonly expect?: RegExp | readonly RegExp[];
+  /**
+   * Output patterns that make a zero exit a failure — the specific phrases a tool
+   * prints when it silently did nothing.
+   *
+   * The counterpart to `expect`, and the cheaper half to write: naming the sentence a
+   * tool prints when it matched nothing needs no knowledge of what a successful run
+   * looks like.
+   */
+  readonly refuse?: readonly (RegExp | IOutputRefusal)[];
+}
+
+/**
+ * A check whose logic is an external command — the bridge that lets specwarden run
+ * a repository's existing gates unchanged while the native rewrites happen check by
+ * check. It declares the `exec` capability, plus `read` when it was given paths to
+ * verify: its engine-port use is the subprocess and, optionally, the existence check
+ * before it; the subprocess does its own file IO outside the capability system, which
+ * is correct — the manifest governs what a check does THROUGH the engine.
+ *
+ * A generic primitive, so it lives in the product; an instance wrapping a concrete
+ * repository gate is consumer-zone, which the spec declares.
+ */
+export class CommandCheck implements ICheck {
+  readonly id: string;
+  readonly title: string;
+  readonly tier: TTier;
+  readonly zone: TZone;
+  readonly capabilities: readonly TCapability[];
+  readonly contractVersion = CHECK_CONTRACT_VERSION;
+  readonly advisory: boolean;
+  readonly exclusive?: boolean;
+  readonly hint?: string;
+  readonly rule?: ICheckRule;
+  readonly timeoutSec?: number;
+  /** Services the command needs; carried for CI placement, never started here. */
+  readonly needs?: readonly string[];
+  /**
+   * The command line, readable from outside. A manifest consumer — the CI-coverage
+   * audit, a test asserting that a gate sweeps by path — needs to know WHAT a wrapped
+   * gate runs, and the spec it was built from is private. Metadata, never re-run.
+   */
+  readonly cmd: string;
+
+  private readonly relevant: (changed: readonly string[]) => boolean;
+
+  constructor(private readonly spec: ICommandCheckSpec) {
+    this.id = spec.id;
+    this.cmd = spec.cmd;
+    this.title = spec.title;
+    this.tier = spec.tier;
+    this.zone = spec.zone ?? 'consumer';
+    this.advisory = Boolean(spec.advisory);
+    this.exclusive = spec.exclusive;
+    this.needs = spec.needs;
+    this.hint = spec.hint;
+    this.rule = spec.rule;
+    // BOTH: the option kills the child, and the check-level deadline ends the WAIT.
+    // They are not redundant — a process runner that ignores the option would leave
+    // the run hanging forever, and the deadline is what makes that a failure with a
+    // name instead of a job that burns its whole budget in silence.
+    this.timeoutSec = spec.timeoutSec;
+    this.capabilities = spec.paths?.length ? ['exec', 'read'] : ['exec'];
+    this.relevant = resolveWhen(spec.when);
+  }
+
+  when(changed: readonly string[]): boolean {
+    return this.relevant(changed);
+  }
+
+  run(ctx: ICheckContext): IVerdict | Promise<IVerdict> {
+    // Before spawning anything: is the command still pointed at files that exist?
+    // A tool handed a path it cannot find usually shrugs and succeeds.
+    const missing = (this.spec.paths ?? []).filter((path) => !ctx.files.exists(path));
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        findings: missing.map((path) => ({
+          severity: 'error' as const,
+          file: path,
+          message:
+            `${this.id} is pointed at ${path}, which does not exist — the command was not run. ` +
+            'A tool given a path it cannot find generally runs the rest and exits 0, so this ' +
+            'would have been a green gate over a shrinking subject.',
+          ruleId: this.id,
+        })),
+      };
+    }
+
+    const cmd = this.spec.shardable && ctx.shard ? `${this.spec.cmd} --shard=${ctx.shard}` : this.spec.cmd;
+    const shell = this.spec.shell ?? DEFAULT_SHELL;
+    // Non-blocking when the adapter offers it, so a concurrent run actually overlaps;
+    // a synchronous spawn holds the event loop and would make concurrency a no-op.
+    const options = { env: this.spec.env, timeoutSec: this.spec.timeoutSec };
+    if (typeof ctx.proc.runAsync === 'function') {
+      return ctx.proc.runAsync(shell.command, shellArgv(shell, cmd), options).then((r) => this.verdictOf(r, cmd, shell));
+    }
+    const result = ctx.proc.run(shell.command, shellArgv(shell, cmd), options);
+    return this.verdictOf(result, cmd, shell);
+  }
+
+  /** One result, one verdict — shared by the sync and async paths so they cannot drift. */
+  private verdictOf(result: IProcessResult, cmd: string, shell: IShell): IVerdict {
+    // A shell that never started is not a failing command. Reported apart, because the
+    // default wording ("exited by signal") sends the reader off to debug a command
+    // that did not run, on a machine where nothing would have run.
+    if (result.spawnError !== undefined) {
+      return {
+        ok: false,
+        findings: [
+          {
+            severity: 'error' as const,
+            message: shellStartFailure(this.id, shell, result.spawnError),
+            ruleId: this.id,
+          },
+        ],
+      };
+    }
+
+    const output = `${result.stdout}${result.stderr}`.trim();
+    const findings = output === ''
+      ? []
+      : [{ severity: 'info' as const, message: output, ruleId: this.id }];
+
+    if (result.status === 0) {
+      // A zero exit says the command did not fail. Whether it DID anything is a
+      // separate question, and one the command cannot be trusted to answer alone.
+      const doubts = this.doubtsAbout(output);
+      if (doubts.length === 0) return { ok: true, findings };
+      return { ok: false, findings: [...findings, ...doubts] };
+    }
+    return {
+      ok: false,
+      findings: [
+        ...findings,
+        {
+          severity: this.advisory ? ('warning' as const) : ('error' as const),
+          message: `${this.id} exited ${result.status ?? 'by signal'} — ${cmd}`,
+          ruleId: this.id,
+        },
+      ],
+    };
+  }
+
+  /** Reasons not to believe a zero exit, from the declarations the spec carries. */
+  private doubtsAbout(output: string): IFinding[] {
+    const findings: IFinding[] = [];
+
+    const expected = this.spec.expect === undefined ? [] : Array.isArray(this.spec.expect) ? this.spec.expect : [this.spec.expect];
+    for (const pattern of expected as readonly RegExp[]) {
+      if (pattern.test(output)) continue;
+      findings.push({
+        severity: 'error',
+        ruleId: this.id,
+        message:
+          `${this.id} exited 0 but its output does not match ${String(pattern)}, which it declares as proof of work. ` +
+          'A zero exit means the command did not fail; it never means the command did anything.',
+      });
+    }
+
+    for (const entry of this.spec.refuse ?? []) {
+      const refusal: IOutputRefusal = entry instanceof RegExp ? { pattern: entry } : entry;
+      if (!refusal.pattern.test(output)) continue;
+      findings.push({
+        severity: 'error',
+        ruleId: this.id,
+        message:
+          `${this.id} exited 0 but its output matched ${String(refusal.pattern)}. ` +
+          (refusal.why ?? 'That pattern is declared as evidence the command silently did nothing.'),
+      });
+    }
+
+    return findings;
+  }
+}
+
+/**
+ * The factory form, for a check file.
+ *
+ *   export const check = commandCheck({ id: 'lint', title: '…', tier: 'heavy', cmd: '…' });
+ *
+ * Same object as `new CommandCheck(spec)`. It exists so a check FILE reads like every
+ * other check file — a call producing a check — rather than being the one place a
+ * consumer meets a class and a constructor.
+ */
+export function commandCheck(spec: ICommandCheckSpec): ICheck {
+  return new CommandCheck(spec);
+}

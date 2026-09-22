@@ -1,0 +1,28 @@
+{
+  "name": "specwarden-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A repository declares its rules; the warden proves which hold. The workspace root — every package lives beside it.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/specwarden/specwarden.git"
+  },
+  "packageManager": "pnpm@10.18.3",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck",
+    "check": "node core/bin/warden.mjs check"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "typescript-eslint": "^8.0.0"
+  }
+}
