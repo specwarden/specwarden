@@ -24,7 +24,13 @@ export function decisionLogShape(options: IDecisionLogShapeOptions): ICheck {
       const src = ctx.files.tryRead(file);
       if (src === undefined) continue;
       for (const r of rejectionsWithoutReason(parseDecisionLog(src))) {
-        findings.push({ severity: 'error', file, line: r.line, message: `${file}:${r.line} — decision "${r.statement}" rejects "${r.alternative}" with no reason. State why: a rejection without a reason is the fact that gets lost.`, ruleId: options.id });
+        findings.push({
+          severity: 'error',
+          file,
+          line: r.line,
+          message: `${file}:${r.line} — decision "${r.statement}" rejects "${r.alternative}" with no reason. State why: a rejection without a reason is the fact that gets lost.`,
+          ruleId: options.id,
+        });
       }
     }
     return verdictFrom(findings, ctx.ratchet ?? options.ratchet);

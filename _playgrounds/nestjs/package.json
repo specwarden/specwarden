@@ -1,0 +1,15 @@
+{
+  "name": "playground-nestjs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gate": "specwarden check"
+  },
+  "devDependencies": {
+    "specwarden": "workspace:*",
+    "@specwarden/scaffold-parts": "workspace:*",
+    "@specwarden/plugin-nestjs": "workspace:*",
+    "@specwarden/security": "workspace:*",
+    "@specwarden/ops": "workspace:*"
+  }
+}

@@ -9,7 +9,13 @@ const ID = { id: 'doc-paths', title: 'paths resolve', tier: 'fast' as const };
 function run(files: Record<string, string>, opts: Partial<Parameters<typeof docPaths>[0]> = {}): IVerdict {
   const source = new InMemoryFileSource(files);
   const tracked = Object.keys(files).filter((f) => f.endsWith('.md'));
-  const check = docPaths({ ...ID, docs: '*.md', prefixes: ['{ws}/src/', 'be/src/'], externalPrefixes: ['adat-reports/'], ...opts });
+  const check = docPaths({
+    ...ID,
+    docs: '*.md',
+    prefixes: ['{ws}/src/', 'be/src/'],
+    externalPrefixes: ['adat-reports/'],
+    ...opts,
+  });
   const ctx = { changed: [], files: source, vcs: { trackedFiles: () => tracked } } as unknown as ICheckContext;
   return check.run(ctx) as IVerdict;
 }

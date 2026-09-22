@@ -44,7 +44,9 @@ const protectedBranch = commandRule({
   match(words) {
     if (words[0] !== 'git' || !words.includes('push')) return null;
     const args = words.slice(words.indexOf('push') + 1).filter((w) => !w.startsWith('-'));
-    const target = args.map((a) => (a.includes(':') ? a.split(':').pop() : a)).map((t) => (t ?? '').replace(/^refs\/heads\//, ''));
+    const target = args
+      .map((a) => (a.includes(':') ? a.split(':').pop() : a))
+      .map((t) => (t ?? '').replace(/^refs\/heads\//, ''));
     return target.includes('prod') ? 'git push … prod' : null;
   },
 });
@@ -83,7 +85,12 @@ describe('a lookalike that is not the command stays allowed', () => {
 
 describe('PerimeterEngine fails open', () => {
   it('a rule that throws does not block', () => {
-    const boom = { id: 'boom', evaluate: () => { throw new Error('kaboom'); } };
+    const boom = {
+      id: 'boom',
+      evaluate: () => {
+        throw new Error('kaboom');
+      },
+    };
     expect(new PerimeterEngine([boom]).evaluate(bash('anything')).blocked).toBe(false);
   });
   it('the first blocking rule wins and carries its id', () => {

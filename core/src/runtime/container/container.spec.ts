@@ -28,7 +28,11 @@ function adapters(): IEngineAdapters {
     proc: { run: () => ({ status: 0, stdout: 'ok', stderr: '' }) },
     clock: new SystemClock(),
     writer: { write: () => {} },
-    ratchets: { read: () => undefined, establish: (id, value) => ({ id, value }), tighten: (id, value) => ({ id, value }) },
+    ratchets: {
+      read: () => undefined,
+      establish: (id, value) => ({ id, value }),
+      tighten: (id, value) => ({ id, value }),
+    },
   };
 }
 
@@ -85,7 +89,9 @@ describe('capability gating — the engine denies what a check did not declare',
   });
 
   it('gates the writer on write: a non-write check may not write, a write check may', () => {
-    expect(() => buildContext(meta('reader', ['read']), adapters(), []).writer.write('x', 'y')).toThrow(CapabilityError);
+    expect(() => buildContext(meta('reader', ['read']), adapters(), []).writer.write('x', 'y')).toThrow(
+      CapabilityError,
+    );
     expect(() => buildContext(meta('scribe', ['write']), adapters(), []).writer.write('x', 'y')).not.toThrow();
   });
 });

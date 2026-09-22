@@ -77,7 +77,13 @@ export function docPaths(options: IDocPathsOptions): ICheck {
         const variants = [ref, ref.replace(/^@/, '')];
         const resolves = variants.some((v) => prefixes.some((p) => ctx.files.exists(p + v)));
         if (!resolves) {
-          findings.push({ severity: 'error', file, line: lineOf(content, m.index ?? 0), message: `${file} names \`${ref}\`, which does not resolve. Often the file gained its own folder and the path did not follow.`, ruleId: options.id });
+          findings.push({
+            severity: 'error',
+            file,
+            line: lineOf(content, m.index ?? 0),
+            message: `${file} names \`${ref}\`, which does not resolve. Often the file gained its own folder and the path did not follow.`,
+            ruleId: options.id,
+          });
         }
       }
     }

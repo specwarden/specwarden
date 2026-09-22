@@ -84,7 +84,11 @@ export function hostOf(upstream: string): string {
 export function violationsFor(
   mode: string,
   upstreams: readonly IUpstream[],
-  options: { readonly hostModes: readonly string[]; readonly loopbackHosts: readonly string[]; readonly fileFor: (m: string) => string },
+  options: {
+    readonly hostModes: readonly string[];
+    readonly loopbackHosts: readonly string[];
+    readonly fileFor: (m: string) => string;
+  },
 ): string[] {
   const runsOnHost = options.hostModes.includes(mode);
   const file = options.fileFor(mode);

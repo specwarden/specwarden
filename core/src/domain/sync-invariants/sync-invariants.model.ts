@@ -44,7 +44,9 @@ export function planInvariantSync(
   const existingIds = new Set(existing.map((e) => e.id));
   const requirementIds = new Set(requirements.map((r) => r.id));
 
-  const toDeposit = requirements.filter((r) => !existingIds.has(r.id)).map((r) => ({ id: r.id, statement: r.statement }));
+  const toDeposit = requirements
+    .filter((r) => !existingIds.has(r.id))
+    .map((r) => ({ id: r.id, statement: r.statement }));
   const orphaned = existing.filter((e) => !requirementIds.has(e.id));
   const inSync = requirements.filter((r) => existingIds.has(r.id)).map((r) => r.id);
 

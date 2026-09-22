@@ -1,0 +1,16 @@
+{
+  "name": "specwarden-speckit",
+  "description": "@specwarden/speckit — Reads a Spec Kit tree as the source of requirements.",
+  "version": "0.0.0",
+  "author": {
+    "name": "specwarden"
+  },
+  "homepage": "https://github.com/specwarden/specwarden/tree/main/modules/speckit",
+  "repository": "https://github.com/specwarden/specwarden",
+  "license": "MIT",
+  "keywords": [
+    "specwarden",
+    "quality-gates",
+    "module"
+  ]
+}

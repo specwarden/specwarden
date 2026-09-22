@@ -7,7 +7,7 @@ import {
   secretScanPart,
   shellScopePart,
   upstreamsExamplePart,
-} from 'specwarden-scaffold-parts';
+} from '@specwarden/scaffold-parts';
 
 /**
  * A starting tree for an INFRASTRUCTURE repository — compose files, a reverse proxy,
@@ -63,7 +63,7 @@ export const ops: ITemplate = {
   // All three unconditionally. The ops module is required even where the shell check is
   // omitted, because the two examples import it as well — a repository that fills one in
   // must not then discover it has to install something.
-  requires: ['specwarden-module-security', 'specwarden-module-docs', 'specwarden-module-ops'],
+  requires: ['@specwarden/security', '@specwarden/docs', '@specwarden/ops'],
 
   files: (ctx: ITemplateContext): readonly ITemplateFile[] => assembled(ctx).files,
   rules: (ctx: ITemplateContext): readonly IRule[] => assembled(ctx).rules,

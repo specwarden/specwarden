@@ -1,5 +1,5 @@
 import type { IRule, ITemplate, ITemplateContext, ITemplateFile } from 'specwarden';
-import { ciCoveragePart, compose, docPathsPart, scriptWrappersPart, secretScanPart } from 'specwarden-scaffold-parts';
+import { ciCoveragePart, compose, docPathsPart, scriptWrappersPart, secretScanPart } from '@specwarden/scaffold-parts';
 
 /**
  * A starting tree for a pnpm WORKSPACE — several packages, one lockfile, one toolchain.
@@ -42,7 +42,7 @@ const shared = (ctx: ITemplateContext) =>
 export const monorepo: ITemplate = {
   name: 'monorepo',
   describe: 'a pnpm workspace — lockfile, build order, dependency pins, credential scan',
-  requires: ['specwarden-module-ops', 'specwarden-module-security', 'specwarden-module-docs'],
+  requires: ['@specwarden/ops', '@specwarden/security', '@specwarden/docs'],
 
   files: (ctx: ITemplateContext): readonly ITemplateFile[] => {
     const pm = ctx.packageManager ?? 'pnpm';
@@ -81,7 +81,7 @@ export const check = commandCheck({
  * \`.check.mjs\`, and it enforces the graph. Left half-configured it would find nothing
  * and report green, which is the failure this engine exists against.
  */
-import { buildOrderFollowsDeps } from 'specwarden-module-ops';
+import { buildOrderFollowsDeps } from '@specwarden/ops';
 
 export const check = buildOrderFollowsDeps({
   id: 'build-order',

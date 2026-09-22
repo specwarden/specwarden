@@ -38,7 +38,10 @@ export function doctor(config: IWardenConfig, registry: CheckRegistry, io: ICliI
     io.out(`  enforced: ${cov.enforced}\n`);
     io.out(`  not mechanizable (with reason): ${cov.notMechanizable}\n`);
     io.out(`  unenforced without a reason: ${cov.unenforcedWithoutReason}\n`);
-    const orphans = orphanChecks(registry.all().map((c) => c.id), config.rules);
+    const orphans = orphanChecks(
+      registry.all().map((c) => c.id),
+      config.rules,
+    );
     io.out(`  checks enforcing no rule (orphans): ${orphans.length}\n`);
   }
   return 0;

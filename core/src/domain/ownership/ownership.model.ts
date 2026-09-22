@@ -8,13 +8,7 @@
  */
 export type TOwnableRole = 'requirements' | 'tasks' | 'plans' | 'invariants' | 'agentContext';
 
-export const OWNABLE_ROLES: readonly TOwnableRole[] = [
-  'requirements',
-  'tasks',
-  'plans',
-  'invariants',
-  'agentContext',
-];
+export const OWNABLE_ROLES: readonly TOwnableRole[] = ['requirements', 'tasks', 'plans', 'invariants', 'agentContext'];
 
 /** A role → owner assignment. An owner is a source/subsystem name (`specwarden`,
  * `openspec`, …). */

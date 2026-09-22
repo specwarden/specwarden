@@ -16,7 +16,10 @@ describe('parseDecisionLog', () => {
     expect(decisions).toHaveLength(2);
     expect(decisions[0].statement).toContain('context-bag');
     expect(decisions[0].rejected).toHaveLength(2);
-    expect(decisions[0].rejected[0]).toMatchObject({ alternative: 'design:paramtypes', reason: expect.stringContaining('oxc') });
+    expect(decisions[0].rejected[0]).toMatchObject({
+      alternative: 'design:paramtypes',
+      reason: expect.stringContaining('oxc'),
+    });
     expect(decisions[0].rejected[1].reason).toContain('hides the dependency graph');
   });
 

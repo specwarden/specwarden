@@ -190,7 +190,9 @@ export class CommandCheck implements ICheck {
     // a synchronous spawn holds the event loop and would make concurrency a no-op.
     const options = { env: this.spec.env, timeoutSec: this.spec.timeoutSec };
     if (typeof ctx.proc.runAsync === 'function') {
-      return ctx.proc.runAsync(shell.command, shellArgv(shell, cmd), options).then((r) => this.verdictOf(r, cmd, shell));
+      return ctx.proc
+        .runAsync(shell.command, shellArgv(shell, cmd), options)
+        .then((r) => this.verdictOf(r, cmd, shell));
     }
     const result = ctx.proc.run(shell.command, shellArgv(shell, cmd), options);
     return this.verdictOf(result, cmd, shell);
@@ -215,9 +217,7 @@ export class CommandCheck implements ICheck {
     }
 
     const output = `${result.stdout}${result.stderr}`.trim();
-    const findings = output === ''
-      ? []
-      : [{ severity: 'info' as const, message: output, ruleId: this.id }];
+    const findings = output === '' ? [] : [{ severity: 'info' as const, message: output, ruleId: this.id }];
 
     if (result.status === 0) {
       // A zero exit says the command did not fail. Whether it DID anything is a
@@ -243,7 +243,8 @@ export class CommandCheck implements ICheck {
   private doubtsAbout(output: string): IFinding[] {
     const findings: IFinding[] = [];
 
-    const expected = this.spec.expect === undefined ? [] : Array.isArray(this.spec.expect) ? this.spec.expect : [this.spec.expect];
+    const expected =
+      this.spec.expect === undefined ? [] : Array.isArray(this.spec.expect) ? this.spec.expect : [this.spec.expect];
     for (const pattern of expected as readonly RegExp[]) {
       if (pattern.test(output)) continue;
       findings.push({

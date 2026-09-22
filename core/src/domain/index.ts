@@ -26,7 +26,15 @@ export type { IFinding, IVerdict } from './finding/finding.model';
 
 // Checks.
 export { isFixable } from './check/check.model';
-export type { ICheck, ICheckContext, ICheckMeta, ICheckResult, ICheckRule, IFixable, IFixOutcome } from './check/check.model';
+export type {
+  ICheck,
+  ICheckContext,
+  ICheckMeta,
+  ICheckResult,
+  ICheckRule,
+  IFixable,
+  IFixOutcome,
+} from './check/check.model';
 export type { ICheckIdentity, TCheckFactory } from './check-factory/check-factory.model';
 
 // Ratchets — the value, and the three pure questions every consumer of one asks:
@@ -46,7 +54,11 @@ export type { IPlugin, TPluginFactory } from './plugin/plugin.model';
 // Interop: spec sources and the ownership map.
 export type { ISpecRequirement, ISpecSource, ISpecSourceResult, ISpecTask } from './spec-source/spec-source.model';
 export { planInvariantSync, invariantsInDocument } from './sync-invariants/sync-invariants.model';
-export type { IExistingInvariant, IInvariantDeposit, IInvariantSyncPlan } from './sync-invariants/sync-invariants.model';
+export type {
+  IExistingInvariant,
+  IInvariantDeposit,
+  IInvariantSyncPlan,
+} from './sync-invariants/sync-invariants.model';
 export { OWNABLE_ROLES, ownsRole, validateOwnership } from './ownership/ownership.model';
 export type { IOwnershipFinding, TOwnableRole, TOwnershipMap } from './ownership/ownership.model';
 export { PLAN_STATUSES } from './plan/plan.model';

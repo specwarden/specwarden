@@ -68,7 +68,9 @@ const everyPart = (c = ctx()): Record<string, IPart> => ({
  * Written INSIDE the package so the generated imports resolve against its own
  * node_modules — the same resolution a consumer gets.
  */
-const scratch = mkdtempSync(join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '.tmp-generated-'));
+const scratch = mkdtempSync(
+  join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '.tmp-generated-'),
+);
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 const importGenerated = async (name: string, body: string): Promise<Record<string, unknown>> => {
@@ -85,8 +87,12 @@ describe('everything a part writes actually loads', () => {
         const mod = await importGenerated(`${part}-${file.path.replace(/\//g, '-')}`, file.body);
         const found = mod.check ? [mod.check] : ((mod.checks as unknown[]) ?? []);
         expect(found.length, `${part}: ${file.path} exports no check`).toBeGreaterThan(0);
-        const expected = file.path.split('/').pop()?.replace(/\.check\.mjs$/, '');
-        if (mod.check) expect((mod.check as { id: string }).id, `${part}: id does not match its filename`).toBe(expected);
+        const expected = file.path
+          .split('/')
+          .pop()
+          ?.replace(/\.check\.mjs$/, '');
+        if (mod.check)
+          expect((mod.check as { id: string }).id, `${part}: id does not match its filename`).toBe(expected);
       }
     }
   });
@@ -94,7 +100,10 @@ describe('everything a part writes actually loads', () => {
   it('every EXAMPLE constructs too — the day it is renamed is the worst day to find out', async () => {
     for (const [part, { files }] of Object.entries(everyPart())) {
       for (const file of files.filter((f) => f.path.endsWith('.check.mjs.example'))) {
-        const mod = await importGenerated(`${part}-${file.path.replace(/\//g, '-').replace(/\.example$/, '')}`, file.body);
+        const mod = await importGenerated(
+          `${part}-${file.path.replace(/\//g, '-').replace(/\.example$/, '')}`,
+          file.body,
+        );
         expect(mod.check, `${part}: ${file.path} exports no check`).toBeDefined();
       }
     }
@@ -110,7 +119,11 @@ describe('everything a part writes actually loads', () => {
 
     for (const framework of ['openspec', 'speckit'] as const) {
       const mod = await importGenerated(`spec-source-${framework}.mjs`, specSourcePart(framework).files[0].body);
-      const source = mod.source as { name: string; requirements: (f: unknown) => unknown; tasks: (f: unknown) => unknown };
+      const source = mod.source as {
+        name: string;
+        requirements: (f: unknown) => unknown;
+        tasks: (f: unknown) => unknown;
+      };
       expect(source.name).toBe(framework);
       expect(typeof source.requirements).toBe('function');
       expect(typeof source.tasks).toBe('function');
@@ -124,7 +137,13 @@ describe('a rule is carried by the part that needs it', () => {
       const written = new Set(
         part.files
           .filter((f) => f.path.endsWith('.check.mjs'))
-          .map((f) => f.path.split('/').pop()?.replace(/\.check\.mjs$/, '') as string),
+          .map(
+            (f) =>
+              f.path
+                .split('/')
+                .pop()
+                ?.replace(/\.check\.mjs$/, '') as string,
+          ),
       );
       for (const rule of part.rules) {
         const ids = (rule.enforcement as { checkIds?: readonly string[] }).checkIds ?? [];
@@ -168,7 +187,9 @@ describe('a part written blind is a red first run, so each one asks first', () =
   it('no lint or test script, no wrapper — it would fail for a reason that is not the code', () => {
     expect(scriptWrappersPart(ctx({ scripts: [] })).files).toEqual([]);
     expect(scriptWrappersPart(ctx({ scripts: [] })).rules).toEqual([]);
-    expect(scriptWrappersPart(ctx({ scripts: ['lint'] })).files.map((f) => f.path)).toEqual(['checks/workspace/lint.check.mjs']);
+    expect(scriptWrappersPart(ctx({ scripts: ['lint'] })).files.map((f) => f.path)).toEqual([
+      'checks/workspace/lint.check.mjs',
+    ]);
   });
 
   it('and the rule shrinks with the files, never naming a check nobody wrote', () => {
@@ -199,11 +220,15 @@ describe('what the caller decides, the part reads', () => {
 
   it('takes the directories a house actually uses', () => {
     expect(agentRolesPart(ctx(), { agentsDir: '.cursor/rules' }).files[0].body).toContain(".cursor/rules'");
-    expect(planLifecyclePart(ctx(), { plansDir: 'plans', archiveDir: 'plans/done' }).files[0].body).toContain("plansDir: 'plans'");
+    expect(planLifecyclePart(ctx(), { plansDir: 'plans', archiveDir: 'plans/done' }).files[0].body).toContain(
+      "plansDir: 'plans'",
+    );
   });
 
   it('names the compose file that was actually found', () => {
-    expect(envFilesExamplePart(ctx({ composeFiles: ['compose.yaml'] })).files[0].body).toContain("composeFile: 'compose.yaml'");
+    expect(envFilesExamplePart(ctx({ composeFiles: ['compose.yaml'] })).files[0].body).toContain(
+      "composeFile: 'compose.yaml'",
+    );
   });
 });
 

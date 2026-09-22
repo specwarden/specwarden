@@ -1,0 +1,58 @@
+{
+  "name": "specwarden",
+  "owner": {
+    "name": "specwarden",
+    "url": "https://github.com/specwarden"
+  },
+  "metadata": {
+    "description": "Agent skills for specwarden — one plugin per package.",
+    "version": "0.0.0"
+  },
+  "plugins": [
+    {
+      "name": "specwarden",
+      "source": "./core",
+      "description": "specwarden — A repository declares its rules; the warden proves which hold."
+    },
+    {
+      "name": "specwarden-docs",
+      "source": "./modules/docs",
+      "description": "@specwarden/docs — Documentation checks: paths, symbols, counts, placement, hygiene."
+    },
+    {
+      "name": "specwarden-plans",
+      "source": "./modules/plans",
+      "description": "@specwarden/plans — Plans and decision logs — one way of working, not the only one."
+    },
+    {
+      "name": "specwarden-ops",
+      "source": "./modules/ops",
+      "description": "@specwarden/ops — Env files, proxy upstreams, CI coverage, build order, shell scoping."
+    },
+    {
+      "name": "specwarden-security",
+      "source": "./modules/security",
+      "description": "@specwarden/security — Credential scanning, with a vendor library as a preset rather than a mandate."
+    },
+    {
+      "name": "specwarden-agents",
+      "source": "./modules/agents",
+      "description": "@specwarden/agents — Coding-agent role definitions."
+    },
+    {
+      "name": "specwarden-openspec",
+      "source": "./modules/openspec",
+      "description": "@specwarden/openspec — Reads an OpenSpec tree as the source of requirements."
+    },
+    {
+      "name": "specwarden-speckit",
+      "source": "./modules/speckit",
+      "description": "@specwarden/speckit — Reads a Spec Kit tree as the source of requirements."
+    },
+    {
+      "name": "specwarden-nestjs",
+      "source": "./plugins/nestjs",
+      "description": "@specwarden/plugin-nestjs — NestJS conventions, declared against the engine's primitives."
+    }
+  ]
+}

@@ -22,7 +22,13 @@ export function ruleCoverage(options: IRuleCoverageOptions): ICheck {
     const cov = computeCoverage(options.rules());
     const findings: IFinding[] =
       cov.unenforcedWithoutReason > 0
-        ? [{ severity: 'error', message: `${cov.unenforcedWithoutReason} rule(s) declared but neither enforced nor given a reason (of ${cov.total} total; ${cov.enforced} enforced, ${cov.notMechanizable} not-mechanizable). Enforce it, or state why it cannot be.`, ruleId: options.id }]
+        ? [
+            {
+              severity: 'error',
+              message: `${cov.unenforcedWithoutReason} rule(s) declared but neither enforced nor given a reason (of ${cov.total} total; ${cov.enforced} enforced, ${cov.notMechanizable} not-mechanizable). Enforce it, or state why it cannot be.`,
+              ruleId: options.id,
+            },
+          ]
         : [];
     return verdictFrom(findings, ctx.ratchet ?? options.ratchet);
   });

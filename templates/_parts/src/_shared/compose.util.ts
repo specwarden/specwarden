@@ -19,17 +19,23 @@ export function compose(...parts: readonly IPart[]): IComposed {
   const files = parts.flatMap((p) => p.files);
   const seen = new Set<string>();
   for (const f of files) {
-    if (seen.has(f.path)) throw new Error(`two parts both write ${f.path} — one of the two configurations would be lost`);
+    if (seen.has(f.path))
+      throw new Error(`two parts both write ${f.path} — one of the two configurations would be lost`);
     seen.add(f.path);
   }
 
-  const extras = parts.map((p) => p.configExtras).filter((e): e is NonNullable<IPart['configExtras']> => e !== undefined);
+  const extras = parts
+    .map((p) => p.configExtras)
+    .filter((e): e is NonNullable<IPart['configExtras']> => e !== undefined);
   return {
     files,
     rules: parts.flatMap((p) => p.rules),
     configExtras: extras.length
       ? {
-          imports: extras.map((e) => e.imports).filter(Boolean).join('\n'),
+          imports: extras
+            .map((e) => e.imports)
+            .filter(Boolean)
+            .join('\n'),
           fields: extras.map((e) => e.fields).join(''),
         }
       : undefined,

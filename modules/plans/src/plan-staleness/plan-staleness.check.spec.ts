@@ -29,12 +29,9 @@ const check = planStaleness({
 });
 
 const ACTIVE = ['**Status:** active', '**Branch:** work-branch'].join('\n');
-const ARCHIVE_OK = [
-  '# Done',
-  '**Started:** 2026-01-01',
-  '**Finished:** 2026-01-02',
-  '**Left open:** nothing',
-].join('\n');
+const ARCHIVE_OK = ['# Done', '**Started:** 2026-01-01', '**Finished:** 2026-01-02', '**Left open:** nothing'].join(
+  '\n',
+);
 
 const runWith = (files: Record<string, string>, branches: string[] | undefined, tracked = Object.keys(files)) => {
   const source = new InMemoryFileSource(files, '');
@@ -58,10 +55,10 @@ describe('planStaleness', () => {
   });
 
   it('fails a draft that names a branch — it arms a failure for the day that branch goes', () => {
-    const verdict = runWith(
-      { 'docs/_plans/thing.md': ['**Status:** draft', '**Branch:** work-branch'].join('\n') },
-      ['dev', 'work-branch'],
-    );
+    const verdict = runWith({ 'docs/_plans/thing.md': ['**Status:** draft', '**Branch:** work-branch'].join('\n') }, [
+      'dev',
+      'work-branch',
+    ]);
 
     expect(verdict.ok).toBe(false);
     expect(messages(verdict)).toMatch(/draft yet declares branch/);
@@ -101,10 +98,7 @@ describe('planStaleness', () => {
   });
 
   it('names each missing archive header field', () => {
-    const verdict = runWith(
-      { 'docs/_plans-archive/done.md': '# Done\n**Started:** 2026-01-01' },
-      ['dev'],
-    );
+    const verdict = runWith({ 'docs/_plans-archive/done.md': '# Done\n**Started:** 2026-01-01' }, ['dev']);
 
     expect(verdict.ok).toBe(false);
     expect(messages(verdict)).toMatch(/Finished/);

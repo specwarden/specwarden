@@ -74,9 +74,7 @@ export function segments(command: string): string[] {
 
 /** Tokenize a segment, stripping one layer of surrounding quotes from each token. */
 export function tokens(segment: string): string[] {
-  return (segment.match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map((t) =>
-    /^(".*"|'.*')$/s.test(t) ? t.slice(1, -1) : t,
-  );
+  return (segment.match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map((t) => (/^(".*"|'.*')$/s.test(t) ? t.slice(1, -1) : t));
 }
 
 /** The words after any leading environment assignments (`MODE=prod docker …` → `docker …`). */

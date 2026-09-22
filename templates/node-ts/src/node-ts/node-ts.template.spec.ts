@@ -32,7 +32,10 @@ describe('it emits a tree, not a config', () => {
     // The convention the engine discovers by: `<id>.check.mjs` exports a check whose id
     // is that word. A template that broke it would produce a tree the engine refuses.
     for (const f of nodeTs.files(ctx())) {
-      const id = f.path.split('/').pop()?.replace(/\.check\.mjs(\.example)?$/, '');
+      const id = f.path
+        .split('/')
+        .pop()
+        ?.replace(/\.check\.mjs(\.example)?$/, '');
       expect(f.body).toContain(`id: '${id}'`);
       expect(f.body).toContain('export const check =');
     }
@@ -69,11 +72,15 @@ describe('what it leaves out is the deliberate part', () => {
 
 describe('it follows the repository it was pointed at', () => {
   it('uses the documentation glob it was given', () => {
-    expect(bodyOf(ctx({ docs: 'handbook/**/*.md' }), 'checks/docs/doc-paths.check.mjs')).toContain("docs: 'handbook/**/*.md'");
+    expect(bodyOf(ctx({ docs: 'handbook/**/*.md' }), 'checks/docs/doc-paths.check.mjs')).toContain(
+      "docs: 'handbook/**/*.md'",
+    );
   });
 
   it('uses the tier the repository named', () => {
-    expect(bodyOf(ctx({ tier: 'pre-commit' }), 'checks/security/secret-scan.check.mjs')).toContain("tier: 'pre-commit'");
+    expect(bodyOf(ctx({ tier: 'pre-commit' }), 'checks/security/secret-scan.check.mjs')).toContain(
+      "tier: 'pre-commit'",
+    );
   });
 
   it('invokes the package manager it detected, and falls back rather than guessing wrong', () => {
@@ -89,13 +96,27 @@ describe('every generated check is named by a rule', () => {
     // wrote — the harness reporting its own scaffold as a defect.
     const ids = paths(ctx())
       .filter((p) => p.endsWith('.check.mjs'))
-      .map((p) => p.split('/').pop()?.replace(/\.check\.mjs$/, ''));
-    const named = new Set(nodeTs.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds));
+      .map((p) =>
+        p
+          .split('/')
+          .pop()
+          ?.replace(/\.check\.mjs$/, ''),
+      );
+    const named = new Set(
+      nodeTs.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
+    );
     for (const id of ids) expect(named.has(id as string), `${id} enforces no rule`).toBe(true);
   });
 
   it('and every rule names a check the template actually writes', () => {
-    const ids = new Set(paths(ctx()).map((p) => p.split('/').pop()?.replace(/\.check\.mjs$/, '')));
+    const ids = new Set(
+      paths(ctx()).map((p) =>
+        p
+          .split('/')
+          .pop()
+          ?.replace(/\.check\.mjs$/, ''),
+      ),
+    );
     for (const rule of nodeTs.rules(ctx())) {
       for (const id of (rule.enforcement as { checkIds: readonly string[] }).checkIds) {
         expect(ids.has(id), `rule ${rule.id} names ${id}, which is not written`).toBe(true);

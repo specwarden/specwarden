@@ -13,17 +13,40 @@ const COMMAND_RE = /\b(pnpm|npx|node|vitest|jest)\b/;
 function run(files: Record<string, string>, opts: Partial<Parameters<typeof planShape>[0]> = {}): IVerdict {
   // The plans directory listing: entries are the basenames; a value of null marks a directory.
   const source = new InMemoryFileSource(Object.fromEntries(Object.entries(files).map(([k, v]) => [k, v ?? ''])));
-  const check = planShape({ ...ID, plansDir: 'docs/_plans', nameRe: NAME_RE, allowedNonPlans: ['README.md'], sizingPatterns: SIZING, phaseHeadingRe: PHASE_RE, commandRe: COMMAND_RE, knownGateIds: ['doc-paths', 'router-mirror'], ...opts });
+  const check = planShape({
+    ...ID,
+    plansDir: 'docs/_plans',
+    nameRe: NAME_RE,
+    allowedNonPlans: ['README.md'],
+    sizingPatterns: SIZING,
+    phaseHeadingRe: PHASE_RE,
+    commandRe: COMMAND_RE,
+    knownGateIds: ['doc-paths', 'router-mirror'],
+    ...opts,
+  });
   return check.run({ changed: [], files: source } as unknown as ICheckContext) as IVerdict;
 }
 
 describe('planShape', () => {
   it('is a product-zone check', () => {
-    expect(planShape({ ...ID, plansDir: 'p', nameRe: NAME_RE, sizingPatterns: [], phaseHeadingRe: PHASE_RE, commandRe: COMMAND_RE, knownGateIds: [] }).zone).toBe('product');
+    expect(
+      planShape({
+        ...ID,
+        plansDir: 'p',
+        nameRe: NAME_RE,
+        sizingPatterns: [],
+        phaseHeadingRe: PHASE_RE,
+        commandRe: COMMAND_RE,
+        knownGateIds: [],
+      }).zone,
+    ).toBe('product');
   });
 
   it('accepts a well-formed plan', () => {
-    const v = run({ 'docs/_plans/MINIAPP-9-thing.md': '## Phase 1\nrun `pnpm gate --id doc-paths`\n', 'docs/_plans/README.md': '' });
+    const v = run({
+      'docs/_plans/MINIAPP-9-thing.md': '## Phase 1\nrun `pnpm gate --id doc-paths`\n',
+      'docs/_plans/README.md': '',
+    });
     expect(v.ok).toBe(true);
   });
 

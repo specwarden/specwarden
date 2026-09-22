@@ -90,12 +90,22 @@ export function planShape(options: IPlanShapeOptions): ICheck {
     for (const entry of ctx.files.list(options.plansDir)) {
       const rel = `${options.plansDir}/${entry}`;
       if (ctx.files.isDirectory(rel)) {
-        hard.push({ severity: 'error', file: rel, message: `${rel}/ — plans are FLAT; a folder here means plans stopped being deleted.`, ruleId: options.id });
+        hard.push({
+          severity: 'error',
+          file: rel,
+          message: `${rel}/ — plans are FLAT; a folder here means plans stopped being deleted.`,
+          ruleId: options.id,
+        });
         continue;
       }
       if (!entry.endsWith('.md') || allowedNonPlans.has(entry)) continue;
       if (!testStateless(options.nameRe, entry)) {
-        hard.push({ severity: 'error', file: rel, message: `${rel} — name must match ${options.nameRe}.`, ruleId: options.id });
+        hard.push({
+          severity: 'error',
+          file: rel,
+          message: `${rel} — name must match ${options.nameRe}.`,
+          ruleId: options.id,
+        });
       }
       plans.push(entry);
     }
@@ -107,7 +117,13 @@ export function planShape(options: IPlanShapeOptions): ICheck {
 
       for (let index = 0; index < lines.length; index++) {
         if (options.sizingPatterns.some((p) => testStateless(p, lines[index]))) {
-          sizing.push({ severity: 'error', file: rel, line: index + 1, message: `${rel}:${index + 1} sizes work — a plan states dependency and deployability, not hours.`, ruleId: options.id });
+          sizing.push({
+            severity: 'error',
+            file: rel,
+            line: index + 1,
+            message: `${rel}:${index + 1} sizes work — a plan states dependency and deployability, not hours.`,
+            ruleId: options.id,
+          });
         }
       }
 
@@ -117,12 +133,24 @@ export function planShape(options: IPlanShapeOptions): ICheck {
       // `--id <that gate>`; it routes through the script path instead until the gate lands.
       // Deliberate, and the cost is real — weigh it before adding a declaration mechanism.
       for (const m of text.matchAll(/--id\s+([a-z0-9-]+)/g)) {
-        if (!knownIds(ctx, options.knownGateIds).has(m[1])) hard.push({ severity: 'error', file: rel, message: `${rel} names gate '--id ${m[1]}', which is not a known check.`, ruleId: options.id });
+        if (!knownIds(ctx, options.knownGateIds).has(m[1]))
+          hard.push({
+            severity: 'error',
+            file: rel,
+            message: `${rel} names gate '--id ${m[1]}', which is not a known check.`,
+            ruleId: options.id,
+          });
       }
 
       for (const section of phaseSections(lines, options.phaseHeadingRe)) {
         if (!section.body.some((line) => testStateless(options.commandRe, line))) {
-          unaccepted.push({ severity: 'error', file: rel, line: section.line, message: `${rel}:${section.line} ${section.title.slice(0, 100)} — a phase with no acceptance command has no definition of done.`, ruleId: options.id });
+          unaccepted.push({
+            severity: 'error',
+            file: rel,
+            line: section.line,
+            message: `${rel}:${section.line} ${section.title.slice(0, 100)} — a phase with no acceptance command has no definition of done.`,
+            ruleId: options.id,
+          });
         }
       }
     }

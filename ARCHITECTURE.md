@@ -135,23 +135,23 @@ of discovered by grep.
 **3. The suffix names the role**, and the list is closed. Adding a suffix means the
 role is new — say so in a review rather than inventing one quietly.
 
-| Suffix | What it is |
-| --- | --- |
-| `.check.ts` | a check factory: options in, `ICheck` out |
-| `.primitive.ts` | a declarative primitive — a structural rule without a class |
-| `.model.ts` | types and the pure rules over them; imports nothing but other models |
-| `.port.ts` | an interface the engine depends on and an adapter implements |
-| `.adapter.ts` | a class implementing a port against something real |
-| `.service.ts` | a class with behaviour of its own |
-| `.util.ts` | pure functions, no state |
-| `.factory.ts` | returns a configured thing |
-| `.command.ts` | one CLI entry point |
-| `.constant.ts` | closed vocabularies |
-| `.error.ts` | a typed failure |
-| `.plugin.ts` | a plugin's declaration |
-| `.source.ts` | an `ISpecSource` — where requirements and tasks come from |
-| `.template.ts` | a tuned starting set, composing parts |
-| `.part.ts` | one check a template can emit: its file, its rule, its config field |
+| Suffix          | What it is                                                           |
+| --------------- | -------------------------------------------------------------------- |
+| `.check.ts`     | a check factory: options in, `ICheck` out                            |
+| `.primitive.ts` | a declarative primitive — a structural rule without a class          |
+| `.model.ts`     | types and the pure rules over them; imports nothing but other models |
+| `.port.ts`      | an interface the engine depends on and an adapter implements         |
+| `.adapter.ts`   | a class implementing a port against something real                   |
+| `.service.ts`   | a class with behaviour of its own                                    |
+| `.util.ts`      | pure functions, no state                                             |
+| `.factory.ts`   | returns a configured thing                                           |
+| `.command.ts`   | one CLI entry point                                                  |
+| `.constant.ts`  | closed vocabularies                                                  |
+| `.error.ts`     | a typed failure                                                      |
+| `.plugin.ts`    | a plugin's declaration                                               |
+| `.source.ts`    | an `ISpecSource` — where requirements and tasks come from            |
+| `.template.ts`  | a tuned starting set, composing parts                                |
+| `.part.ts`      | one check a template can emit: its file, its rule, its config field  |
 
 An underscored folder is not a peer of what sits beside it: `_shared/` is what the
 siblings are built from, `_contract/` is a suite belonging to a PORT rather than to any
@@ -166,11 +166,11 @@ was until you opened it. Those four are gone, and the rules above are what close
 
 ## Where to read next
 
-| You want | Read |
-| --- | --- |
-| how the engine works, and how to add a check or a rule | `core/README.md` |
-| what a plugin may declare | `plugins/nestjs/src/nestjs/nestjs.plugin.ts` — the header is the contract |
-| where a repository's own facts go | `scripts/README.md` and `.specwarden/` |
+| You want                                               | Read                                                                      |
+| ------------------------------------------------------ | ------------------------------------------------------------------------- |
+| how the engine works, and how to add a check or a rule | `core/README.md`                                                          |
+| what a plugin may declare                              | `plugins/nestjs/src/nestjs/nestjs.plugin.ts` — the header is the contract |
+| where a repository's own facts go                      | `scripts/README.md` and `.specwarden/`                                    |
 
 ## Speed
 

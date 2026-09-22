@@ -14,7 +14,8 @@ async function harness(files: Record<string, string> = {}, template?: string) {
   return { code, written, out: () => out, err: () => err };
 }
 
-const manifestWith = (...pkgs: string[]) => JSON.stringify({ name: 'x', devDependencies: Object.fromEntries(pkgs.map((p) => [p, '1'])) });
+const manifestWith = (...pkgs: string[]) =>
+  JSON.stringify({ name: 'x', devDependencies: Object.fromEntries(pkgs.map((p) => [p, '1'])) });
 
 describe('init writes the TREE, not a list', () => {
   it('writes the four constant files, and nothing else, when no module is installed', async () => {
@@ -38,16 +39,19 @@ describe('init writes the TREE, not a list', () => {
   });
 
   it('the config declares no checks — the engine reads checks/ by convention', async () => {
-    const config = (await harness({ 'package.json': manifestWith('specwarden-module-security') })).written.get('.specwarden/warden.config.mjs') ?? '';
+    const config =
+      (await harness({ 'package.json': manifestWith('@specwarden/security') })).written.get(
+        '.specwarden/warden.config.mjs',
+      ) ?? '';
     expect(config).not.toContain('checks:');
     expect(config).not.toContain('secretScan');
     expect(config).toContain('reads `checks/` by convention');
   });
 
   it('a declared module becomes a check FILE in its family folder', async () => {
-    const h = await harness({ 'package.json': manifestWith('specwarden-module-security') });
+    const h = await harness({ 'package.json': manifestWith('@specwarden/security') });
     const file = h.written.get('.specwarden/checks/security/secret-scan.check.mjs') ?? '';
-    expect(file).toContain("import { secretScan } from 'specwarden-module-security';");
+    expect(file).toContain("import { secretScan } from '@specwarden/security';");
     expect(file).toContain("id: 'secret-scan'");
     expect(file).toContain('export const check =');
     // ...and the module it did not declare yields no file
@@ -55,22 +59,31 @@ describe('init writes the TREE, not a list', () => {
   });
 
   it('both modules yield both families, and the doc check points at the docs it found', async () => {
-    const h = await harness({ 'package.json': manifestWith('specwarden-module-security', 'specwarden-module-docs'), 'docs/x.md': '#' });
+    const h = await harness({
+      'package.json': manifestWith('@specwarden/security', '@specwarden/docs'),
+      'docs/x.md': '#',
+    });
     expect(h.written.has('.specwarden/checks/security/secret-scan.check.mjs')).toBe(true);
     const docs = h.written.get('.specwarden/checks/docs/doc-paths.check.mjs') ?? '';
     expect(docs).toContain("docs: 'docs/**/*.md'");
   });
 
   it('falls back to a repository-wide glob when there is no docs directory', async () => {
-    const docs = (await harness({ 'package.json': manifestWith('specwarden-module-docs') })).written.get('.specwarden/checks/docs/doc-paths.check.mjs') ?? '';
+    const docs =
+      (await harness({ 'package.json': manifestWith('@specwarden/docs') })).written.get(
+        '.specwarden/checks/docs/doc-paths.check.mjs',
+      ) ?? '';
     expect(docs).toContain("docs: '**/*.md'");
   });
 
   it('the check file name and the id inside it are the same word — the convention the engine discovers by', async () => {
-    const h = await harness({ 'package.json': manifestWith('specwarden-module-security', 'specwarden-module-docs') });
+    const h = await harness({ 'package.json': manifestWith('@specwarden/security', '@specwarden/docs') });
     for (const [path, body] of h.written) {
       if (!path.endsWith('.check.mjs')) continue;
-      const name = path.split('/').pop()?.replace(/\.check\.mjs$/, '');
+      const name = path
+        .split('/')
+        .pop()
+        ?.replace(/\.check\.mjs$/, '');
       expect(body).toContain(`id: '${name}'`);
     }
   });
@@ -87,7 +100,7 @@ describe('init refuses to overwrite', () => {
 
 describe('what it tells the reader', () => {
   it('lists the check files it wrote, and the next command', async () => {
-    const h = await harness({ 'package.json': manifestWith('specwarden-module-security') });
+    const h = await harness({ 'package.json': manifestWith('@specwarden/security') });
     expect(h.out()).toContain('checks/security/secret-scan.check.mjs');
     expect(h.out()).toContain('specwarden check --all');
   });
@@ -102,7 +115,11 @@ describe('the generated files are usable as written', () => {
     // The defect this pins: the scaffold once emitted `import { docPaths } from
     // 'specwarden'` months after that check moved to a module. It typechecked, it read
     // correctly, and it failed on the first run with an import error.
-    for (const manifest of ['{}', manifestWith('specwarden-module-security'), manifestWith('specwarden-module-docs', 'specwarden-module-security')]) {
+    for (const manifest of [
+      '{}',
+      manifestWith('@specwarden/security'),
+      manifestWith('@specwarden/docs', '@specwarden/security'),
+    ]) {
       const declared = new Set(['specwarden', ...Object.keys(JSON.parse(manifest).devDependencies ?? {})]);
       for (const [path, body] of (await harness({ 'package.json': manifest })).written) {
         if (!path.endsWith('.mjs')) continue;
@@ -119,7 +136,10 @@ describe('the generated files are usable as written', () => {
   });
 
   it('the checks README names every family it created, and says how to add one', async () => {
-    const readme = (await harness({ 'package.json': manifestWith('specwarden-module-security', 'specwarden-module-docs') })).written.get('.specwarden/checks/README.md') ?? '';
+    const readme =
+      (await harness({ 'package.json': manifestWith('@specwarden/security', '@specwarden/docs') })).written.get(
+        '.specwarden/checks/README.md',
+      ) ?? '';
     expect(readme).toContain('`security/`');
     expect(readme).toContain('`docs/`');
     expect(readme).toContain('.check.mjs');
@@ -128,7 +148,8 @@ describe('the generated files are usable as written', () => {
 
   it('the README explains every path it created and the ones a run will create', async () => {
     const readme = (await harness()).written.get('.specwarden/README.md') ?? '';
-    for (const path of ['warden.config.mjs', 'rules.mjs', 'checks/', 'ratchets/', 'perimeter.mjs']) expect(readme).toContain(path);
+    for (const path of ['warden.config.mjs', 'rules.mjs', 'checks/', 'ratchets/', 'perimeter.mjs'])
+      expect(readme).toContain(path);
   });
 });
 
@@ -137,11 +158,16 @@ describe('a fresh tree has no orphans and no missing enforcer', () => {
     // The first run of a freshly initialised repository was red on orphan-check: the
     // scaffold wrote two checks and an empty rule list, so the harness's own audit
     // reported the checks it had just been handed. A check arrives with its rule now.
-    const h = await harness({ 'package.json': manifestWith('specwarden-module-security', 'specwarden-module-docs') });
+    const h = await harness({ 'package.json': manifestWith('@specwarden/security', '@specwarden/docs') });
     const rules = h.written.get('.specwarden/rules.mjs') ?? '';
     const checkIds = [...h.written.keys()]
       .filter((k) => k.endsWith('.check.mjs'))
-      .map((k) => k.split('/').pop()?.replace(/\.check\.mjs$/, ''));
+      .map((k) =>
+        k
+          .split('/')
+          .pop()
+          ?.replace(/\.check\.mjs$/, ''),
+      );
     expect(checkIds.length).toBe(2);
     for (const id of checkIds) expect(rules).toContain(`checkIds: ['${id}']`);
     // the owner is a file init itself writes, so rule-owner-resolves cannot fail on it

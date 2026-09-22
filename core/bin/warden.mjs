@@ -29,7 +29,7 @@
  * through to the content fingerprint, which stays the authority.
  */
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { newestSrcMtimeMs, srcFingerprint } from '../scripts/src-fingerprint.mjs';
@@ -40,7 +40,16 @@ const srcDir = join(pkg, 'src');
 const distDir = join(pkg, 'dist');
 const distEntry = join(distDir, 'index.js');
 const hashFile = join(distDir, '.srchash');
-const BUILD_CMD = 'pnpm --dir packages/specwarden/core run build';
+/**
+ * How to rebuild, phrased for wherever this copy is.
+ *
+ * DERIVED rather than written down: it said `pnpm --dir packages/specwarden/core run
+ * build` — the path inside the monorepo this engine was extracted from — and stayed
+ * correct exactly as long as there was one checkout. A person meeting this message in an
+ * installed copy, or in the standalone repository, would be told to cd into a directory
+ * that does not exist, while the thing they actually needed was one word.
+ */
+const BUILD_CMD = `pnpm --dir ${relative(process.cwd(), pkg).split(sep).join('/') || '.'} run build`;
 
 function die(reason) {
   process.stderr.write(`specwarden: ${reason}\n  run: ${BUILD_CMD}\n`);
@@ -58,7 +67,9 @@ function die(reason) {
  * how a declaration and its enforcement drift apart — and it is checked BEFORE the
  * import, which is the only point at which a readable message is still possible.
  */
-const floor = Number(/(\d+)/.exec(JSON.parse(readFileSync(join(pkg, 'package.json'), 'utf8')).engines?.node ?? '')?.[1]);
+const floor = Number(
+  /(\d+)/.exec(JSON.parse(readFileSync(join(pkg, 'package.json'), 'utf8')).engines?.node ?? '')?.[1],
+);
 const running = Number(process.versions.node.split('.')[0]);
 if (Number.isFinite(floor) && running < floor) {
   process.stderr.write(
@@ -77,7 +88,10 @@ if (existsSync(srcDir)) {
   if (!existsSync(hashFile)) die('dist is stale — build predates the fingerprint stamp');
   // Fast path: stamp newer than every source ⇒ built after the last edit ⇒ fresh, no
   // hash. Otherwise the mtime is ambiguous — confirm by content before declaring stale.
-  if (newestSrcMtimeMs(srcDir) > statSync(hashFile).mtimeMs && readFileSync(hashFile, 'utf8').trim() !== srcFingerprint(srcDir)) {
+  if (
+    newestSrcMtimeMs(srcDir) > statSync(hashFile).mtimeMs &&
+    readFileSync(hashFile, 'utf8').trim() !== srcFingerprint(srcDir)
+  ) {
     die('dist is stale — source has changed since the build');
   }
 }

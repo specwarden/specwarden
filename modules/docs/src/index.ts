@@ -7,8 +7,21 @@
  * style — where documents live, what a symbol looks like, which words hedge a number.
  * A repository with no documentation to speak of should not be carrying any of it.
  */
-export { docCounts, claimPattern, scanCounts, scanOrdinals, menuLabels, duplicateMenuNumbers } from './doc-counts/doc-counts.check';
-export type { IDocCountsOptions, IAllowedClaim, IMenuOptions, ICountHit, IOrdinalHit } from './doc-counts/doc-counts.check';
+export {
+  docCounts,
+  claimPattern,
+  scanCounts,
+  scanOrdinals,
+  menuLabels,
+  duplicateMenuNumbers,
+} from './doc-counts/doc-counts.check';
+export type {
+  IDocCountsOptions,
+  IAllowedClaim,
+  IMenuOptions,
+  ICountHit,
+  IOrdinalHit,
+} from './doc-counts/doc-counts.check';
 export { docPaths, DOC_PATH_RE } from './doc-paths/doc-paths.check';
 export type { IDocPathsOptions } from './doc-paths/doc-paths.check';
 export { docSymbols } from './doc-symbols/doc-symbols.check';

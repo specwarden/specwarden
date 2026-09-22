@@ -74,11 +74,16 @@ export function archiveReadiness(text: string, files: IFileSource): IArchiveRead
   const harvest = parseHarvest(text);
   const reasons: string[] = [];
   if (!harvest.present) reasons.push('no Harvest section — archiving requires declaring what moved and where.');
-  for (const line of harvest.bareClaims) reasons.push(`line ${line}: "harvested: yes" is not accepted — name what moved and to which document (a claim that cannot be falsified is a check that cannot fail).`);
-  if (harvest.present && harvest.entries.length === 0 && harvest.bareClaims.length === 0) reasons.push('the Harvest section names no "what → where" entry.');
+  for (const line of harvest.bareClaims)
+    reasons.push(
+      `line ${line}: "harvested: yes" is not accepted — name what moved and to which document (a claim that cannot be falsified is a check that cannot fail).`,
+    );
+  if (harvest.present && harvest.entries.length === 0 && harvest.bareClaims.length === 0)
+    reasons.push('the Harvest section names no "what → where" entry.');
   for (const e of harvest.entries) {
     const dest = e.where.split('§')[0].split('#')[0].trim();
-    if ((dest.includes('/') || dest.endsWith('.md')) && !files.exists(dest)) reasons.push(`line ${e.line}: harvest destination "${dest}" does not exist.`);
+    if ((dest.includes('/') || dest.endsWith('.md')) && !files.exists(dest))
+      reasons.push(`line ${e.line}: harvest destination "${dest}" does not exist.`);
   }
   return { ready: reasons.length === 0, reasons };
 }

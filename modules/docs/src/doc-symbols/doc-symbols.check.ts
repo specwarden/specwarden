@@ -62,11 +62,14 @@ export function docSymbols(options: IDocSymbolsOptions): ICheck {
   const declRe = options.declaration ?? DEFAULT_DECL_RE;
   const symbolRefRe = options.symbolRef ?? DEFAULT_SYMBOL_REF_RE;
 
-  const isReference = (id: string): boolean => !bareRe.test(id) && suffixRe.test(id) && !external.has(id) && !illustrative.has(id);
+  const isReference = (id: string): boolean =>
+    !bareRe.test(id) && suffixRe.test(id) && !external.has(id) && !illustrative.has(id);
 
   return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx) => {
     const defined = new Set<string>();
-    const codeFiles = codeSpecs.flatMap((s) => ctx.vcs.trackedFiles(s)).filter((f) => !excludeCode.some((e) => f.includes(e)));
+    const codeFiles = codeSpecs
+      .flatMap((s) => ctx.vcs.trackedFiles(s))
+      .filter((f) => !excludeCode.some((e) => f.includes(e)));
     for (const file of codeFiles) {
       // `d\.ts` before `tsx?` so `foo.d.ts` → `foo`, not `foo.d` (the `tsx?` branch
       // would otherwise match the trailing `.ts` first and leave `.d`).

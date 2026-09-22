@@ -93,8 +93,7 @@ export const DEFAULT_ARCHIVE_HEADER: readonly IArchiveHeaderField[] = [
   { label: 'Left open', pattern: /^\*\*Left open:\*\*\s*\S/m },
 ];
 
-const lastGroup = (match: RegExpExecArray | null): string | undefined =>
-  match ? match[match.length - 1] : undefined;
+const lastGroup = (match: RegExpExecArray | null): string | undefined => (match ? match[match.length - 1] : undefined);
 
 export function planStaleness(options: IPlanStalenessOptions): ICheck {
   const ratchet = options.undeclaredStatusRatchet ?? 0;

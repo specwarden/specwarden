@@ -22,7 +22,7 @@ export const secretScanPart = (ctx: ITemplateContext, o: IPartOptions = {}): IPa
       body: `/**
  * \`secret-scan\` — ${o.header ?? DEFAULT_HEADER}
  */
-import { secretScan } from 'specwarden-module-security';
+import { secretScan } from '@specwarden/security';
 
 export const check = secretScan({
   id: 'secret-scan',

@@ -21,7 +21,9 @@ const ctx = (over: Partial<ITemplateContext> = {}): ITemplateContext => ({
 const paths = (c = ctx()) => speckitTemplate.files(c).map((f) => f.path);
 const bodyOf = (path: string, c = ctx()) => speckitTemplate.files(c).find((f) => f.path === path)?.body ?? '';
 
-const scratch = mkdtempSync(join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '..', '.tmp-generated-'));
+const scratch = mkdtempSync(
+  join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '..', '.tmp-generated-'),
+);
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe('the seam it exists for', () => {
@@ -63,7 +65,13 @@ describe('rules', () => {
     const written = new Set(
       paths()
         .filter((p) => p.endsWith('.check.mjs'))
-        .map((p) => p.split('/').pop()?.replace(/\.check\.mjs$/, '') as string),
+        .map(
+          (p) =>
+            p
+              .split('/')
+              .pop()
+              ?.replace(/\.check\.mjs$/, '') as string,
+        ),
     );
     const named = new Set(
       speckitTemplate.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
@@ -77,7 +85,12 @@ describe('rules', () => {
       const abs = join(scratch, file.path.replace(/\//g, '-'));
       writeFileSync(abs, file.body);
       const mod = (await import(pathToFileURL(abs).href)) as { check?: { id: string } };
-      expect(mod.check?.id).toBe(file.path.split('/').pop()?.replace(/\.check\.mjs$/, ''));
+      expect(mod.check?.id).toBe(
+        file.path
+          .split('/')
+          .pop()
+          ?.replace(/\.check\.mjs$/, ''),
+      );
     }
   });
 });

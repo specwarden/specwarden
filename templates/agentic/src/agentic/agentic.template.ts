@@ -1,11 +1,5 @@
 import type { IRule, ITemplate, ITemplateContext, ITemplateFile } from 'specwarden';
-import {
-  agentRolesPart,
-  compose,
-  docPathsPart,
-  perimeterPart,
-  planLifecyclePart,
-} from 'specwarden-scaffold-parts';
+import { agentRolesPart, compose, docPathsPart, perimeterPart, planLifecyclePart } from '@specwarden/scaffold-parts';
 
 /**
  * A starting tree for a repository that CODING AGENTS work in.
@@ -42,8 +36,9 @@ const assembled = (ctx: ITemplateContext) =>
 
 export const agentic: ITemplate = {
   name: 'agentic',
-  describe: 'a repository coding agents work in — role files, agent-read docs, plan and decision lifecycle, a perimeter',
-  requires: ['specwarden-module-agents', 'specwarden-module-plans', 'specwarden-module-docs'],
+  describe:
+    'a repository coding agents work in — role files, agent-read docs, plan and decision lifecycle, a perimeter',
+  requires: ['@specwarden/agents', '@specwarden/plans', '@specwarden/docs'],
 
   files: (ctx: ITemplateContext): readonly ITemplateFile[] => assembled(ctx).files,
   rules: (ctx: ITemplateContext): readonly IRule[] => assembled(ctx).rules,

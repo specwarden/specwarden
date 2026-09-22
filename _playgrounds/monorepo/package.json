@@ -1,0 +1,15 @@
+{
+  "name": "playground-monorepo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gate": "specwarden check"
+  },
+  "devDependencies": {
+    "specwarden": "workspace:*",
+    "@specwarden/scaffold-parts": "workspace:*",
+    "@specwarden/ops": "workspace:*",
+    "@specwarden/security": "workspace:*",
+    "@specwarden/docs": "workspace:*"
+  }
+}

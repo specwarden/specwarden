@@ -5,7 +5,7 @@ import {
   docHygienePart,
   docPathsPart,
   docPlacementExamplePart,
-} from 'specwarden-scaffold-parts';
+} from '@specwarden/scaffold-parts';
 
 /**
  * A starting tree for a repository whose product IS documentation — a handbook, a
@@ -39,7 +39,7 @@ const assembled = (ctx: ITemplateContext) =>
 export const docsOnly: ITemplate = {
   name: 'docs-only',
   describe: 'a repository whose product is documentation — paths, hygiene, counts, placement',
-  requires: ['specwarden-module-docs'],
+  requires: ['@specwarden/docs'],
 
   files: (ctx: ITemplateContext): readonly ITemplateFile[] => assembled(ctx).files,
   rules: (ctx: ITemplateContext): readonly IRule[] => assembled(ctx).rules,

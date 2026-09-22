@@ -89,12 +89,7 @@ export class InMemoryFileSource implements IFileSource {
   }
 
   private norm(path: string): string {
-    return path
-      .replace(/\\/g, '/')
-      .replace(/^\.\//, '')
-      .replace(/\/+/g, '/')
-      .replace(/\/$/, '')
-      .replace(/^\//, '');
+    return path.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+/g, '/').replace(/\/$/, '').replace(/^\//, '');
   }
 
   /** `**` crosses slashes, `*`/`?` stay within a segment, everything else is literal.

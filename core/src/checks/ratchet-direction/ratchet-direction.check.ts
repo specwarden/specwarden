@@ -72,18 +72,33 @@ export function ratchetDirection(options: IRatchetDirectionOptions): ICheck {
       try {
         parsed = JSON.parse(ctx.files.read(file));
       } catch (error) {
-        findings.push({ severity: 'error', file, message: `${file} is not valid JSON: ${(error as Error).message}. A ratchet that will not parse caps nothing.`, ruleId: options.id });
+        findings.push({
+          severity: 'error',
+          file,
+          message: `${file} is not valid JSON: ${(error as Error).message}. A ratchet that will not parse caps nothing.`,
+          ruleId: options.id,
+        });
         continue;
       }
 
       const record = parsed as { id?: unknown; value?: unknown };
       if (record.id !== undefined && record.id !== fileId) {
-        findings.push({ severity: 'error', file, message: `${file} declares id \`${String(record.id)}\` but its filename is \`${fileId}\` — the store is keyed by filename, so the two must agree.`, ruleId: options.id });
+        findings.push({
+          severity: 'error',
+          file,
+          message: `${file} declares id \`${String(record.id)}\` but its filename is \`${fileId}\` — the store is keyed by filename, so the two must agree.`,
+          ruleId: options.id,
+        });
       }
 
       const value = record.value;
       if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-        findings.push({ severity: 'error', file, message: `${file} has value \`${String(value)}\` — a ratchet is a non-negative integer.`, ruleId: options.id });
+        findings.push({
+          severity: 'error',
+          file,
+          message: `${file} has value \`${String(value)}\` — a ratchet is a non-negative integer.`,
+          ruleId: options.id,
+        });
         continue;
       }
 

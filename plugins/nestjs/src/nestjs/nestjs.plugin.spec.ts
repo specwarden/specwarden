@@ -77,5 +77,4 @@ describe('nestjs plugin', () => {
 
     expect(documented.checks?.[0]?.hint).toContain('skills/nestjs/SKILL.md');
   });
-
 });

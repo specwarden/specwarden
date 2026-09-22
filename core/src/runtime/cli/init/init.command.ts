@@ -87,7 +87,9 @@ export async function init(
     templateFiles = template!.files(context);
     // A template leaves `owner` empty: it does not know where this repository's README
     // will be. Filled with the one init itself writes, so the owner resolves on day one.
-    templateRules = template!.rules(context).map((r) => (r.owner === '' ? { ...r, owner: `${CONFIG_DIR}/README.md` } : r));
+    templateRules = template!
+      .rules(context)
+      .map((r) => (r.owner === '' ? { ...r, owner: `${CONFIG_DIR}/README.md` } : r));
     templateLabel = template!.name;
     // A template whose tree needs the config to know something about it — a perimeter's
     // rule ids counting as enforcers, say — contributes those fields as source.

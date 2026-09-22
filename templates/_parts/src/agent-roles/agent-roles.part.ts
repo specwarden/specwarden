@@ -31,7 +31,7 @@ export const agentRolesPart = (ctx: ITemplateContext, o: IAgentRolesOptions = {}
  * layout. Another assistant keeps its roles elsewhere; the check does not care which,
  * only that the files parse and declare the fields you require.
  */
-import { agentDefinitions } from 'specwarden-module-agents';
+import { agentDefinitions } from '@specwarden/agents';
 
 export const check = agentDefinitions({
   id: 'agent-definitions',

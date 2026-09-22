@@ -36,6 +36,10 @@ export function joinDir(dir: string, rel: string): string {
 
 /** Whether a repository-relative path is among a glob's matches, using the active
  * file source's own glob engine (so Node and in-memory agree). */
-export function pathMatches(ctx: { files: { glob(p: string): readonly string[] } }, glob: string, path: string): boolean {
+export function pathMatches(
+  ctx: { files: { glob(p: string): readonly string[] } },
+  glob: string,
+  path: string,
+): boolean {
   return ctx.files.glob(glob).includes(path);
 }

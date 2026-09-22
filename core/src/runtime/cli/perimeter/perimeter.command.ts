@@ -68,7 +68,8 @@ export async function perimeter(cwd: string, readStdin: () => string, io: ICliIo
     // A consumer's perimeter.mjs may export `runtime` beside `rules`; the two live in
     // the same file because a rule set and the tool it guards are chosen together.
     const runtime =
-      mod.runtime ?? (Array.isArray(mod.default) ? undefined : (mod.default as { runtime?: IAgentRuntime } | undefined)?.runtime);
+      mod.runtime ??
+      (Array.isArray(mod.default) ? undefined : (mod.default as { runtime?: IAgentRuntime } | undefined)?.runtime);
     const raw = readStdin().trim();
     const { code, message } = evaluatePayload(raw ? JSON.parse(raw) : {}, rules, runtime);
     if (message) io.err(message);

@@ -309,9 +309,7 @@ export function docCounts(options: IDocCountsOptions): ICheck {
       if (options.menu) {
         const menuSource = read(options.menu.source);
         if (menuSource === undefined) {
-          failures.push(
-            `${options.menu.source} cannot be read — the menu half of this check compared nothing.`,
-          );
+          failures.push(`${options.menu.source} cannot be read — the menu half of this check compared nothing.`);
         } else {
           failures.push(...duplicateMenuNumbers(menuSource, options.menu.dispatch));
 

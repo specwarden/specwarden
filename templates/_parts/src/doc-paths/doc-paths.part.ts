@@ -24,7 +24,7 @@ export const docPathsPart = (ctx: ITemplateContext, o: IPartOptions = {}): IPart
       body: `/**
  * \`doc-paths\` — ${o.header ?? DEFAULT_HEADER}
  */
-import { docPaths } from 'specwarden-module-docs';
+import { docPaths } from '@specwarden/docs';
 
 export const check = docPaths({
   id: 'doc-paths',

@@ -1,0 +1,16 @@
+{
+  "name": "specwarden-nestjs",
+  "description": "@specwarden/plugin-nestjs — NestJS conventions, declared against the engine's primitives.",
+  "version": "0.0.0",
+  "author": {
+    "name": "specwarden"
+  },
+  "homepage": "https://github.com/specwarden/specwarden/tree/main/plugins/nestjs",
+  "repository": "https://github.com/specwarden/specwarden",
+  "license": "MIT",
+  "keywords": [
+    "specwarden",
+    "quality-gates",
+    "plugin"
+  ]
+}

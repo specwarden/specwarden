@@ -1,0 +1,28 @@
+# Build output and installed dependencies.
+dist/
+node_modules/
+coverage/
+reports/
+.stryker-tmp/
+pnpm-lock.yaml
+
+# GENERATED from scripts/registry.mjs, and from the templates.
+#
+# Prettier and the scaffolder would each want the last word on these, and the scaffolder
+# has it: a file prettier reformatted fails `check:drift` on the next run, and a file the
+# scaffolder rewrote fails `format` — a fight that alternates forever and that neither
+# tool can win. What is generated is formatted by whatever generated it.
+**/package.json
+**/tsconfig.json
+**/tsup.config.ts
+**/.claude-plugin/*.json
+**/skills/**/reference.md
+LICENSE
+**/LICENSE
+llms.txt
+_playgrounds/
+CLAUDE.md
+README.md
+
+# Scratch trees a template test writes and deletes.
+**/.tmp-generated-*/

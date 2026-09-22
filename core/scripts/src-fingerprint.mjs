@@ -54,3 +54,25 @@ export function srcFingerprint(srcDir) {
   }
   return hash.digest('hex');
 }
+
+/**
+ * Write the stamp beside the bundle. Called by the build once the output exists.
+ *
+ * It lives HERE rather than in the build config because the shim and the build must
+ * agree on what a stamp is, and they already read the fingerprint from this file. A
+ * second place that writes one is a second definition of "fresh".
+ *
+ * Relative to this file, never to the working directory: the build may be invoked from
+ * the repository root, and a stamp written into the wrong directory leaves every run
+ * refusing with "dist is stale" while the build reports success.
+ */
+export async function stampFingerprint() {
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const { dirname, join } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+
+  const pkgDir = dirname(dirname(fileURLToPath(import.meta.url)));
+  const dist = join(pkgDir, 'dist');
+  mkdirSync(dist, { recursive: true });
+  writeFileSync(join(dist, '.srchash'), srcFingerprint(join(pkgDir, 'src')));
+}

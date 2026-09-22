@@ -1,4 +1,13 @@
-import type { ICheck, ICheckContext, ICheckResult, IFixable, IReporter, IVerdict, TCapability, TTier } from '../../../domain';
+import type {
+  ICheck,
+  ICheckContext,
+  ICheckResult,
+  IFixable,
+  IReporter,
+  IVerdict,
+  TCapability,
+  TTier,
+} from '../../../domain';
 import { isFixable } from '../../../domain';
 import type { TSharedBuildInput } from '../../config/config.model';
 import { type IEngineAdapters, buildContext } from '../../container';
@@ -104,7 +113,10 @@ function measurementOf(verdict: IVerdict): number {
  */
 function attributed(verdict: IVerdict, checkId: string): IVerdict {
   if (verdict.findings.every((f) => f.ruleId !== undefined)) return verdict;
-  return { ...verdict, findings: verdict.findings.map((f) => (f.ruleId === undefined ? { ...f, ruleId: checkId } : f)) };
+  return {
+    ...verdict,
+    findings: verdict.findings.map((f) => (f.ruleId === undefined ? { ...f, ruleId: checkId } : f)),
+  };
 }
 
 /** How a run ended: the exit code plus the results, so a caller (and a test) can
@@ -166,7 +178,14 @@ export class CheckRunner {
     const lanes = options.fix || options.tighten ? 1 : Math.max(1, Math.trunc(options.concurrency ?? 1));
 
     if (lanes > 1) {
-      const outcome = await this.runConcurrently(candidates, lanes, { named, isRelevant, skip, denied, options, changed });
+      const outcome = await this.runConcurrently(candidates, lanes, {
+        named,
+        isRelevant,
+        skip,
+        denied,
+        options,
+        changed,
+      });
       results.push(...outcome);
       this.reporter.runFinished(results, this.adapters.clock.monotonicMs() - runStart);
       const anyFailed = results.some((r) => !r.skipped && !r.verdict.ok && !r.meta.advisory);
@@ -365,7 +384,11 @@ export class CheckRunner {
       return {
         ok: after.ok,
         findings: [
-          { severity: 'info', message: `fixed ${outcome.fixed} finding(s)${outcome.summary ? `: ${outcome.summary}` : ''}`, ruleId: check.id },
+          {
+            severity: 'info',
+            message: `fixed ${outcome.fixed} finding(s)${outcome.summary ? `: ${outcome.summary}` : ''}`,
+            ruleId: check.id,
+          },
           ...after.findings,
         ],
       };
@@ -374,7 +397,11 @@ export class CheckRunner {
         ok: false,
         findings: [
           ...before.findings,
-          { severity: 'error', message: `fix failed: ${err instanceof Error ? err.message : String(err)}`, ruleId: check.id },
+          {
+            severity: 'error',
+            message: `fix failed: ${err instanceof Error ? err.message : String(err)}`,
+            ruleId: check.id,
+          },
         ],
       };
     }
@@ -385,7 +412,10 @@ export class CheckRunner {
     if (raw === '') return new Set();
     if (env.ci) return new Set(); // a skip that reaches the arbiter is a hole
     if (raw.toLowerCase() === 'all') return new Set(candidates.map((c) => c.id));
-    const wanted = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    const wanted = raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
     const unknown = wanted.filter((id) => !this.registry.byId(id));
     if (unknown.length > 0) {
       throw new RunnerUsageError(`unknown check id(s) in skip: ${unknown.join(', ')}`);
@@ -514,7 +544,13 @@ export class CheckRunner {
   /** The verdicts reachable without running the check: skipped, or capability-denied. */
   private decide(
     check: ICheck,
-    ctx: { named: boolean; isRelevant: (c: ICheck) => boolean; skip: ReadonlySet<string>; denied: ReadonlySet<TCapability>; options: ICheckRunnerOptions },
+    ctx: {
+      named: boolean;
+      isRelevant: (c: ICheck) => boolean;
+      skip: ReadonlySet<string>;
+      denied: ReadonlySet<TCapability>;
+      options: ICheckRunnerOptions;
+    },
   ): ICheckResult | undefined {
     if ((!ctx.named || ctx.options.ifRelevant) && !ctx.isRelevant(check)) return this.skipped(check, 'not-relevant');
     if (ctx.skip.has(check.id)) return this.skipped(check, 'by-request');
@@ -537,7 +573,11 @@ export class CheckRunner {
   }
 
   /** One check, start to verdict. Never called on a fix/tighten run — those are serial. */
-  private async runOne(check: ICheck, options: ICheckRunnerOptions, changed: readonly string[] | undefined): Promise<ICheckResult> {
+  private async runOne(
+    check: ICheck,
+    options: ICheckRunnerOptions,
+    changed: readonly string[] | undefined,
+  ): Promise<ICheckResult> {
     const stored = check.ratchet ? this.adapters.ratchets.read(check.ratchet.id)?.value : undefined;
     const context = buildContext(check, this.adapters, changed ?? [], options.shard, stored, () => this.registry.all());
     const startedAt = this.adapters.clock.monotonicMs();

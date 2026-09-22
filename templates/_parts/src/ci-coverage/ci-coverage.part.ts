@@ -50,7 +50,7 @@ export const ciCoveragePart = (ctx: ITemplateContext): IPart => {
  * from a list somebody maintains: a hand-built list can forget a gate, and the forgotten
  * gate would then be invisible to the one audit meant to notice it.
  */
-import { gatesHaveCiJobs } from 'specwarden-module-ops';
+import { gatesHaveCiJobs } from '@specwarden/ops';
 
 export const check = gatesHaveCiJobs({
   id: 'gate-coverage',

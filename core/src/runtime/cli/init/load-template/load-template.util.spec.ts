@@ -21,12 +21,18 @@ describe('loadTemplate resolves from the repository, not from the engine', () =>
   const installTemplate = (name: string, source: string) => {
     const dir = join(root, 'node_modules', packageForTemplate(name));
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: packageForTemplate(name), type: 'module', main: 'index.mjs' }));
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ name: packageForTemplate(name), type: 'module', main: 'index.mjs' }),
+    );
     writeFileSync(join(dir, 'index.mjs'), source);
   };
 
   const declare = (...pkgs: string[]) =>
-    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'host', devDependencies: Object.fromEntries(pkgs.map((p) => [p, '1'])) }));
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ name: 'host', devDependencies: Object.fromEntries(pkgs.map((p) => [p, '1'])) }),
+    );
 
   const TEMPLATE = (requires: string[] = []) => `export const t = {
     name: 'demo',
@@ -53,7 +59,7 @@ describe('loadTemplate resolves from the repository, not from the engine', () =>
   it('names the package to install when there is none', async () => {
     const { template, problem } = await loadTemplate('missing', new NodeFileSource(root));
     expect(template).toBeUndefined();
-    expect(problem).toContain('specwarden-template-missing');
+    expect(problem).toContain('@specwarden/template-missing');
     expect(problem).toContain('omit --template');
   });
 
@@ -61,16 +67,16 @@ describe('loadTemplate resolves from the repository, not from the engine', () =>
     // Its generated files import those modules; writing them would produce a tree that
     // fails on its first run with an import error — the run that decides whether the
     // tool is kept.
-    installTemplate('demo', TEMPLATE(['specwarden-module-docs', 'specwarden-module-ops']));
+    installTemplate('demo', TEMPLATE(['@specwarden/docs', '@specwarden/ops']));
     const { template, problem } = await loadTemplate('demo', new NodeFileSource(root));
     expect(template).toBeUndefined();
-    expect(problem).toContain('specwarden-module-docs, specwarden-module-ops');
+    expect(problem).toContain('@specwarden/docs, @specwarden/ops');
     expect(problem).toContain('first run');
   });
 
   it('accepts it once they are declared', async () => {
-    installTemplate('demo', TEMPLATE(['specwarden-module-docs']));
-    declare('specwarden-module-docs');
+    installTemplate('demo', TEMPLATE(['@specwarden/docs']));
+    declare('@specwarden/docs');
     const { template, problem } = await loadTemplate('demo', new NodeFileSource(root));
     expect(problem).toBeUndefined();
     expect(template?.name).toBe('demo');

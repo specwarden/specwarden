@@ -38,7 +38,10 @@ describe('discoverChecks', () => {
   it('accepts the three export spellings the consumer zone already used', async () => {
     write('docs/one.check.mjs', CHECK('one', 'check'));
     write('docs/two.check.mjs', CHECK('two', 'gateCheck'));
-    write('docs/many.check.mjs', `export const checks = [${CHECK('three').replace('export const check = ', '').trim().replace(/;$/, '')}];\n`);
+    write(
+      'docs/many.check.mjs',
+      `export const checks = [${CHECK('three').replace('export const check = ', '').trim().replace(/;$/, '')}];\n`,
+    );
     write('docs/dflt.check.mjs', CHECK('four').replace('export const check =', 'export default'));
     const { checks } = await run();
     expect(checks.map((c) => c.id).sort()).toEqual(['four', 'one', 'three', 'two']);

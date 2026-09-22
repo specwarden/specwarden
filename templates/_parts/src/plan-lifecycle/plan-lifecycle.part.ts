@@ -48,7 +48,7 @@ export const planLifecyclePart = (ctx: ITemplateContext, o: IPlanLifecycleOption
  * Delete this file if you do not plan in the repository. An inert check is worse than
  * an absent one: it looks like coverage.
  */
-import { planStaleness } from 'specwarden-module-plans';
+import { planStaleness } from '@specwarden/plans';
 
 export const check = planStaleness({
   id: 'plan-staleness',
@@ -77,7 +77,7 @@ export const check = planStaleness({
  * The four patterns are English and are HERE rather than hidden in a default, so a
  * repository writing plans in another language can see exactly what to replace.
  */
-import { planShape } from 'specwarden-module-plans';
+import { planShape } from '@specwarden/plans';
 
 export const check = planShape({
   id: 'plan-shape',
@@ -109,7 +109,7 @@ export const check = planShape({
  * A reason is an assertion, not an apology. "Too slow" is a reason; "we did not have
  * time" is a schedule.
  */
-import { decisionLogShape } from 'specwarden-module-plans';
+import { decisionLogShape } from '@specwarden/plans';
 
 export const check = decisionLogShape({
   id: 'decision-log-shape',

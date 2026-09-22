@@ -80,5 +80,10 @@ function exported(mod: ICheckModule): readonly ICheck[] {
 }
 
 function isCheck(v: unknown): v is ICheck {
-  return typeof v === 'object' && v !== null && typeof (v as ICheck).id === 'string' && typeof (v as ICheck).run === 'function';
+  return (
+    typeof v === 'object' &&
+    v !== null &&
+    typeof (v as ICheck).id === 'string' &&
+    typeof (v as ICheck).run === 'function'
+  );
 }

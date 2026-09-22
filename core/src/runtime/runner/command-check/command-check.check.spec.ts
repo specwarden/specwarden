@@ -78,7 +78,8 @@ describe('CommandCheck', () => {
 });
 
 describe('the shell is a setting, because not every machine has bash', () => {
-  const ctxWith = (proc: { run: (c: string, a: readonly string[]) => unknown }) => ({ proc }) as unknown as ICheckContext;
+  const ctxWith = (proc: { run: (c: string, a: readonly string[]) => unknown }) =>
+    ({ proc }) as unknown as ICheckContext;
 
   it('runs through bash by default', () => {
     let spawned = '';
@@ -93,7 +94,9 @@ describe('the shell is a setting, because not every machine has bash', () => {
     // should require forking the engine.
     let spawned = '';
     const ctx = ctxWith({ run: (c, a) => ((spawned = `${c} ${a.join(' ')}`), { status: 0, stdout: '', stderr: '' }) });
-    new CommandCheck({ id: 'x', title: 'x', tier: 'fast', cmd: 'echo hi', shell: { command: 'sh', args: ['-c'] } }).run(ctx);
+    new CommandCheck({ id: 'x', title: 'x', tier: 'fast', cmd: 'echo hi', shell: { command: 'sh', args: ['-c'] } }).run(
+      ctx,
+    );
     expect(spawned).toBe('sh -c echo hi');
   });
 
@@ -185,7 +188,11 @@ describe('CommandCheck — a zero exit is not evidence of work', () => {
   });
 
   it('refuses to run at all when a path it is pointed at has moved', async () => {
-    const v = await ran({ paths: ['src/a.test.ts', 'src/gone.test.ts'] }, { status: 0, stdout: '', stderr: '' }, { 'src/a.test.ts': '' });
+    const v = await ran(
+      { paths: ['src/a.test.ts', 'src/gone.test.ts'] },
+      { status: 0, stdout: '', stderr: '' },
+      { 'src/a.test.ts': '' },
+    );
 
     expect(v.ok).toBe(false);
     expect(v.findings).toHaveLength(1);
@@ -193,7 +200,11 @@ describe('CommandCheck — a zero exit is not evidence of work', () => {
   });
 
   it('runs when every declared path is on disk', async () => {
-    const v = await ran({ paths: ['src/a.test.ts'] }, { status: 0, stdout: 'ok\n', stderr: '' }, { 'src/a.test.ts': '' });
+    const v = await ran(
+      { paths: ['src/a.test.ts'] },
+      { status: 0, stdout: 'ok\n', stderr: '' },
+      { 'src/a.test.ts': '' },
+    );
 
     expect(v.ok).toBe(true);
   });

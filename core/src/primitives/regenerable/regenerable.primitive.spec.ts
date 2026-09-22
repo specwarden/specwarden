@@ -6,7 +6,8 @@ import { regenerable } from './regenerable.primitive';
 
 const ID = { id: 'map', title: 'the map matches its generator', tier: 'fast' as const };
 
-const check = (over: Record<string, unknown> = {}) => regenerable({ ...ID, artifact: 'docs/map.md', by: 'generate-map', ...over });
+const check = (over: Record<string, unknown> = {}) =>
+  regenerable({ ...ID, artifact: 'docs/map.md', by: 'generate-map', ...over });
 
 const producing = (stdout: string, status = 0) => ({
   tree: { 'docs/map.md': 'committed' },
@@ -41,9 +42,20 @@ describe('regenerable', () => {
   });
 
   it('hands the generator its own deadline, so a hung one does not hang the run', () => {
-    const ctx = testContext({ ...producing('committed'), exec: () => ({ status: 0, stdout: 'committed', stderr: '' }) });
+    const ctx = testContext({
+      ...producing('committed'),
+      exec: () => ({ status: 0, stdout: 'committed', stderr: '' }),
+    });
     let seen: unknown;
-    const spy = { ...ctx, proc: { run: (c: string, a: readonly string[], o?: unknown) => ((seen = o), { status: 0, stdout: 'committed', stderr: '' }) } };
+    const spy = {
+      ...ctx,
+      proc: {
+        run: (c: string, a: readonly string[], o?: unknown) => (
+          (seen = o),
+          { status: 0, stdout: 'committed', stderr: '' }
+        ),
+      },
+    };
 
     check({ timeoutSec: 30 }).run(spy as never);
 

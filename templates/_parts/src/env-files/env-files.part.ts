@@ -32,7 +32,7 @@ export const envFilesExamplePart = (ctx: ITemplateContext): IPart => {
  *
  * Fill it in, confirm the modes and the verifier service, and rename to \`.check.mjs\`.
  */
-import { envFilesAgree } from 'specwarden-module-ops';
+import { envFilesAgree } from '@specwarden/ops';
 
 export const check = envFilesAgree({
   id: 'env-files-agree',

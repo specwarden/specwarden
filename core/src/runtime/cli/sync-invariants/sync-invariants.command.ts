@@ -20,7 +20,9 @@ export function syncInvariants(config: IWardenConfig, files: IFileSource, io: IC
   }
   const result = source.requirements(files);
   if (!result.found) {
-    io.out(`spec source "${source.name}" found nothing: ${result.note ?? 'no requirements'}. (This is not a green light — it means the source could not be read.)\n`);
+    io.out(
+      `spec source "${source.name}" found nothing: ${result.note ?? 'no requirements'}. (This is not a green light — it means the source could not be read.)\n`,
+    );
     return 0;
   }
 
@@ -33,22 +35,32 @@ export function syncInvariants(config: IWardenConfig, files: IFileSource, io: IC
 
   const plan = planInvariantSync(result.items, existing);
 
-  io.out(`sync-invariants — ${source.name}: ${result.items.length} requirement(s), ${existing.length} invariant(s) found\n\n`);
+  io.out(
+    `sync-invariants — ${source.name}: ${result.items.length} requirement(s), ${existing.length} invariant(s) found\n\n`,
+  );
 
   if (plan.toDeposit.length) {
-    io.out(`${plan.toDeposit.length} requirement(s) with no invariant yet — propose depositing (a human decides the module and the pinning):\n`);
+    io.out(
+      `${plan.toDeposit.length} requirement(s) with no invariant yet — propose depositing (a human decides the module and the pinning):\n`,
+    );
     for (const d of plan.toDeposit) io.out(`  + ${d.id}  ${d.statement}\n`);
     io.out('\n');
   }
   if (plan.orphaned.length) {
-    io.out(`${plan.orphaned.length} invariant(s) whose requirement has vanished — reconcile (retire the invariant, or restore the requirement):\n`);
+    io.out(
+      `${plan.orphaned.length} invariant(s) whose requirement has vanished — reconcile (retire the invariant, or restore the requirement):\n`,
+    );
     for (const o of plan.orphaned) io.out(`  - ${o.id}  (${o.location})\n`);
     io.out('\n');
   }
   if (!plan.toDeposit.length && !plan.orphaned.length) {
-    io.out(`✓ in sync — every requirement has an invariant and every invariant a requirement (${plan.inSync.length}).\n`);
+    io.out(
+      `✓ in sync — every requirement has an invariant and every invariant a requirement (${plan.inSync.length}).\n`,
+    );
   }
 
-  io.out('Nothing was written. Apply the deposits by hand — a requirement becomes a module invariant only when a person decides it does.\n');
+  io.out(
+    'Nothing was written. Apply the deposits by hand — a requirement becomes a module invariant only when a person decides it does.\n',
+  );
   return 0;
 }

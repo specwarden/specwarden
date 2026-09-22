@@ -158,9 +158,7 @@ export function buildOrderFollowsDeps(options: IBuildOrderOptions): ICheck {
         ? { ok: false, findings }
         : {
             ok: true,
-            findings: [
-              { severity: 'info', message: `✓ every ${options.scopePrefix}* build follows its dependencies` },
-            ],
+            findings: [{ severity: 'info', message: `✓ every ${options.scopePrefix}* build follows its dependencies` }],
           };
     },
   };

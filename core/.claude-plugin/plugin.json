@@ -1,0 +1,16 @@
+{
+  "name": "specwarden",
+  "description": "specwarden — A repository declares its rules; the warden proves which hold.",
+  "version": "0.0.0",
+  "author": {
+    "name": "specwarden"
+  },
+  "homepage": "https://github.com/specwarden/specwarden/tree/main/core",
+  "repository": "https://github.com/specwarden/specwarden",
+  "license": "MIT",
+  "keywords": [
+    "specwarden",
+    "quality-gates",
+    "core"
+  ]
+}

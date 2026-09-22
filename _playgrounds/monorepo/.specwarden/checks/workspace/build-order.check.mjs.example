@@ -1,0 +1,29 @@
+/**
+ * `build-order` — the declared build order follows the dependency graph.
+ *
+ * A package built before the one it depends on picks up the PREVIOUS build's output.
+ * Nothing errors: the build succeeds, and ships something stale.
+ *
+ * Ships as `.example` because four of its inputs are facts about YOUR tooling that no
+ * template can guess — where the packages are, what their name prefix is, which files
+ * declare the order, and how a build is spelled in them. Fill the four in, rename to
+ * `.check.mjs`, and it enforces the graph. Left half-configured it would find nothing
+ * and report green, which is the failure this engine exists against.
+ */
+import { buildOrderFollowsDeps } from '@specwarden/ops';
+
+export const check = buildOrderFollowsDeps({
+  id: 'build-order',
+  title: 'a package is built after everything it depends on',
+  tier: 'fast',
+  // Where the workspace packages live.
+  packagesDir: 'packages',
+  // A workspace package's name prefix; anything else is an external dependency.
+  scopePrefix: '@your-scope/',
+  // The files that DECLARE the order — a Dockerfile, a CI workflow, a build script.
+  containerFiles: 'Dockerfile*',
+  // Matches one build invocation and captures the package name.
+  buildInvocation: String.raw`pnpm --filter (\S+) run build`,
+  when: (changed) => changed.some((f) => f.includes('Dockerfile') || f.endsWith('package.json')),
+  hint: 'Reorder the build, or fix the dependency that made the order wrong.',
+});

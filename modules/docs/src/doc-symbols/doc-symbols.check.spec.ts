@@ -35,7 +35,9 @@ describe('docSymbols', () => {
   });
 
   it('accepts a symbol whose NAME is only the filename (factory-built view models)', () => {
-    expect(run({ 'MOD.md': 'the `AuthViewModel`', 'AuthViewModel.ts': 'export const useAuthViewModel = () => {}' }).ok).toBe(true);
+    expect(
+      run({ 'MOD.md': 'the `AuthViewModel`', 'AuthViewModel.ts': 'export const useAuthViewModel = () => {}' }).ok,
+    ).toBe(true);
   });
 
   it('does not flag a bare suffix used as a word, or a non-suffixed name', () => {

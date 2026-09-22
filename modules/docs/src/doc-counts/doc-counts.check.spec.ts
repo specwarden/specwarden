@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  claimPattern,
-  duplicateMenuNumbers,
-  menuLabels,
-  scanCounts,
-  scanOrdinals,
-} from './doc-counts.check';
+import { claimPattern, duplicateMenuNumbers, menuLabels, scanCounts, scanOrdinals } from './doc-counts.check';
 
 /**
  * The whole value of this check is the line between four kinds of number, and three of the
@@ -123,10 +117,7 @@ describe('the menu half', () => {
   const REFERENCE = /\boption\s+\*{0,2}(\d+)\*{0,2}(?![\w])/gi;
   const DISPATCH = /^\s{4}(\d+)\)/gm;
 
-  const MENU = [
-    "  printf '  12) Export globals (pg_dumpall)\\n'",
-    "  printf '  57) Cron status\\n'",
-  ].join('\n');
+  const MENU = ["  printf '  12) Export globals (pg_dumpall)\\n'", "  printf '  57) Cron status\\n'"].join('\n');
 
   const labels = menuLabels(MENU, ITEM);
 

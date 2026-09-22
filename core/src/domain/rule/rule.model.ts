@@ -12,9 +12,7 @@ import type { TZone } from '../zone/zone.model';
  * not mechanizable. The reason is an assertion, not an apology — why enforcement is
  * impossible, not that nobody got to it — and there is no way to state "unenforced"
  * without one. */
-export type TRuleEnforcement =
-  | { readonly checkIds: readonly string[] }
-  | { readonly notMechanizable: string };
+export type TRuleEnforcement = { readonly checkIds: readonly string[] } | { readonly notMechanizable: string };
 
 export interface IRule {
   readonly id: string;

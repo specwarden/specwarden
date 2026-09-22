@@ -1,5 +1,5 @@
 import type { IRule, ITemplate, ITemplateContext, ITemplateFile } from 'specwarden';
-import { compose, docPathsPart, secretScanPart, specSourcePart } from 'specwarden-scaffold-parts';
+import { compose, docPathsPart, secretScanPart, specSourcePart } from '@specwarden/scaffold-parts';
 
 /**
  * A starting tree for a repository that specifies its work with OPENSPEC.
@@ -34,7 +34,7 @@ const assembled = (ctx: ITemplateContext) =>
 export const openspecTemplate: ITemplate = {
   name: 'openspec',
   describe: 'a repository specified with OpenSpec — the spec source wired, credential scan, doc paths',
-  requires: ['specwarden-module-openspec', 'specwarden-module-security', 'specwarden-module-docs'],
+  requires: ['@specwarden/openspec', '@specwarden/security', '@specwarden/docs'],
 
   files: (ctx: ITemplateContext): readonly ITemplateFile[] => assembled(ctx).files,
   rules: (ctx: ITemplateContext): readonly IRule[] => assembled(ctx).rules,

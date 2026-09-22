@@ -11,9 +11,11 @@ import { describe, expect, it } from 'vitest';
  * first.
  */
 describe('public surface', () => {
-  const pkg = JSON.parse(
-    readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8'),
-  ) as { exports: Record<string, unknown>; main: string; types: string };
+  const pkg = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8')) as {
+    exports: Record<string, unknown>;
+    main: string;
+    types: string;
+  };
 
   it('exposes exactly the root export', () => {
     expect(Object.keys(pkg.exports)).toEqual(['.']);

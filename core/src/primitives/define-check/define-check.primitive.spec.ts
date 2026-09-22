@@ -154,7 +154,8 @@ describe('defineCheck', () => {
   });
 
   it('an `up` ratchet fails BELOW its floor and holds at or above it', async () => {
-    const at = (score: number) => build(() => ({ findings: [], measured: score }), { ratchet: 68, ratchetDirection: 'up' });
+    const at = (score: number) =>
+      build(() => ({ findings: [], measured: score }), { ratchet: 68, ratchetDirection: 'up' });
 
     expect((await runCheck(at(61))).ok).toBe(false);
     expect((await runCheck(at(68))).ok).toBe(true);
@@ -164,7 +165,9 @@ describe('defineCheck', () => {
   // ── the corpus floor ───────────────────────────────────────────────────────────
 
   it('fails when it examined fewer units than it declared it must', async () => {
-    const verdict = await runCheck(build(() => ({ findings: [], examined: 0, unit: 'documents' }), { corpus: { atLeast: 1 } }));
+    const verdict = await runCheck(
+      build(() => ({ findings: [], examined: 0, unit: 'documents' }), { corpus: { atLeast: 1 } }),
+    );
 
     expect(verdict.ok).toBe(false);
     expect(errorsOf(verdict)[0]).toContain('examined 0 documents');

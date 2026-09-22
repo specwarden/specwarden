@@ -15,13 +15,23 @@
 export { envFilesAgree, parseCompose, parseEnvFile } from './env-files-agree/env-files-agree.check';
 export type { IEnvFilesAgreeOptions, IComposeService } from './env-files-agree/env-files-agree.check';
 
-export { upstreamsResolve, parseUpstreams, hostOf, violationsFor as upstreamViolationsFor } from './upstreams-resolve/upstreams-resolve.check';
+export {
+  upstreamsResolve,
+  parseUpstreams,
+  hostOf,
+  violationsFor as upstreamViolationsFor,
+} from './upstreams-resolve/upstreams-resolve.check';
 export type { IUpstreamsResolveOptions, IUpstream } from './upstreams-resolve/upstreams-resolve.check';
 
 export { gatesHaveCiJobs, parseWorkflowJobs } from './gates-have-ci-jobs/gates-have-ci-jobs.check';
 export type { IGateEntry, IGatesHaveCiJobsOptions, IWorkflowJob } from './gates-have-ci-jobs/gates-have-ci-jobs.check';
 
-export { buildOrderFollowsDeps, buildOrder, violationsFor, workspaceDeps } from './build-order-follows-deps/build-order-follows-deps.check';
+export {
+  buildOrderFollowsDeps,
+  buildOrder,
+  violationsFor,
+  workspaceDeps,
+} from './build-order-follows-deps/build-order-follows-deps.check';
 export type { IBuildOrderOptions } from './build-order-follows-deps/build-order-follows-deps.check';
 
 export { shellLocalScope, functionSpans, localOutsideFunction } from './shell-local-scope/shell-local-scope.check';

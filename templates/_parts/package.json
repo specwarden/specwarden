@@ -1,8 +1,15 @@
 {
-  "name": "specwarden-scaffold-parts",
+  "name": "@specwarden/scaffold-parts",
   "version": "0.0.0",
-  "private": true,
   "type": "module",
+  "description": "scaffold: The pieces every template is assembled from.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/specwarden/specwarden.git",
+    "directory": "templates/_parts"
+  },
+  "homepage": "https://github.com/specwarden/specwarden/tree/main/templates/_parts#readme",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -12,27 +19,37 @@
       "default": "./dist/index.js"
     }
   },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
-    "build": "node scripts/build.mjs",
+    "build": "tsup",
     "lint": "eslint src --max-warnings=0",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepare": "pnpm run build"
   },
   "dependencies": {
-    "specwarden": "workspace:*"
+    "specwarden": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "esbuild": "^0.25.0",
+    "tsup": "^8.5.0",
     "typescript": "^5.9.0",
     "vitest": "^4.0.0",
-    "specwarden-module-agents": "workspace:*",
-    "specwarden-module-docs": "workspace:*",
-    "specwarden-module-ops": "workspace:*",
-    "specwarden-module-openspec": "workspace:*",
-    "specwarden-module-plans": "workspace:*",
-    "specwarden-module-security": "workspace:*",
-    "specwarden-module-speckit": "workspace:*"
+    "@specwarden/agents": "workspace:*",
+    "@specwarden/docs": "workspace:*",
+    "@specwarden/ops": "workspace:*",
+    "@specwarden/openspec": "workspace:*",
+    "@specwarden/plans": "workspace:*",
+    "@specwarden/security": "workspace:*",
+    "@specwarden/speckit": "workspace:*"
   }
 }

@@ -29,7 +29,7 @@ export const upstreamsExamplePart = (ctx: ITemplateContext): IPart => ({
  *
  * Name the modes, point \`fileFor\` at each mode's config, rename to \`.check.mjs\`.
  */
-import { upstreamsResolve } from 'specwarden-module-ops';
+import { upstreamsResolve } from '@specwarden/ops';
 
 export const check = upstreamsResolve({
   id: 'upstreams-resolve',

@@ -39,7 +39,18 @@ export interface IParsedArgs {
 }
 
 export function parseArgs(argv: readonly string[]): IParsedArgs {
-  const args: IParsedArgs = { ids: [], positionals: [], all: false, list: false, json: false, fix: false, tighten: false, ifRelevant: false, relevance: false, showSkipped: false };
+  const args: IParsedArgs = {
+    ids: [],
+    positionals: [],
+    all: false,
+    list: false,
+    json: false,
+    fix: false,
+    tighten: false,
+    ifRelevant: false,
+    relevance: false,
+    showSkipped: false,
+  };
   const valueFlags: Record<string, keyof IParsedArgs> = {
     '--tier': 'tier',
     '--base': 'base',

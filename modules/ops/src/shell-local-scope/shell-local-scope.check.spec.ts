@@ -41,27 +41,15 @@ describe('localOutsideFunction', () => {
   });
 
   it('allows a local inside a nested block inside a function', () => {
-    const script = [
-      'do_thing() {',
-      '  if [ -n "$1" ]; then',
-      '    local inner',
-      '    inner=1',
-      '  fi',
-      '}',
-    ].join('\n');
+    const script = ['do_thing() {', '  if [ -n "$1" ]; then', '    local inner', '    inner=1', '  fi', '}'].join('\n');
 
     expect(localOutsideFunction(script)).toEqual([]);
   });
 
   it('treats a heredoc body as data, and keeps the reported line true', () => {
-    const script = [
-      'write_note() {',
-      "  cat > /tmp/x <<'EOF'",
-      'local this is prose',
-      'EOF',
-      '}',
-      'local real',
-    ].join('\n');
+    const script = ['write_note() {', "  cat > /tmp/x <<'EOF'", 'local this is prose', 'EOF', '}', 'local real'].join(
+      '\n',
+    );
 
     const hits = localOutsideFunction(script);
 

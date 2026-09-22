@@ -35,7 +35,7 @@ export const docPlacementExamplePart = (ctx: ITemplateContext): IPart => ({
  * finding. Loud rather than silent, which is the right way round for a check waiting on
  * a decision. Rename to \`.check.mjs\` once the list is real.
  */
-import { docPlacement } from 'specwarden-module-docs';
+import { docPlacement } from '@specwarden/docs';
 
 export const check = docPlacement({
   id: 'doc-placement',

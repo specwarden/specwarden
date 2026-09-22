@@ -1,8 +1,15 @@
 {
-  "name": "specwarden-module-openspec",
+  "name": "@specwarden/openspec",
   "version": "0.0.0",
-  "private": true,
   "type": "module",
+  "description": "module: Reads an OpenSpec tree as the source of requirements.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/specwarden/specwarden.git",
+    "directory": "modules/openspec"
+  },
+  "homepage": "https://github.com/specwarden/specwarden/tree/main/modules/openspec#readme",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -12,19 +19,30 @@
       "default": "./dist/index.js"
     }
   },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md",
+    "skills"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
-    "build": "node scripts/build.mjs",
+    "build": "tsup",
     "lint": "eslint src --max-warnings=0",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepare": "pnpm run build"
   },
   "dependencies": {
-    "specwarden": "workspace:*"
+    "specwarden": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "esbuild": "^0.25.0",
+    "tsup": "^8.5.0",
     "typescript": "^5.9.0",
     "vitest": "^4.0.0"
   }

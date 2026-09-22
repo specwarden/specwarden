@@ -44,7 +44,9 @@ export async function planStatus(
   if (sub === 'archive') {
     const readiness = archiveReadiness(readFileSync(abs, 'utf8'), new NodeFileSource(cwd));
     if (readiness.ready) {
-      io.out(`✅ ${file} is ready to archive — harvest declared and every destination resolves.\n   Move it: git mv ${file} ${dirname(file)}-archive/\n`);
+      io.out(
+        `✅ ${file} is ready to archive — harvest declared and every destination resolves.\n   Move it: git mv ${file} ${dirname(file)}-archive/\n`,
+      );
       return 0;
     }
     io.err(`❌ ${file} is not ready to archive:\n`);

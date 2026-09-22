@@ -37,9 +37,13 @@ interface IKnownModule {
 const docGlob = (shape: IRepoShape): string => (shape.docDirs.length ? `${shape.docDirs[0]}/**/*.md` : '**/*.md');
 
 const SECURITY: IKnownModule = {
-  pkg: 'specwarden-module-security',
+  pkg: '@specwarden/security',
   family: 'security',
-  rule: { id: 'no-credentials-in-tree', statement: 'A credential never enters the repository, not even a revoked one.', checkId: 'secret-scan' },
+  rule: {
+    id: 'no-credentials-in-tree',
+    statement: 'A credential never enters the repository, not even a revoked one.',
+    checkId: 'secret-scan',
+  },
   render: () => ({
     file: 'secret-scan.check.mjs',
     body: `/**
@@ -50,7 +54,7 @@ const SECURITY: IKnownModule = {
  * (a reason is required, and it is reported), or supply the whole library with
  * \`patterns.replace\`. A match means ROTATE first, delete second.
  */
-import { secretScan } from 'specwarden-module-security';
+import { secretScan } from '@specwarden/security';
 
 export const check = secretScan({
   id: 'secret-scan',
@@ -62,9 +66,13 @@ export const check = secretScan({
 };
 
 const DOCS: IKnownModule = {
-  pkg: 'specwarden-module-docs',
+  pkg: '@specwarden/docs',
   family: 'docs',
-  rule: { id: 'paths-in-documentation-resolve', statement: 'Every repository-relative path named in documentation exists.', checkId: 'doc-paths' },
+  rule: {
+    id: 'paths-in-documentation-resolve',
+    statement: 'Every repository-relative path named in documentation exists.',
+    checkId: 'doc-paths',
+  },
   render: (shape) => ({
     file: 'doc-paths.check.mjs',
     body: `/**
@@ -78,7 +86,7 @@ const DOCS: IKnownModule = {
  * services" in a document that describes nine; its vocabulary is English by default
  * and overridable), \`docHygiene\`, \`docPlacement\`.
  */
-import { docPaths } from 'specwarden-module-docs';
+import { docPaths } from '@specwarden/docs';
 
 export const check = docPaths({
   id: 'doc-paths',
@@ -103,7 +111,10 @@ export function availableModules(files: IFileSource): readonly IKnownModule[] {
 }
 
 /** The check files to write: one per installed module, each in its family folder. */
-export function renderCheckFiles(shape: IRepoShape, modules: readonly IKnownModule[]): readonly { readonly path: string; readonly body: string }[] {
+export function renderCheckFiles(
+  shape: IRepoShape,
+  modules: readonly IKnownModule[],
+): readonly { readonly path: string; readonly body: string }[] {
   return modules.map((m) => {
     const { file, body } = m.render(shape);
     return { path: `checks/${m.family}/${file}`, body };
@@ -193,7 +204,9 @@ export function renderRules(modules: readonly IKnownModule[] = [], extra: readon
     ...modules.map((m) => asSource(m.rule.id, m.rule.statement, '.specwarden/README.md', [m.rule.checkId])),
     // A template's rules arrive already owned by the caller — it knows where the README
     // it just wrote is; the template does not.
-    ...extra.map((r) => asSource(r.id, r.statement, r.owner, (r.enforcement as { checkIds?: readonly string[] }).checkIds ?? [])),
+    ...extra.map((r) =>
+      asSource(r.id, r.statement, r.owner, (r.enforcement as { checkIds?: readonly string[] }).checkIds ?? []),
+    ),
   ].join('\n');
   return `/**
  * What this repository has DECIDED — separate from what it can check.

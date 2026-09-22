@@ -96,7 +96,14 @@ describe('config.adapters replaces a port', () => {
       },
     };
 
-    await check(args(), { ...base, adapters: () => ({ files: new InMemoryFileSource() }) }, registryOf([probe]), process.cwd(), {}, io().io);
+    await check(
+      args(),
+      { ...base, adapters: () => ({ files: new InMemoryFileSource() }) },
+      registryOf([probe]),
+      process.cwd(),
+      {},
+      io().io,
+    );
     expect(seen).toContain('clock');
     expect(seen).toContain('vcs');
   });
@@ -105,7 +112,13 @@ describe('config.adapters replaces a port', () => {
     let given: string | undefined;
     await check(
       args(),
-      { ...base, adapters: (_d, ctx) => { given = ctx.root; return {}; } },
+      {
+        ...base,
+        adapters: (_d, ctx) => {
+          given = ctx.root;
+          return {};
+        },
+      },
       registryOf([]),
       '/some/root',
       {},
@@ -146,7 +159,13 @@ describe('config.reporter replaces the output', () => {
     for (const json of [true, false]) {
       await check(
         args({ json }),
-        { ...base, reporter: (ctx) => { saw.push(ctx.json); return quiet; } },
+        {
+          ...base,
+          reporter: (ctx) => {
+            saw.push(ctx.json);
+            return quiet;
+          },
+        },
         registryOf([]),
         process.cwd(),
         {},

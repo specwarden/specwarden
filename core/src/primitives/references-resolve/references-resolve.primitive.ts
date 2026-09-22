@@ -16,7 +16,10 @@ export interface IReferencesResolveOptions extends ICheckIdentity {
  * reader follows the dead one, finds nothing, and invents.
  */
 export function referencesResolve(options: IReferencesResolveOptions): ICheck {
-  const re = new RegExp(options.extract.source, options.extract.flags.includes('g') ? options.extract.flags : `${options.extract.flags}g`);
+  const re = new RegExp(
+    options.extract.source,
+    options.extract.flags.includes('g') ? options.extract.flags : `${options.extract.flags}g`,
+  );
   const resolves = options.resolve ?? ((ref, ctx) => ctx.files.exists(ref));
   return buildCheck(options, ['read'], (ctx) => {
     const findings: IFinding[] = [];

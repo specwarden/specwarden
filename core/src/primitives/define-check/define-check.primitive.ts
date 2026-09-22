@@ -123,7 +123,8 @@ export interface IDefineCheckOptions extends Omit<ICheckIdentity, 'tier'> {
   readonly run: (ctx: ICheckContext) => TCheckOutcome | Promise<TCheckOutcome>;
 }
 
-const normalise = (outcome: TCheckOutcome): ICheckOutcome => (Array.isArray(outcome) ? { findings: outcome } : (outcome as ICheckOutcome));
+const normalise = (outcome: TCheckOutcome): ICheckOutcome =>
+  Array.isArray(outcome) ? { findings: outcome } : (outcome as ICheckOutcome);
 
 /** Every finding carries the rule it proves. Stamped here rather than typed out per
  * finding, which is where it was forgotten or spelled differently. */

@@ -35,7 +35,7 @@ export const docCountsExamplePart = (ctx: ITemplateContext): IPart => ({
  * inventory, so it belongs in the allowlist together with the paths where it is
  * legitimate. A descriptive count sharing the same phrase is then still reported.
  */
-import { docCounts } from 'specwarden-module-docs';
+import { docCounts } from '@specwarden/docs';
 
 export const check = docCounts({
   id: 'doc-counts',

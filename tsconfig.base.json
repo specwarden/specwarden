@@ -1,0 +1,38 @@
+{
+  "//": [
+    "Shared compiler options. Every package extends this file and adds only its rootDir,",
+    "outDir and include — which is what makes 'the same TypeScript everywhere' a fact",
+    "rather than eighteen manifests that happen to agree today.",
+    "",
+    "Packages resolve each other through their own `exports`: workspace symlinks make them",
+    "ordinary dependencies, so a `paths` list would be a second truth about the same thing.",
+    "",
+    "The engine is a NODE tool, so there is no DOM lib and no `jsx`. A check reads files,",
+    "spawns processes and returns a verdict; anything reaching for a browser global here is",
+    "a mistake the type system should make immediately."
+  ],
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+
+    "declaration": true,
+    "sourceMap": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+
+    "experimentalDecorators": true
+  }
+}

@@ -25,12 +25,20 @@ export function sourcesAgree(options: ISourcesAgreeOptions): ICheck {
     const findings: IFinding[] = [];
     for (const name of a) {
       if (!b.has(name)) {
-        findings.push({ severity: 'error', message: `\`${name}\` is in ${options.a.name} but not ${options.b.name}.`, ruleId: options.id });
+        findings.push({
+          severity: 'error',
+          message: `\`${name}\` is in ${options.a.name} but not ${options.b.name}.`,
+          ruleId: options.id,
+        });
       }
     }
     for (const name of b) {
       if (!a.has(name)) {
-        findings.push({ severity: 'error', message: `\`${name}\` is in ${options.b.name} but not ${options.a.name}.`, ruleId: options.id });
+        findings.push({
+          severity: 'error',
+          message: `\`${name}\` is in ${options.b.name} but not ${options.a.name}.`,
+          ruleId: options.id,
+        });
       }
     }
     return verdictFrom(findings);

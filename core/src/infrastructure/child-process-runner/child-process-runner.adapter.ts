@@ -54,9 +54,7 @@ export class ChildProcessRunner implements IProcessRunner {
       child.stderr?.on('data', (c: Buffer) => (stderr += c.toString('utf8')));
       if (options.input !== undefined) child.stdin?.end(options.input);
 
-      const timer = options.timeoutSec
-        ? setTimeout(() => child.kill(), options.timeoutSec * 1000)
-        : undefined;
+      const timer = options.timeoutSec ? setTimeout(() => child.kill(), options.timeoutSec * 1000) : undefined;
 
       child.on('error', (err) => {
         if (timer) clearTimeout(timer);

@@ -8,17 +8,19 @@ describe('CheckRunner --fix', () => {
     let broken = true;
     const fixme: ICheck & IFixable = {
       ...check({ id: 'fixme', capabilities: ['write'] }),
-      run: () => (broken ? { ok: false, findings: [{ severity: 'error', message: 'broken' }] } : { ok: true, findings: [] }),
+      run: () =>
+        broken ? { ok: false, findings: [{ severity: 'error', message: 'broken' }] } : { ok: true, findings: [] },
       fix: (ctx: ICheckContext) => {
         ctx.writer.write('out.txt', 'repaired');
         broken = false;
         return { fixed: 1, summary: 'rewrote out.txt' };
       },
     };
-    const { exitCode, results } = await new CheckRunner(registryOf([fixme]), adapters([]), recordingReporter().reporter).run(
-      { tier: 'fast', fix: true },
-      { ci: false },
-    );
+    const { exitCode, results } = await new CheckRunner(
+      registryOf([fixme]),
+      adapters([]),
+      recordingReporter().reporter,
+    ).run({ tier: 'fast', fix: true }, { ci: false });
     expect(exitCode).toBe(0);
     expect(results[0].verdict.findings[0].message).toContain('fixed 1 finding(s): rewrote out.txt');
   });
@@ -32,10 +34,11 @@ describe('CheckRunner --fix', () => {
         return { fixed: 1 };
       },
     };
-    const { exitCode, results } = await new CheckRunner(registryOf([fixme]), adapters([]), recordingReporter().reporter).run(
-      { tier: 'fast', fix: true },
-      { ci: false },
-    );
+    const { exitCode, results } = await new CheckRunner(
+      registryOf([fixme]),
+      adapters([]),
+      recordingReporter().reporter,
+    ).run({ tier: 'fast', fix: true }, { ci: false });
     expect(exitCode).toBe(1);
     expect(results[0].verdict.findings.some((f) => f.message.includes('fix failed'))).toBe(true);
   });
@@ -49,8 +52,10 @@ describe('CheckRunner --fix', () => {
         return { fixed: 0 };
       },
     };
-    await new CheckRunner(registryOf([fixme]), adapters([]), recordingReporter().reporter).run({ tier: 'fast' }, { ci: false });
+    await new CheckRunner(registryOf([fixme]), adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast' },
+      { ci: false },
+    );
     expect(fixCalled).toBe(false);
   });
 });
-

@@ -20,7 +20,11 @@ export function orphanChecks(checkIds: readonly string[], rules: readonly IRule[
 }
 
 /** Findings for rules whose owner document does not exist. */
-export function ruleOwnerFindings(rules: readonly IRule[], files: IFileSource, ruleId = 'rule-owner-resolves'): readonly IFinding[] {
+export function ruleOwnerFindings(
+  rules: readonly IRule[],
+  files: IFileSource,
+  ruleId = 'rule-owner-resolves',
+): readonly IFinding[] {
   const findings: IFinding[] = [];
   for (const rule of rules) {
     // An owner may be a path plus a section (`AGENTS.md § Migration Rule`); check the path.

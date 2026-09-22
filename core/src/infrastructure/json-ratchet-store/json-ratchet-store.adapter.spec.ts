@@ -110,6 +110,10 @@ describe('JsonRatchetStore — what else the file holds', () => {
 
     store.tighten('r', 4);
 
-    expect(Object.keys(JSON.parse(readFileSync(join(dir, 'r.json'), 'utf8')) as object)).toEqual(['id', 'value', 'note']);
+    expect(Object.keys(JSON.parse(readFileSync(join(dir, 'r.json'), 'utf8')) as object)).toEqual([
+      'id',
+      'value',
+      'note',
+    ]);
   });
 });

@@ -22,7 +22,10 @@ function run(check: ICheck, files: InMemoryFileSource, proc?: (cmd: string) => I
     vcs: {} as ICheckContext['vcs'],
     clock: {} as ICheckContext['clock'],
     writer: {} as ICheckContext['writer'],
-    proc: { run: (_c: string, args: readonly string[]) => (proc ? proc(args[args.length - 1]) : { status: 0, stdout: '', stderr: '' }) },
+    proc: {
+      run: (_c: string, args: readonly string[]) =>
+        proc ? proc(args[args.length - 1]) : { status: 0, stdout: '', stderr: '' },
+    },
   } as ICheckContext;
   return check.run(ctx) as IVerdict;
 }
@@ -35,23 +38,41 @@ describe('siblingRequired', () => {
     expect(v.findings[0].message).toContain('be/src/a.service.spec.ts');
   });
   it('passes when the sibling exists', () => {
-    expect(run(check, new InMemoryFileSource({ 'be/src/a.service.ts': '', 'be/src/a.service.spec.ts': '' })).ok).toBe(true);
+    expect(run(check, new InMemoryFileSource({ 'be/src/a.service.ts': '', 'be/src/a.service.spec.ts': '' })).ok).toBe(
+      true,
+    );
   });
 });
 
 describe('forbidImport', () => {
-  const check = forbidImport({ ...ID, from: 'be/src/modules/**', to: 'drizzle-orm', except: ['be/src/modules/**/repositories/**'] });
+  const check = forbidImport({
+    ...ID,
+    from: 'be/src/modules/**',
+    to: 'drizzle-orm',
+    except: ['be/src/modules/**/repositories/**'],
+  });
   it('fails when forbidden code imports the banned module', () => {
-    const v = run(check, new InMemoryFileSource({ 'be/src/modules/x/x.service.ts': "import { sql } from 'drizzle-orm';\n" }));
+    const v = run(
+      check,
+      new InMemoryFileSource({ 'be/src/modules/x/x.service.ts': "import { sql } from 'drizzle-orm';\n" }),
+    );
     expect(v.ok).toBe(false);
     expect(v.findings[0].message).toContain('drizzle-orm');
   });
   it('passes for the excepted layer', () => {
-    expect(run(check, new InMemoryFileSource({ 'be/src/modules/x/repositories/x.repo.ts': "import { sql } from 'drizzle-orm';\n" })).ok).toBe(true);
+    expect(
+      run(
+        check,
+        new InMemoryFileSource({ 'be/src/modules/x/repositories/x.repo.ts': "import { sql } from 'drizzle-orm';\n" }),
+      ).ok,
+    ).toBe(true);
   });
   it('a violation within the ratchet passes, keeps the error finding, and frames it as tolerated', () => {
     const ratcheted = forbidImport({ ...ID, from: 'be/src/modules/**', to: 'drizzle-orm', ratchet: 1 });
-    const v = run(ratcheted, new InMemoryFileSource({ 'be/src/modules/x/x.service.ts': "import { sql } from 'drizzle-orm';\n" }));
+    const v = run(
+      ratcheted,
+      new InMemoryFileSource({ 'be/src/modules/x/x.service.ts': "import { sql } from 'drizzle-orm';\n" }),
+    );
     expect(v.ok).toBe(true);
     // The frame comes first so the ✅ is not printed above a bare `error` line, and
     // the original error survives so `--tighten` can still count it.
@@ -117,14 +138,28 @@ describe('referencesResolve', () => {
 describe('regenerable', () => {
   const check = regenerable({ ...ID, artifact: 'CLAUDE.md', by: 'node build-router.mjs' });
   it('fails when the artifact differs from the generator output', () => {
-    const v = run(check, new InMemoryFileSource({ 'CLAUDE.md': 'stale\n' }), () => ({ status: 0, stdout: 'fresh\n', stderr: '' }));
+    const v = run(check, new InMemoryFileSource({ 'CLAUDE.md': 'stale\n' }), () => ({
+      status: 0,
+      stdout: 'fresh\n',
+      stderr: '',
+    }));
     expect(v.ok).toBe(false);
   });
   it('passes when they match', () => {
-    expect(run(check, new InMemoryFileSource({ 'CLAUDE.md': 'fresh\n' }), () => ({ status: 0, stdout: 'fresh\n', stderr: '' })).ok).toBe(true);
+    expect(
+      run(check, new InMemoryFileSource({ 'CLAUDE.md': 'fresh\n' }), () => ({
+        status: 0,
+        stdout: 'fresh\n',
+        stderr: '',
+      })).ok,
+    ).toBe(true);
   });
   it('fails when the generator itself fails', () => {
-    const v = run(check, new InMemoryFileSource({ 'CLAUDE.md': 'x\n' }), () => ({ status: 1, stdout: '', stderr: 'boom' }));
+    const v = run(check, new InMemoryFileSource({ 'CLAUDE.md': 'x\n' }), () => ({
+      status: 1,
+      stdout: '',
+      stderr: 'boom',
+    }));
     expect(v.ok).toBe(false);
   });
 });
@@ -170,7 +205,13 @@ describe('a factory carries the relevance it was given', () => {
   });
 
   it('honours a predicate', () => {
-    const check = forbidPattern({ ...id, when: (c: readonly string[]) => c.includes('x'), files: '**/*.ts', pattern: /x/, message: 'm' });
+    const check = forbidPattern({
+      ...id,
+      when: (c: readonly string[]) => c.includes('x'),
+      files: '**/*.ts',
+      pattern: /x/,
+      message: 'm',
+    });
 
     expect(check.when(['x'])).toBe(true);
     expect(check.when(['y'])).toBe(false);

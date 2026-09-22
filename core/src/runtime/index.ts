@@ -17,7 +17,12 @@ export { native } from './spec-source';
 export type { INativeOptions } from './spec-source';
 export { orphanChecks, ruleOwnerFindings, orphanCheck } from './rules';
 export type { IOrphanCheckOptions } from './rules';
-export { generateConstraintCard, ConstraintCardTooLongError, ConstraintCardTooManyLinesError, ConstraintCardMissingLineError } from './constraint-card/constraint-card.util';
+export {
+  generateConstraintCard,
+  ConstraintCardTooLongError,
+  ConstraintCardTooManyLinesError,
+  ConstraintCardMissingLineError,
+} from './constraint-card/constraint-card.util';
 export type { IConstraintCardOptions } from './constraint-card/constraint-card.util';
 // The perimeter's pure core, public so a consumer can test ITS OWN rules along the
 // path the agent hook actually takes — payload in, exit code out — instead of
@@ -26,6 +31,12 @@ export { evaluatePayload } from './cli/perimeter/perimeter.command';
 
 // The consumer tree, read by convention — checks discovered under checks/, the
 // harness's own checks assembled from defaults. The reason a config can be short.
-export { discoverChecks, CheckDiscoveryError, harnessChecks, HARNESS_CHECK_IDS, loadConsumerTree } from './consumer-tree';
+export {
+  discoverChecks,
+  CheckDiscoveryError,
+  harnessChecks,
+  HARNESS_CHECK_IDS,
+  loadConsumerTree,
+} from './consumer-tree';
 export type { IDiscoveredChecks, IHarnessOptions, IHarnessInputs, ILoadedTree } from './consumer-tree';
 export { commandCheck } from './runner/command-check/command-check.check';

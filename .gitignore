@@ -15,3 +15,6 @@ reports/
 
 # JetBrains project files — a workstation's state, not the repository's.
 .idea/
+
+# A playground borrows the workspace's installed packages through a link.
+_playgrounds/*/node_modules

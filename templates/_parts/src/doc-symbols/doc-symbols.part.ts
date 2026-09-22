@@ -36,7 +36,7 @@ export const docSymbolsExamplePart = (ctx: ITemplateContext): IPart => ({
  *
  * Fill the suffixes in, rename to \`.check.mjs\`, and it starts finding things.
  */
-import { docSymbols } from 'specwarden-module-docs';
+import { docSymbols } from '@specwarden/docs';
 
 export const check = docSymbols({
   id: 'doc-symbols',

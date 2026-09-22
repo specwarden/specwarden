@@ -15,7 +15,8 @@ const RULES: readonly IPerimeterRule[] = [
   commandRule({
     id: 'no-force-push',
     why: 'a force-push rewrites a branch other people have',
-    match: (words) => (words[0] === 'git' && words.includes('push') && words.includes('--force') ? words.join(' ') : null),
+    match: (words) =>
+      words[0] === 'git' && words.includes('push') && words.includes('--force') ? words.join(' ') : null,
   }),
 ];
 
@@ -58,6 +59,8 @@ describe('another assistant keeps every rule and none of the vendor shape', () =
   it('a payload it does not recognise is nothing to judge, and allows', () => {
     // Fail-open is the contract: a guard that turns a fault into a block halts work
     // while wearing the face of a rule.
-    expect(evaluatePayload({ tool_name: 'Bash', tool_input: { command: 'git push --force' } }, RULES, otherAssistant).code).toBe(0);
+    expect(
+      evaluatePayload({ tool_name: 'Bash', tool_input: { command: 'git push --force' } }, RULES, otherAssistant).code,
+    ).toBe(0);
   });
 });

@@ -59,20 +59,44 @@ export function agentDefinitions(options: IAgentDefinitionsOptions): ICheck {
       const rel = `${options.agentsDir}/${entry}`;
       const fields = parseFrontmatter(ctx.files.read(rel));
       if (!fields) {
-        findings.push({ severity: 'error', file: rel, message: `${rel}: no YAML frontmatter — the harness cannot register this agent.`, ruleId: options.id });
+        findings.push({
+          severity: 'error',
+          file: rel,
+          message: `${rel}: no YAML frontmatter — the harness cannot register this agent.`,
+          ruleId: options.id,
+        });
         continue;
       }
       for (const field of required) {
-        if (!fields[field]) findings.push({ severity: 'error', file: rel, message: `${rel}: missing or empty \`${field}:\`.`, ruleId: options.id });
+        if (!fields[field])
+          findings.push({
+            severity: 'error',
+            file: rel,
+            message: `${rel}: missing or empty \`${field}:\`.`,
+            ruleId: options.id,
+          });
       }
       const expected = entry.replace(/\.md$/, '');
       if (fields.name && fields.name !== expected) {
-        findings.push({ severity: 'error', file: rel, message: `${rel}: \`name: ${fields.name}\` does not match the filename (\`${expected}\`) — the harness addresses agents by name, so this one is uncallable.`, ruleId: options.id });
+        findings.push({
+          severity: 'error',
+          file: rel,
+          message: `${rel}: \`name: ${fields.name}\` does not match the filename (\`${expected}\`) — the harness addresses agents by name, so this one is uncallable.`,
+          ruleId: options.id,
+        });
       }
-      const tools = (fields.tools || '').split(',').map((t) => t.trim()).filter(Boolean);
+      const tools = (fields.tools || '')
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
       const spawn = tools.filter((t) => spawnTools.has(t));
       if (spawn.length && !orchestrators.has(expected)) {
-        findings.push({ severity: 'error', file: rel, message: `${rel}: declares the spawn tool(s) ${spawn.join(', ')} but is not an orchestrator — a leaf role that can spawn turns a bounded pipeline into an unbounded one.`, ruleId: options.id });
+        findings.push({
+          severity: 'error',
+          file: rel,
+          message: `${rel}: declares the spawn tool(s) ${spawn.join(', ')} but is not an orchestrator — a leaf role that can spawn turns a bounded pipeline into an unbounded one.`,
+          ruleId: options.id,
+        });
       }
     }
     return verdictFrom(findings, 0);

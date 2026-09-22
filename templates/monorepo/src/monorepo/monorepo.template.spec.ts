@@ -32,7 +32,9 @@ const live = (c = ctx()) => monorepo.files(c).filter((f) => f.path.endsWith('.ch
  * Written INSIDE the package so the generated imports resolve against its own
  * node_modules — the same resolution a consumer gets.
  */
-const scratch = mkdtempSync(join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '..', '.tmp-generated-'));
+const scratch = mkdtempSync(
+  join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '..', '.tmp-generated-'),
+);
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe('the generated tree actually loads', () => {
@@ -45,7 +47,10 @@ describe('the generated tree actually loads', () => {
       const mod = (await import(pathToFileURL(abs).href)) as { check?: { id: string }; checks?: { id: string }[] };
       const found = mod.check ? [mod.check] : (mod.checks ?? []);
       expect(found.length, `${file.path} exports no check`).toBeGreaterThan(0);
-      const expected = file.path.split('/').pop()?.replace(/\.check\.mjs$/, '');
+      const expected = file.path
+        .split('/')
+        .pop()
+        ?.replace(/\.check\.mjs$/, '');
       if (mod.check) expect(mod.check.id).toBe(expected);
     }
   });
@@ -86,8 +91,17 @@ describe('the two checks it cannot configure honestly ship as examples', () => {
 
 describe('every live check is named by a rule', () => {
   it('so a fresh tree has no orphan, and no rule points at an example', () => {
-    const ids = new Set(live().map((f) => f.path.split('/').pop()?.replace(/\.check\.mjs$/, '')));
-    const named = new Set(monorepo.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds));
+    const ids = new Set(
+      live().map((f) =>
+        f.path
+          .split('/')
+          .pop()
+          ?.replace(/\.check\.mjs$/, ''),
+      ),
+    );
+    const named = new Set(
+      monorepo.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
+    );
     expect([...named].sort()).toEqual([...ids].sort());
   });
 });
@@ -114,7 +128,12 @@ describe('what it takes from the repository rather than assuming', () => {
         monorepo
           .files(c)
           .filter((f) => f.path.endsWith('.check.mjs'))
-          .map((f) => f.path.split('/').pop()?.replace(/\.check\.mjs$/, '')),
+          .map((f) =>
+            f.path
+              .split('/')
+              .pop()
+              ?.replace(/\.check\.mjs$/, ''),
+          ),
       );
       for (const rule of monorepo.rules(c)) {
         for (const id of (rule.enforcement as { checkIds: readonly string[] }).checkIds) {

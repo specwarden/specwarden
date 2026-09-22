@@ -16,7 +16,8 @@ const rule = (id: string, statement: string, over: Partial<IRule> = {}): IRule =
   ...over,
 });
 
-const irreversible = (id: string, card: string): IRule => rule(id, `declarative form of ${id}`, { irreversible: true, card });
+const irreversible = (id: string, card: string): IRule =>
+  rule(id, `declarative form of ${id}`, { irreversible: true, card });
 
 describe('generateConstraintCard', () => {
   it('emits only the irreversible rules, in registry order', () => {
@@ -84,7 +85,9 @@ describe('generateConstraintCard', () => {
   });
 
   it('carries a note as an HTML comment — for the reader of the file, not the card', () => {
-    const card = generateConstraintCard([irreversible('a', 'Never a')], { note: 'generated; edit the register instead' });
+    const card = generateConstraintCard([irreversible('a', 'Never a')], {
+      note: 'generated; edit the register instead',
+    });
 
     expect(card).toContain('<!--');
     expect(card).toContain('edit the register instead');

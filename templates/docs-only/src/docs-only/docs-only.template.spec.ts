@@ -52,7 +52,10 @@ describe('the count check ships disabled, and says why', () => {
 describe('the tree it emits is the convention', () => {
   it('every real check file names the id its file name promises', () => {
     for (const f of docsOnly.files(ctx()).filter((f) => f.path.endsWith('.check.mjs'))) {
-      const id = f.path.split('/').pop()?.replace(/\.check\.mjs$/, '');
+      const id = f.path
+        .split('/')
+        .pop()
+        ?.replace(/\.check\.mjs$/, '');
       expect(f.body).toContain(`id: '${id}'`);
     }
   });
@@ -71,8 +74,19 @@ describe('the tree it emits is the convention', () => {
 
 describe('every generated check is named by a rule', () => {
   it('so a fresh tree has no orphan, and no rule points at a file it did not write', () => {
-    const ids = new Set(paths().filter((p) => p.endsWith('.check.mjs')).map((p) => p.split('/').pop()?.replace(/\.check\.mjs$/, '')));
-    const named = new Set(docsOnly.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds));
+    const ids = new Set(
+      paths()
+        .filter((p) => p.endsWith('.check.mjs'))
+        .map((p) =>
+          p
+            .split('/')
+            .pop()
+            ?.replace(/\.check\.mjs$/, ''),
+        ),
+    );
+    const named = new Set(
+      docsOnly.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
+    );
     expect([...named].sort()).toEqual([...ids].sort());
   });
 });
@@ -91,7 +105,9 @@ describe('placement ships as an example, and the reason is not caution', () => {
   });
 
   it('declares no rule for either example — nothing loads them until they are renamed', () => {
-    const named = new Set(docsOnly.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds));
+    const named = new Set(
+      docsOnly.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
+    );
     expect(named.has('doc-placement')).toBe(false);
     expect(named.has('doc-counts')).toBe(false);
   });

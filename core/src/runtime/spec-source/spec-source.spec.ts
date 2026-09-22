@@ -8,7 +8,8 @@ describe('native spec source', () => {
   it('reads plans as tasks, a phase per task, carrying its acceptance', () => {
     const files = new InMemoryFileSource({
       'docs/_plans/README.md': 'ignored',
-      'docs/_plans/feature.md': '**Status:** active\n\n## Phase 1 — a\n**Acceptance.** cmd-a\n\n## Phase 2 — b\n**Acceptance.** cmd-b\n',
+      'docs/_plans/feature.md':
+        '**Status:** active\n\n## Phase 1 — a\n**Acceptance.** cmd-a\n\n## Phase 2 — b\n**Acceptance.** cmd-b\n',
     });
     const result = native({ plansDir: 'docs/_plans' }).tasks(files);
     expect(result.found).toBe(true);

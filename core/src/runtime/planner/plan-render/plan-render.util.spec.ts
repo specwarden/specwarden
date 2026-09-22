@@ -51,7 +51,9 @@ describe('parse → render → parse', () => {
   });
 
   it('renders a plan the parser reads back without complaint', () => {
-    const { findings } = roundtrip(['**Status:** done', '**Branch:** b', '', '## Phase 1 — x', '', '**Acceptance.** y'].join('\n'));
+    const { findings } = roundtrip(
+      ['**Status:** done', '**Branch:** b', '', '## Phase 1 — x', '', '**Acceptance.** y'].join('\n'),
+    );
 
     expect(findings.filter((f) => f.severity === 'error')).toEqual([]);
   });

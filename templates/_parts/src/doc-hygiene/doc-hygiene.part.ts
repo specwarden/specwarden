@@ -17,7 +17,7 @@ export const docHygienePart = (ctx: ITemplateContext, o: IPartOptions = {}): IPa
       body: `/**
  * \`doc-hygiene\` — ${o.header ?? DEFAULT_HEADER}
  */
-import { docHygiene } from 'specwarden-module-docs';
+import { docHygiene } from '@specwarden/docs';
 
 export const check = docHygiene({
   id: 'doc-hygiene',

@@ -21,7 +21,9 @@ const inline = (id: string): ICheck => ({
   run: () => ({ ok: true, findings: [] }),
 });
 
-const RULES: readonly IRule[] = [{ id: 'r', statement: 's', owner: 'README.md', enforcement: { checkIds: ['from-file'] } }];
+const RULES: readonly IRule[] = [
+  { id: 'r', statement: 's', owner: 'README.md', enforcement: { checkIds: ['from-file'] } },
+];
 
 describe('loadConsumerTree', () => {
   let root: string;
@@ -60,7 +62,13 @@ describe('loadConsumerTree', () => {
     const tree = await loadConsumerTree(files(), '.specwarden', { rules: RULES });
     const harnessRule = tree.rules.find((r) => r.id === 'harness-integrity');
     const enforcement = harnessRule?.enforcement as { checkIds: readonly string[] };
-    const selfChecks = ['rule-owner-resolves', 'rule-coverage', 'orphan-check', 'enforcement-resolves', 'ratchet-direction'];
+    const selfChecks = [
+      'rule-owner-resolves',
+      'rule-coverage',
+      'orphan-check',
+      'enforcement-resolves',
+      'ratchet-direction',
+    ];
     expect([...enforcement.checkIds].sort()).toEqual([...selfChecks].sort());
     expect(harnessRule?.owner).toBe('.specwarden/README.md');
   });
@@ -116,7 +124,10 @@ describe('a self-check declared by hand is refused with the fix, not a bare dupl
     const root2 = mkdtempSync(join(tmpdir(), 'spw-tree2-'));
     mkdirSync(join(root2, '.specwarden', 'checks'), { recursive: true });
     try {
-      const run = loadConsumerTree(new NodeFileSource(root2), '.specwarden', { rules: [], checks: [inline('orphan-check')] });
+      const run = loadConsumerTree(new NodeFileSource(root2), '.specwarden', {
+        rules: [],
+        checks: [inline('orphan-check')],
+      });
       await expect(run).rejects.toThrow(/orphan-check: the engine now builds this check from convention/);
       await expect(run).rejects.toThrow(/harness: \{ disable:/);
     } finally {
@@ -140,7 +151,7 @@ describe('loadConsumerTree — rules declared on the checks that enforce them', 
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   const files = () => new NodeFileSource(root);
-  const ruled = (id: string, rule: Record<string, unknown>): ICheck => ({ ...inline(id), rule } as ICheck);
+  const ruled = (id: string, rule: Record<string, unknown>): ICheck => ({ ...inline(id), rule }) as ICheck;
 
   it('joins the register, enforced by the check that declared it', async () => {
     const tree = await loadConsumerTree(files(), '.specwarden', {
@@ -209,7 +220,7 @@ describe('loadConsumerTree — one id, one declaration', () => {
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
   const files = () => new NodeFileSource(root);
-  const ruled = (id: string, rule: Record<string, unknown>): ICheck => ({ ...inline(id), rule } as ICheck);
+  const ruled = (id: string, rule: Record<string, unknown>): ICheck => ({ ...inline(id), rule }) as ICheck;
 
   it('refuses a rule declared both on a check and in the register', async () => {
     // It happened on the first migration that used this: the rule moved onto its check
@@ -235,7 +246,10 @@ describe('loadConsumerTree — one id, one declaration', () => {
   it('allows the same id on two CHECKS — that is the many-to-one the register always had', async () => {
     const tree = await loadConsumerTree(files(), '.specwarden', {
       rules: [],
-      checks: [ruled('a', { id: 'shared', statement: 's', owner: 'README.md' }), ruled('b', { id: 'shared', statement: 's', owner: 'README.md' })],
+      checks: [
+        ruled('a', { id: 'shared', statement: 's', owner: 'README.md' }),
+        ruled('b', { id: 'shared', statement: 's', owner: 'README.md' }),
+      ],
     });
 
     expect(tree.rules.find((r) => r.id === 'shared')?.enforcement).toEqual({ checkIds: ['a', 'b'] });

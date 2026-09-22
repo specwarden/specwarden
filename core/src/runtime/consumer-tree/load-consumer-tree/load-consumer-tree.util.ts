@@ -73,15 +73,25 @@ function rulesDeclaredOnChecks(checks: readonly ICheck[]): readonly IRule[] {
   return [...byId.values()].map(({ rule, checkIds }) => ({ ...rule, enforcement: { checkIds } }));
 }
 
-export async function loadConsumerTree(files: IFileSource, consumerDir: string, config: IWardenConfig): Promise<ILoadedTree> {
+export async function loadConsumerTree(
+  files: IFileSource,
+  consumerDir: string,
+  config: IWardenConfig,
+): Promise<ILoadedTree> {
   const notes: string[] = [];
   const declaredRules = config.rules ?? [];
   // Filled once the harness is built: it brings the rule its own checks enforce, and
   // the audits read `rules` through a thunk, so the list they see includes it.
   let rules: readonly IRule[] = declaredRules;
 
-  const discovered = config.autoload === false ? { checks: [], files: [] } : await discoverChecks(files, `${consumerDir}/${config.checksDir ?? 'checks'}`);
-  if (discovered.files.length) notes.push(`discovered ${discovered.checks.length} check(s) in ${discovered.files.length} file(s) under ${consumerDir}/${config.checksDir ?? 'checks'}/`);
+  const discovered =
+    config.autoload === false
+      ? { checks: [], files: [] }
+      : await discoverChecks(files, `${consumerDir}/${config.checksDir ?? 'checks'}`);
+  if (discovered.files.length)
+    notes.push(
+      `discovered ${discovered.checks.length} check(s) in ${discovered.files.length} file(s) under ${consumerDir}/${config.checksDir ?? 'checks'}/`,
+    );
 
   const declared = config.checks ?? [];
   const fromPlugins = loadPlugins(config.plugins ?? []).checks;
@@ -92,7 +102,12 @@ export async function loadConsumerTree(files: IFileSource, consumerDir: string, 
     config.harness === false
       ? { checks: [], rules: [], notes: ['harness self-checks disabled entirely (config.harness = false)'] }
       : harnessChecks(
-          { rules: () => rules, rulesDeclared: config.rules !== undefined, checkIds: () => roster.map((c) => c.id), consumerDir },
+          {
+            rules: () => rules,
+            rulesDeclared: config.rules !== undefined,
+            checkIds: () => roster.map((c) => c.id),
+            consumerDir,
+          },
           typeof config.harness === 'object' ? config.harness : {},
         );
   notes.push(...harness.notes);
@@ -101,7 +116,9 @@ export async function loadConsumerTree(files: IFileSource, consumerDir: string, 
   // before the harness assembled them — would meet a bare "duplicate id" from the
   // registry, which names the symptom and not the fix. Say the fix.
   const harnessIds = new Set(harness.checks.map((c) => c.id));
-  const redeclared = [...discovered.checks, ...declared, ...fromPlugins].filter((c) => harnessIds.has(c.id)).map((c) => c.id);
+  const redeclared = [...discovered.checks, ...declared, ...fromPlugins]
+    .filter((c) => harnessIds.has(c.id))
+    .map((c) => c.id);
   if (redeclared.length > 0) {
     throw new CheckDiscoveryError(
       `${redeclared.join(', ')}: the engine now builds this check from convention, and the config declares it too. ` +

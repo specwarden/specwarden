@@ -25,9 +25,9 @@ describe('CheckRunner skip semantics', () => {
     const { reporter, ran } = recordingReporter();
     await new CheckRunner(reg, adapters([]), reporter).run({ tier: 'fast' }, { ci: false, skip: 'all' });
     expect(ran).toEqual([]);
-    await expect(new CheckRunner(reg, adapters([]), reporter).run({ tier: 'fast' }, { ci: false, skip: 'ghost' })).rejects.toThrow(
-      RunnerUsageError,
-    );
+    await expect(
+      new CheckRunner(reg, adapters([]), reporter).run({ tier: 'fast' }, { ci: false, skip: 'ghost' }),
+    ).rejects.toThrow(RunnerUsageError);
   });
 });
 
@@ -75,18 +75,30 @@ describe('CheckRunner ratchets', () => {
 
   it('the stored threshold reaches the check via ctx.ratchet, deciding ok', async () => {
     ratchetBacking.set('r', 5);
-    const under = await new CheckRunner(registryOf([ratcheted(2)]), adapters([]), recordingReporter().reporter).run({ tier: 'fast' }, { ci: false });
+    const under = await new CheckRunner(registryOf([ratcheted(2)]), adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast' },
+      { ci: false },
+    );
     expect(under.exitCode).toBe(0); // 2 <= 5
     ratchetBacking.set('r', 1);
-    const over = await new CheckRunner(registryOf([ratcheted(2)]), adapters([]), recordingReporter().reporter).run({ tier: 'fast' }, { ci: false });
+    const over = await new CheckRunner(registryOf([ratcheted(2)]), adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast' },
+      { ci: false },
+    );
     expect(over.exitCode).toBe(1); // 2 > 1
   });
 
   it('--tighten lowers the ratchet to the observed count; a normal run does not', async () => {
     ratchetBacking.set('r', 5);
-    await new CheckRunner(registryOf([ratcheted(2)]), adapters([]), recordingReporter().reporter).run({ tier: 'fast' }, { ci: false });
+    await new CheckRunner(registryOf([ratcheted(2)]), adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast' },
+      { ci: false },
+    );
     expect(ratchetBacking.get('r')).toBe(5); // unchanged without --tighten
-    await new CheckRunner(registryOf([ratcheted(2)]), adapters([]), recordingReporter().reporter).run({ tier: 'fast', tighten: true }, { ci: false });
+    await new CheckRunner(registryOf([ratcheted(2)]), adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast', tighten: true },
+      { ci: false },
+    );
     expect(ratchetBacking.get('r')).toBe(2); // lowered to the observed count
   });
 });
@@ -94,19 +106,28 @@ describe('CheckRunner ratchets', () => {
 describe('CheckRunner exit code', () => {
   it('is 0 when all pass', async () => {
     const reg = registryOf([check({ id: 'a' })]);
-    const { exitCode } = await new CheckRunner(reg, adapters([]), recordingReporter().reporter).run({ tier: 'fast' }, { ci: false });
+    const { exitCode } = await new CheckRunner(reg, adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast' },
+      { ci: false },
+    );
     expect(exitCode).toBe(0);
   });
 
   it('is 1 when a blocking check fails', async () => {
     const reg = registryOf([check({ id: 'bad', verdict: { ok: false, findings: [] } })]);
-    const { exitCode } = await new CheckRunner(reg, adapters([]), recordingReporter().reporter).run({ tier: 'fast' }, { ci: false });
+    const { exitCode } = await new CheckRunner(reg, adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast' },
+      { ci: false },
+    );
     expect(exitCode).toBe(1);
   });
 
   it('stays 0 when only an advisory check fails', async () => {
     const reg = registryOf([check({ id: 'adv', advisory: true, verdict: { ok: false, findings: [] } })]);
-    const { exitCode } = await new CheckRunner(reg, adapters([]), recordingReporter().reporter).run({ tier: 'fast' }, { ci: false });
+    const { exitCode } = await new CheckRunner(reg, adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast' },
+      { ci: false },
+    );
     expect(exitCode).toBe(0);
   });
 
@@ -121,13 +142,15 @@ describe('CheckRunner exit code', () => {
       check({ id: 'after' }),
     ]);
     const { reporter, ran } = recordingReporter();
-    const { exitCode, results } = await new CheckRunner(reg, adapters([]), reporter).run({ tier: 'fast' }, { ci: false });
+    const { exitCode, results } = await new CheckRunner(reg, adapters([]), reporter).run(
+      { tier: 'fast' },
+      { ci: false },
+    );
     expect(exitCode).toBe(1);
     expect(ran).toEqual(['boom', 'after']); // the run continued past the throw
     expect(results.find((r) => r.meta.id === 'boom')?.verdict.findings[0]?.message).toContain('kaboom');
   });
 });
-
 
 /**
  * What a run RECORDS, and what it attributes.
@@ -177,10 +200,16 @@ describe('CheckRunner ratchet measurement', () => {
     });
 
     ratchetBacking.set('f', 68);
-    await new CheckRunner(registryOf([scored(71)]), adapters([]), recordingReporter().reporter).run({ tier: 'fast', tighten: true }, { ci: false });
+    await new CheckRunner(registryOf([scored(71)]), adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast', tighten: true },
+      { ci: false },
+    );
     expect(ratchetBacking.get('f')).toBe(71);
 
-    await new CheckRunner(registryOf([scored(61)]), adapters([]), recordingReporter().reporter).run({ tier: 'fast', tighten: true }, { ci: false });
+    await new CheckRunner(registryOf([scored(61)]), adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast', tighten: true },
+      { ci: false },
+    );
     expect(ratchetBacking.get('f')).toBe(71); // a drop is discarded, not recorded
   });
 });
@@ -190,7 +219,10 @@ describe('CheckRunner finding attribution', () => {
     const reg = registryOf([
       check({ id: 'a', verdict: { ok: false, findings: [{ severity: 'error', message: 'bad' }] } }),
     ]);
-    const { results } = await new CheckRunner(reg, adapters([]), recordingReporter().reporter).run({ tier: 'fast' }, { ci: false });
+    const { results } = await new CheckRunner(reg, adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast' },
+      { ci: false },
+    );
 
     expect(results[0].verdict.findings[0].ruleId).toBe('a');
   });
@@ -199,7 +231,10 @@ describe('CheckRunner finding attribution', () => {
     const reg = registryOf([
       check({ id: 'a', verdict: { ok: false, findings: [{ severity: 'error', message: 'bad', ruleId: 'the-rule' }] } }),
     ]);
-    const { results } = await new CheckRunner(reg, adapters([]), recordingReporter().reporter).run({ tier: 'fast' }, { ci: false });
+    const { results } = await new CheckRunner(reg, adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast' },
+      { ci: false },
+    );
 
     expect(results[0].verdict.findings[0].ruleId).toBe('the-rule');
   });
@@ -213,7 +248,10 @@ describe('CheckRunner finding attribution', () => {
         },
       }),
     ]);
-    const { results } = await new CheckRunner(reg, adapters([]), recordingReporter().reporter).run({ tier: 'fast' }, { ci: false });
+    const { results } = await new CheckRunner(reg, adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast' },
+      { ci: false },
+    );
 
     expect(results[0].verdict.findings[0].ruleId).toBe('boom');
   });
@@ -231,20 +269,22 @@ describe('CheckRunner deadlines', () => {
   });
 
   it('fails a check that outlives its declared deadline, and names it', async () => {
-    const { results } = await new CheckRunner(registryOf([stalling(0.01)]), adapters([]), recordingReporter().reporter).run(
-      { tier: 'fast' },
-      { ci: false },
-    );
+    const { results } = await new CheckRunner(
+      registryOf([stalling(0.01)]),
+      adapters([]),
+      recordingReporter().reporter,
+    ).run({ tier: 'fast' }, { ci: false });
 
     expect(results[0].verdict.ok).toBe(false);
     expect(results[0].verdict.findings[0].message).toContain('stalls exceeded its 0.01s deadline');
   });
 
   it('a timed-out check FAILS rather than being skipped — the two are opposite claims', async () => {
-    const { exitCode, results } = await new CheckRunner(registryOf([stalling(0.01)]), adapters([]), recordingReporter().reporter).run(
-      { tier: 'fast' },
-      { ci: false },
-    );
+    const { exitCode, results } = await new CheckRunner(
+      registryOf([stalling(0.01)]),
+      adapters([]),
+      recordingReporter().reporter,
+    ).run({ tier: 'fast' }, { ci: false });
 
     expect(exitCode).toBe(1);
     expect(results[0].skipped).toBeUndefined();
@@ -252,7 +292,10 @@ describe('CheckRunner deadlines', () => {
 
   it('the run continues past a stalled check', async () => {
     const reg = registryOf([stalling(0.01), check({ id: 'after' })]);
-    const { results } = await new CheckRunner(reg, adapters([]), recordingReporter().reporter).run({ tier: 'fast' }, { ci: false });
+    const { results } = await new CheckRunner(reg, adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast' },
+      { ci: false },
+    );
 
     expect(results.map((r) => r.meta.id)).toEqual(['stalls', 'after']);
     expect(results[1].verdict.ok).toBe(true);
@@ -260,14 +303,20 @@ describe('CheckRunner deadlines', () => {
 
   it('a check that declares no deadline is left alone', async () => {
     const quick = { ...check({ id: 'quick' }), run: async () => ({ ok: true, findings: [] }) };
-    const { exitCode } = await new CheckRunner(registryOf([quick]), adapters([]), recordingReporter().reporter).run({ tier: 'fast' }, { ci: false });
+    const { exitCode } = await new CheckRunner(registryOf([quick]), adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast' },
+      { ci: false },
+    );
 
     expect(exitCode).toBe(0);
   });
 
   it('a check that finishes inside its deadline is not penalised for having one', async () => {
     const quick = { ...check({ id: 'quick' }), timeoutSec: 30, run: async () => ({ ok: true, findings: [] }) };
-    const { exitCode } = await new CheckRunner(registryOf([quick]), adapters([]), recordingReporter().reporter).run({ tier: 'fast' }, { ci: false });
+    const { exitCode } = await new CheckRunner(registryOf([quick]), adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast' },
+      { ci: false },
+    );
 
     expect(exitCode).toBe(0);
   });
@@ -309,7 +358,11 @@ describe('CheckRunner skip reporting', () => {
   });
 
   it('reports skips in registry order under concurrency, same as serially', async () => {
-    const reg = registryOf([check({ id: 'a', when: () => false }), check({ id: 'b' }), check({ id: 'c', when: () => false })]);
+    const reg = registryOf([
+      check({ id: 'a', when: () => false }),
+      check({ id: 'b' }),
+      check({ id: 'c', when: () => false }),
+    ]);
     const rec = recording();
     await new CheckRunner(reg, adapters(['x.ts']), rec.reporter).run({ tier: 'fast', concurrency: 4 }, { ci: false });
 

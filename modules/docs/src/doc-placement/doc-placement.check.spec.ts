@@ -44,6 +44,8 @@ describe('docPlacement', () => {
 
   it('exempts the plan folder itself and the allowed README target', () => {
     const link = { pattern: /_plans\/([\w.-]+)\.md/, dir: 'docs/_plans/', allow: 'README' };
-    expect(run({ 'docs/_plans/a.md': 'see docs/_plans/b.md', 'AGENTS.md': 'see docs/_plans/README.md' }, { link }).ok).toBe(true);
+    expect(
+      run({ 'docs/_plans/a.md': 'see docs/_plans/b.md', 'AGENTS.md': 'see docs/_plans/README.md' }, { link }).ok,
+    ).toBe(true);
   });
 });

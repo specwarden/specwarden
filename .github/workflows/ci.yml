@@ -1,0 +1,82 @@
+# The merge arbiter.
+#
+# The jobs below run the SAME gates a contributor runs locally, through the same engine,
+# against the same list — because two lists drift, and the one that runs is then not the
+# one that was reviewed.
+#
+# `ci-ok` is the only required check. Every other job feeds it, and it uses `!cancelled()`
+# rather than `success()` so a skipped dependency cannot report the whole run as passing:
+# a needs-based skip is the classic way a matrix goes green over work it never did.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  # A superseded run on a branch is wasted compute. `main` is never cancelled: a cancelled
+  # run is not a pass, and main is the one place that distinction has to hold.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  fast:
+    name: fast tier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # `--all` on purpose: the relevance filter is for a working copy with a diff, and CI
+      # is the place that must not depend on one being readable.
+      - run: node core/bin/warden.mjs check --tier fast --all
+
+  heavy:
+    name: heavy tier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node core/bin/warden.mjs check --tier heavy --all
+
+  mutation:
+    name: mutation score
+    runs-on: ubuntu-latest
+    # Slow by nature, and about the ENGINE rather than about a change: a surviving mutant
+    # is a way to break a check that no test catches, which is the same defect this whole
+    # product exists against, one level up.
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir core run test:mutation
+
+  ci-ok:
+    name: ci-ok
+    runs-on: ubuntu-latest
+    needs: [fast, heavy]
+    if: ${{ !cancelled() }}
+    steps:
+      - name: every gate job passed
+        run: |
+          if [ "${{ needs.fast.result }}" != "success" ] || [ "${{ needs.heavy.result }}" != "success" ]; then
+            echo "fast=${{ needs.fast.result }} heavy=${{ needs.heavy.result }}"
+            echo "A gate job did not pass. A skipped or cancelled dependency is not a pass."
+            exit 1
+          fi
+          echo "every gate job passed"

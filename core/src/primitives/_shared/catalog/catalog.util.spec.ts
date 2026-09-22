@@ -60,7 +60,12 @@ describe('disable is allowed, but never silent', () => {
   it('disabling everything leaves an empty catalog, loudly', () => {
     const r = resolveCatalog(
       BUILTIN,
-      { disable: [{ id: 'a', why: 'x' }, { id: 'b', why: 'y' }] },
+      {
+        disable: [
+          { id: 'a', why: 'x' },
+          { id: 'b', why: 'y' },
+        ],
+      },
       'pattern',
     );
     expect(r.entries).toEqual([]);
@@ -84,7 +89,11 @@ describe('replace ignores the built-ins entirely', () => {
   it('wins over extra and disable, since it is the whole list', () => {
     const r = resolveCatalog(
       BUILTIN,
-      { replace: [{ id: 'z', value: 'only' }], extra: [{ id: 'c', value: 'ignored' }], disable: [{ id: 'a', why: 'ignored' }] },
+      {
+        replace: [{ id: 'z', value: 'only' }],
+        extra: [{ id: 'c', value: 'ignored' }],
+        disable: [{ id: 'a', why: 'ignored' }],
+      },
       'pattern',
     );
     expect(ids(r.entries)).toEqual(['z']);

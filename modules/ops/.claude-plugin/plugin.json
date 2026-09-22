@@ -1,0 +1,16 @@
+{
+  "name": "specwarden-ops",
+  "description": "@specwarden/ops — Env files, proxy upstreams, CI coverage, build order, shell scoping.",
+  "version": "0.0.0",
+  "author": {
+    "name": "specwarden"
+  },
+  "homepage": "https://github.com/specwarden/specwarden/tree/main/modules/ops",
+  "repository": "https://github.com/specwarden/specwarden",
+  "license": "MIT",
+  "keywords": [
+    "specwarden",
+    "quality-gates",
+    "module"
+  ]
+}

@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 import type { ICheckContext, IRule } from '../../../domain';
 import { orphanCheck } from './orphan-check.check';
 
-const rule = (checkIds: string[]): IRule => ({ id: 'r', statement: 's', owner: 'AGENTS.md', enforcement: { checkIds } });
+const rule = (checkIds: string[]): IRule => ({
+  id: 'r',
+  statement: 's',
+  owner: 'AGENTS.md',
+  enforcement: { checkIds },
+});
 const ctx = {} as ICheckContext;
 
 describe('orphanCheck', () => {

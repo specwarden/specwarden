@@ -1,8 +1,15 @@
 {
-  "name": "specwarden-template-nestjs",
+  "name": "@specwarden/template-nestjs",
   "version": "0.0.0",
-  "private": true,
   "type": "module",
+  "description": "template: A NestJS backend — the plugin wired, plus what a backend needs.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/specwarden/specwarden.git",
+    "directory": "templates/nestjs"
+  },
+  "homepage": "https://github.com/specwarden/specwarden/tree/main/templates/nestjs#readme",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -12,23 +19,33 @@
       "default": "./dist/index.js"
     }
   },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
-    "build": "node scripts/build.mjs",
+    "build": "tsup",
     "lint": "eslint src --max-warnings=0",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepare": "pnpm run build"
   },
   "dependencies": {
-    "specwarden": "workspace:*",
-    "specwarden-plugin-nestjs": "workspace:*",
-    "specwarden-module-security": "workspace:*",
-    "specwarden-scaffold-parts": "workspace:*",
-    "specwarden-module-ops": "workspace:*"
+    "specwarden": "workspace:^",
+    "@specwarden/scaffold-parts": "workspace:^",
+    "@specwarden/plugin-nestjs": "workspace:^",
+    "@specwarden/security": "workspace:^",
+    "@specwarden/ops": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "esbuild": "^0.25.0",
+    "tsup": "^8.5.0",
     "typescript": "^5.9.0",
     "vitest": "^4.0.0"
   }

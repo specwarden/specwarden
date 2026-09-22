@@ -9,7 +9,10 @@ import type { IPart, IPartOptions } from '../_shared/part.model';
  * scripts are, and a wrong pathspec makes it inert loudly (it reports how many files it
  * read). Everything else about it is a property of `sh` itself.
  */
-export const shellScopePart = (ctx: ITemplateContext, o: IPartOptions & { readonly pathspecs?: readonly string[] } = {}): IPart => {
+export const shellScopePart = (
+  ctx: ITemplateContext,
+  o: IPartOptions & { readonly pathspecs?: readonly string[] } = {},
+): IPart => {
   // No shell, no check. Its empty-corpus report is a FAILURE by design — a check that
   // examined nothing must never pass — so writing it into a repository with no scripts
   // makes the scaffold itself the reason the first run is red.
@@ -28,7 +31,7 @@ export const shellScopePart = (ctx: ITemplateContext, o: IPartOptions & { readon
  *
  * The pathspecs below are yours: a vendored script is not this repository's to style.
  */
-import { shellLocalScope } from 'specwarden-module-ops';
+import { shellLocalScope } from '@specwarden/ops';
 
 export const check = shellLocalScope({
   id: 'shell-local-scope',
@@ -44,7 +47,8 @@ export const check = shellLocalScope({
     rules: [
       {
         id: 'a-script-fails-where-it-is-wrong',
-        statement: 'A shell script declares `local` only inside a function, so a mistake fails at the line that made it.',
+        statement:
+          'A shell script declares `local` only inside a function, so a mistake fails at the line that made it.',
         owner: '',
         enforcement: { checkIds: ['shell-local-scope'] },
       },

@@ -72,7 +72,10 @@ describe('the report stays deterministic', () => {
     const log: string[] = [];
     const checks = [timed('slow', log, 40), timed('fast', log, 1)];
     const { reporter } = recordingReporter();
-    const out = await new CheckRunner(registryOf(checks), adapters([]), reporter).run({ all: true, concurrency: 2 }, ENV);
+    const out = await new CheckRunner(registryOf(checks), adapters([]), reporter).run(
+      { all: true, concurrency: 2 },
+      ENV,
+    );
     expect(out.results.map((r) => r.meta.id)).toEqual(['slow', 'fast']);
   });
 });
@@ -120,7 +123,10 @@ describe('an exclusive check runs alone', () => {
     const log: string[] = [];
     const checks = [timed('a', log, 30), { ...timed('lonely', log, 1), exclusive: true }, timed('b', log, 1)];
     const { reporter } = recordingReporter();
-    const out = await new CheckRunner(registryOf(checks), adapters([]), reporter).run({ all: true, concurrency: 3 }, ENV);
+    const out = await new CheckRunner(registryOf(checks), adapters([]), reporter).run(
+      { all: true, concurrency: 3 },
+      ENV,
+    );
     expect(out.results.map((r) => r.meta.id)).toEqual(['a', 'lonely', 'b']);
   });
 });

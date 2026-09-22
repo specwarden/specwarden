@@ -37,7 +37,12 @@ const COMMANDS_NEEDING_CONFIG = ['check', 'doctor', 'migrate', 'sync-invariants'
  * file growing back: a new command is a new folder plus one line, never a new branch
  * in a function that already does six things.
  */
-export async function main(argv: readonly string[], env: NodeJS.ProcessEnv, cwd: string, io: ICliIo = defaultIo): Promise<number> {
+export async function main(
+  argv: readonly string[],
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+  io: ICliIo = defaultIo,
+): Promise<number> {
   const args = parseArgs(argv);
 
   // init writes; adopt and suggest only read. All three run on a repository that has
@@ -45,7 +50,13 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv, cwd:
   // The VCS port goes with it: what a template writes depends on what the CHECKS will
   // see, and a check reads tracked files rather than the filesystem.
   if (args.command === 'init')
-    return init(new NodeFileSource(cwd), new NodeFileWriter(cwd), io, args.template, new GitVcs(new ChildProcessRunner(), cwd));
+    return init(
+      new NodeFileSource(cwd),
+      new NodeFileWriter(cwd),
+      io,
+      args.template,
+      new GitVcs(new ChildProcessRunner(), cwd),
+    );
   if (args.command === 'adopt') return adopt(new NodeFileSource(cwd), io);
   if (args.command === 'suggest') return suggest(new NodeFileSource(cwd), io);
   // Scaffolding a check needs a consumer directory, not a loaded config: the point is
@@ -92,7 +103,9 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv, cwd:
   const loaded = (await import(pathToFileURL(found.configPath).href)) as { default?: IWardenConfig };
   const config = loaded.default;
   if (!config || typeof config !== 'object') {
-    io.err(`${found.configPath} must default-export a config object (see defineConfig). Checks are read from checks/ by convention.\n`);
+    io.err(
+      `${found.configPath} must default-export a config object (see defineConfig). Checks are read from checks/ by convention.\n`,
+    );
     return 2;
   }
 
@@ -113,7 +126,9 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv, cwd:
       return 0;
     }
     if (configVersion > CONFIG_VERSION) {
-      io.err(`config declares version ${configVersion}, newer than this engine (v${CONFIG_VERSION}). Upgrade specwarden.\n`);
+      io.err(
+        `config declares version ${configVersion}, newer than this engine (v${CONFIG_VERSION}). Upgrade specwarden.\n`,
+      );
       return 2;
     }
     // configVersion < CONFIG_VERSION: no migrations are defined yet (only v1 exists).

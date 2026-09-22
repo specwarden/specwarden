@@ -43,7 +43,10 @@ describe('ruleOwnerFindings', () => {
 
   it('accepts an owner path with a section suffix', () => {
     const files = new InMemoryFileSource({ 'AGENTS.md': '# router' });
-    const findings = ruleOwnerFindings([{ id: 'r', statement: 's', owner: 'AGENTS.md § Migration Rule', enforcement: { checkIds: ['x'] } }], files);
+    const findings = ruleOwnerFindings(
+      [{ id: 'r', statement: 's', owner: 'AGENTS.md § Migration Rule', enforcement: { checkIds: ['x'] } }],
+      files,
+    );
     expect(findings).toEqual([]);
   });
 });

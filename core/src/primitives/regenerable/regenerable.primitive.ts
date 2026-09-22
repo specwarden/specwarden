@@ -61,12 +61,22 @@ export function regenerable(options: IRegenerableOptions): ICheck {
     const findings: IFinding[] = [];
     const committed = ctx.files.tryRead(options.artifact);
     if (committed === undefined) {
-      findings.push({ severity: 'error', file: options.artifact, message: `${options.artifact} does not exist to compare against.`, ruleId: options.id });
+      findings.push({
+        severity: 'error',
+        file: options.artifact,
+        message: `${options.artifact} does not exist to compare against.`,
+        ruleId: options.id,
+      });
       return verdictFrom(findings);
     }
     const result = generate(ctx);
     if (result.status !== 0) {
-      findings.push({ severity: 'error', file: options.artifact, message: `the generator \`${options.by}\` failed (exit ${result.status ?? 'signal'}).`, ruleId: options.id });
+      findings.push({
+        severity: 'error',
+        file: options.artifact,
+        message: `the generator \`${options.by}\` failed (exit ${result.status ?? 'signal'}).`,
+        ruleId: options.id,
+      });
       return verdictFrom(findings);
     }
     if (result.stdout !== committed) {
@@ -94,9 +104,12 @@ export function regenerable(options: IRegenerableOptions): ICheck {
   const fix = (ctx: ICheckContext): IFixOutcome => {
     const result = generate(ctx);
     if (result.status !== 0) {
-      throw new Error(`the generator \`${options.by}\` failed (exit ${result.status ?? 'signal'}); ${options.artifact} was not written.`);
+      throw new Error(
+        `the generator \`${options.by}\` failed (exit ${result.status ?? 'signal'}); ${options.artifact} was not written.`,
+      );
     }
-    if (result.stdout === ctx.files.tryRead(options.artifact)) return { fixed: 0, summary: `${options.artifact} was already current` };
+    if (result.stdout === ctx.files.tryRead(options.artifact))
+      return { fixed: 0, summary: `${options.artifact} was already current` };
     ctx.writer.write(options.artifact, result.stdout);
     return { fixed: 1, summary: `regenerated ${options.artifact}` };
   };

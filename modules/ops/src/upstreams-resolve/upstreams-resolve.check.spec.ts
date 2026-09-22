@@ -94,8 +94,7 @@ describe('upstreamsResolve', () => {
     when: () => true,
   });
 
-  const runOver = (files: Record<string, string>) =>
-    check.run({ files: new InMemoryFileSource(files, '') } as never);
+  const runOver = (files: Record<string, string>) => check.run({ files: new InMemoryFileSource(files, '') } as never);
 
   const errors = (verdict: { findings: readonly { severity: string; message: string }[] }) =>
     verdict.findings.filter((f) => f.severity === 'error').map((f) => f.message);

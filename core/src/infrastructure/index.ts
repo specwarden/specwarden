@@ -13,4 +13,9 @@ export { JsonReporter } from './json-reporter/json-reporter.adapter';
 export { GithubReporter } from './github-reporter/github-reporter.adapter';
 export { JsonRatchetStore, RatchetOverwriteError } from './json-ratchet-store/json-ratchet-store.adapter';
 export { type TWriteSink, stdoutSink } from './reporter-sink/reporter-sink.model';
-export { parseClaudeToolCall, perimeterExitCode, formatBlock, claudeAgentRuntime } from './agent-runtime/claude/claude.adapter';
+export {
+  parseClaudeToolCall,
+  perimeterExitCode,
+  formatBlock,
+  claudeAgentRuntime,
+} from './agent-runtime/claude/claude.adapter';

@@ -78,9 +78,9 @@ describe('what a template needs to know before it writes anything', () => {
     const vcs = { trackedFiles: () => [] } as unknown as Parameters<typeof detectRepo>[1];
     expect(detectRepo(files, vcs)?.hasShellScripts).toBe(false);
 
-    const tracked = { trackedFiles: (p: string) => (p === 'scripts/**/*.sh' ? ['scripts/deploy.sh'] : []) } as unknown as Parameters<
-      typeof detectRepo
-    >[1];
+    const tracked = {
+      trackedFiles: (p: string) => (p === 'scripts/**/*.sh' ? ['scripts/deploy.sh'] : []),
+    } as unknown as Parameters<typeof detectRepo>[1];
     expect(detectRepo(files, tracked)?.hasShellScripts).toBe(true);
   });
 

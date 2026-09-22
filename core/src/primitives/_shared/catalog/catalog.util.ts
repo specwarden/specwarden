@@ -92,7 +92,9 @@ export function resolveCatalog<T extends ICatalogEntry>(
   const known = new Set(builtin.map((e) => e.id));
   for (const [id, why] of disabled) {
     if (!known.has(id)) {
-      notes.push(`${label} '${id}' is disabled but no built-in has that id — a rename or a typo, so nothing was switched off.`);
+      notes.push(
+        `${label} '${id}' is disabled but no built-in has that id — a rename or a typo, so nothing was switched off.`,
+      );
       continue;
     }
     notes.push(`${label} '${id}' disabled: ${why}`);

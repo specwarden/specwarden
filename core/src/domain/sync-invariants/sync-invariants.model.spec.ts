@@ -27,7 +27,10 @@ describe('planInvariantSync', () => {
   it('handles both directions at once', () => {
     const plan = planInvariantSync(
       [req('A-1', 'new'), req('A-2', 'kept')],
-      [{ id: 'A-2', location: 'm.md' }, { id: 'A-9', location: 'm.md' }],
+      [
+        { id: 'A-2', location: 'm.md' },
+        { id: 'A-9', location: 'm.md' },
+      ],
     );
     expect(plan.toDeposit.map((d) => d.id)).toEqual(['A-1']);
     expect(plan.orphaned.map((o) => o.id)).toEqual(['A-9']);

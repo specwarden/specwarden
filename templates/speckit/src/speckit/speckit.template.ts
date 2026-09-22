@@ -1,5 +1,5 @@
 import type { IRule, ITemplate, ITemplateContext, ITemplateFile } from 'specwarden';
-import { compose, docPathsPart, scriptWrappersPart, secretScanPart, specSourcePart } from 'specwarden-scaffold-parts';
+import { compose, docPathsPart, scriptWrappersPart, secretScanPart, specSourcePart } from '@specwarden/scaffold-parts';
 
 /**
  * A starting tree for a repository that specifies its work with SPEC KIT.
@@ -35,7 +35,7 @@ const assembled = (ctx: ITemplateContext) =>
 export const speckitTemplate: ITemplate = {
   name: 'speckit',
   describe: 'a repository specified with Spec Kit — the spec source wired, credential scan, doc paths, lint and tests',
-  requires: ['specwarden-module-speckit', 'specwarden-module-security', 'specwarden-module-docs'],
+  requires: ['@specwarden/speckit', '@specwarden/security', '@specwarden/docs'],
 
   files: (ctx: ITemplateContext): readonly ITemplateFile[] => assembled(ctx).files,
   rules: (ctx: ITemplateContext): readonly IRule[] => assembled(ctx).rules,

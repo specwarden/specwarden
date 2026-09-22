@@ -88,4 +88,3 @@ export function registryOf(checks: readonly ICheck[]): CheckRegistry {
   reg.registerAll(checks);
   return reg;
 }
-

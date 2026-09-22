@@ -19,7 +19,13 @@ const ids = (cs: readonly { id: string }[]) => cs.map((c) => c.id);
 describe('the self-checks exist without being asked for', () => {
   it('builds the five that need no repository fact', () => {
     const { checks, notes } = harnessChecks(inputs());
-    expect(ids(checks)).toEqual(['rule-owner-resolves', 'rule-coverage', 'orphan-check', 'enforcement-resolves', 'ratchet-direction']);
+    expect(ids(checks)).toEqual([
+      'rule-owner-resolves',
+      'rule-coverage',
+      'orphan-check',
+      'enforcement-resolves',
+      'ratchet-direction',
+    ]);
     expect(notes).toEqual([]);
   });
 
@@ -31,7 +37,9 @@ describe('the self-checks exist without being asked for', () => {
   it('points the ratchet check at the conventional store under the consumer dir', () => {
     // Proven through the option surface: a different consumerDir must yield a
     // different check (the glob is baked in at build time).
-    const a = harnessChecks({ ...inputs(), consumerDir: '.specwarden' }).checks.find((c) => c.id === 'ratchet-direction');
+    const a = harnessChecks({ ...inputs(), consumerDir: '.specwarden' }).checks.find(
+      (c) => c.id === 'ratchet-direction',
+    );
     const b = harnessChecks({ ...inputs(), consumerDir: '.harness' }).checks.find((c) => c.id === 'ratchet-direction');
     expect(a).toBeDefined();
     expect(b).toBeDefined();
@@ -54,7 +62,9 @@ describe('the zone barrier is opt-in', () => {
 
 describe('switching one off is allowed and never silent', () => {
   it('removes the check and reports the reason', () => {
-    const { checks, notes } = harnessChecks(inputs(), { disable: [{ id: 'rule-coverage', why: 'rules are tracked in the forge' }] });
+    const { checks, notes } = harnessChecks(inputs(), {
+      disable: [{ id: 'rule-coverage', why: 'rules are tracked in the forge' }],
+    });
     expect(ids(checks)).not.toContain('rule-coverage');
     expect(notes).toEqual(["harness check 'rule-coverage' disabled: rules are tracked in the forge"]);
   });
@@ -75,7 +85,12 @@ describe('the roster is read lazily', () => {
     // The whole reason the inputs are thunks: the self-checks are part of the roster
     // they audit, and a list read at build time would report them as missing.
     let roster: string[] = [];
-    const { checks } = harnessChecks({ rules: () => RULES, rulesDeclared: true, checkIds: () => roster, consumerDir: '.specwarden' });
+    const { checks } = harnessChecks({
+      rules: () => RULES,
+      rulesDeclared: true,
+      checkIds: () => roster,
+      consumerDir: '.specwarden',
+    });
     roster = [...ids(checks), 'some-check'];
     const orphan = checks.find((c) => c.id === 'orphan-check');
     expect(orphan).toBeDefined();

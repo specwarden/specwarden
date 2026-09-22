@@ -4,10 +4,23 @@ import type { ICheckMeta, ICheckResult, IFinding } from '../../domain';
 import { GithubReporter } from './github-reporter.adapter';
 
 const meta = (over: Partial<ICheckMeta> = {}): ICheckMeta =>
-  ({ id: 'lint', title: 'ESLint', tier: 'fast', zone: 'consumer', capabilities: [], contractVersion: 1, ...over }) as ICheckMeta;
+  ({
+    id: 'lint',
+    title: 'ESLint',
+    tier: 'fast',
+    zone: 'consumer',
+    capabilities: [],
+    contractVersion: 1,
+    ...over,
+  }) as ICheckMeta;
 
 const result = (findings: readonly IFinding[], over: Partial<ICheckResult> = {}): ICheckResult =>
-  ({ meta: meta(), verdict: { ok: findings.every((f) => f.severity !== 'error'), findings }, durationMs: 10, ...over }) as ICheckResult;
+  ({
+    meta: meta(),
+    verdict: { ok: findings.every((f) => f.severity !== 'error'), findings },
+    durationMs: 10,
+    ...over,
+  }) as ICheckResult;
 
 function capture() {
   let out = '';
@@ -17,7 +30,9 @@ function capture() {
 describe('GithubReporter', () => {
   it('annotates an error at its file and line', () => {
     const c = capture();
-    new GithubReporter(c.write).checkFinished(result([{ severity: 'error', message: 'bad import', file: 'src/a.ts', line: 12, column: 3 }]));
+    new GithubReporter(c.write).checkFinished(
+      result([{ severity: 'error', message: 'bad import', file: 'src/a.ts', line: 12, column: 3 }]),
+    );
 
     expect(c.out()).toContain('::error title=lint,file=src/a.ts,line=12,col=3::bad import');
   });
@@ -58,7 +73,12 @@ describe('GithubReporter', () => {
     expect(c.out()).toContain('first%0Asecond, 100%25 sure');
     // The whole annotation stays on ONE line: a raw newline in the message would end
     // the workflow command there and leave the rest as plain log text.
-    expect(c.out().split('\n').filter((l) => l.startsWith('::error'))).toHaveLength(1);
+    expect(
+      c
+        .out()
+        .split('\n')
+        .filter((l) => l.startsWith('::error')),
+    ).toHaveLength(1);
   });
 
   it('wraps each check in a collapsible group', () => {
@@ -73,7 +93,9 @@ describe('GithubReporter', () => {
 
   it('puts a hint on the log rather than on the diff', () => {
     const c = capture();
-    new GithubReporter(c.write).checkFinished(result([{ severity: 'error', message: 'x' }], { meta: meta({ hint: 'run the thing' }) }));
+    new GithubReporter(c.write).checkFinished(
+      result([{ severity: 'error', message: 'x' }], { meta: meta({ hint: 'run the thing' }) }),
+    );
 
     expect(c.out()).toContain('hint: run the thing');
     expect(c.out()).not.toContain('::error title=lint::hint');

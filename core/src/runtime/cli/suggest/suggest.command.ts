@@ -23,7 +23,11 @@ export function suggest(files: IFileSource, io: ICliIo): number {
   let proposed = 0;
   for (const candidate of SIBLING_CANDIDATES) {
     const inference = inferSibling(files, candidate.when, candidate.require);
-    if (inference.total === 0 || inference.ratio < CONSISTENCY_THRESHOLD || inference.exceptions.length === inference.total) {
+    if (
+      inference.total === 0 ||
+      inference.ratio < CONSISTENCY_THRESHOLD ||
+      inference.exceptions.length === inference.total
+    ) {
       continue;
     }
     proposed++;
@@ -31,7 +35,9 @@ export function suggest(files: IFileSource, io: ICliIo): number {
       `${Math.round(inference.ratio * 100)}% of ${inference.when} have ${inference.require} ` +
         `(${inference.satisfied} of ${inference.total}).\n`,
     );
-    io.out(`  → siblingRequired({ subjects: '${inference.when}', require: '${inference.require}' }), ratchet ${inference.exceptions.length}.\n`);
+    io.out(
+      `  → siblingRequired({ subjects: '${inference.when}', require: '${inference.require}' }), ratchet ${inference.exceptions.length}.\n`,
+    );
     if (inference.exceptions.length > 0) {
       const shown = inference.exceptions.slice(0, 5);
       io.out(`  exceptions: ${shown.join(', ')}${inference.exceptions.length > shown.length ? ', …' : ''}\n`);

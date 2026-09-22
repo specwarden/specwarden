@@ -1,12 +1,15 @@
 {
   "name": "specwarden",
   "version": "0.0.0",
-  "private": true,
   "type": "module",
-  "engines": {
-    "node": ">=24"
+  "description": "core: A repository declares its rules; the warden proves which hold.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/specwarden/specwarden.git",
+    "directory": "core"
   },
-  "description": "SpecWarden — a repository declares its rules; the warden proves which hold. Product zone (P): no knowledge of any host repository, its domain or its stack.",
+  "homepage": "https://github.com/specwarden/specwarden/tree/main/core#readme",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -20,21 +23,34 @@
     "specwarden": "./bin/warden.mjs",
     "spw": "./bin/warden.mjs"
   },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md",
+    "bin",
+    "scripts",
+    "skills"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
-    "build": "node scripts/build.mjs",
+    "build": "tsup",
     "lint": "eslint src --max-warnings=0",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:mutation": "stryker run",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "prepare": "pnpm run build"
+    "prepare": "pnpm run build",
+    "test:watch": "vitest",
+    "test:mutation": "stryker run"
   },
   "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0",
     "@stryker-mutator/core": "^9.6.1",
-    "@stryker-mutator/vitest-runner": "^9.6.1",
-    "@types/node": "^22.10.7",
-    "esbuild": "^0.27.4",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.9"
+    "@stryker-mutator/vitest-runner": "^9.6.1"
   }
 }

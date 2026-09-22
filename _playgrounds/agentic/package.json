@@ -1,0 +1,15 @@
+{
+  "name": "playground-agentic",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gate": "specwarden check"
+  },
+  "devDependencies": {
+    "specwarden": "workspace:*",
+    "@specwarden/scaffold-parts": "workspace:*",
+    "@specwarden/agents": "workspace:*",
+    "@specwarden/plans": "workspace:*",
+    "@specwarden/docs": "workspace:*"
+  }
+}

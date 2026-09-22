@@ -28,7 +28,21 @@ export type { INamedSource, ISourcesAgreeOptions } from './sources-agree/sources
  * and two verdict rules is how a ratchet starts meaning different things in different
  * checks.
  */
-export { buildCheck, frameTolerated, verdictFrom, resolveCatalog, catalogNotes, IMPORT_RE, matchesSpecifier, testStateless, dirOf, joinDir, lineOf, pathMatches, stem } from './_shared';
+export {
+  buildCheck,
+  frameTolerated,
+  verdictFrom,
+  resolveCatalog,
+  catalogNotes,
+  IMPORT_RE,
+  matchesSpecifier,
+  testStateless,
+  dirOf,
+  joinDir,
+  lineOf,
+  pathMatches,
+  stem,
+} from './_shared';
 export type { ICatalogDisable, ICatalogEntry, ICatalogOptions, IResolvedCatalog } from './_shared';
 
 /**

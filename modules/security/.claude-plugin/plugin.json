@@ -1,0 +1,16 @@
+{
+  "name": "specwarden-security",
+  "description": "@specwarden/security — Credential scanning, with a vendor library as a preset rather than a mandate.",
+  "version": "0.0.0",
+  "author": {
+    "name": "specwarden"
+  },
+  "homepage": "https://github.com/specwarden/specwarden/tree/main/modules/security",
+  "repository": "https://github.com/specwarden/specwarden",
+  "license": "MIT",
+  "keywords": [
+    "specwarden",
+    "quality-gates",
+    "module"
+  ]
+}

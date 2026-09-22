@@ -5,7 +5,7 @@ import {
   docSymbolsExamplePart,
   scriptWrappersPart,
   secretScanPart,
-} from 'specwarden-scaffold-parts';
+} from '@specwarden/scaffold-parts';
 
 /**
  * A starting tree for an ordinary TypeScript repository.
@@ -28,17 +28,12 @@ import {
  * kind.
  */
 const assembled = (ctx: ITemplateContext) =>
-  compose(
-    secretScanPart(ctx),
-    docPathsPart(ctx),
-    docSymbolsExamplePart(ctx),
-    scriptWrappersPart(ctx),
-  );
+  compose(secretScanPart(ctx), docPathsPart(ctx), docSymbolsExamplePart(ctx), scriptWrappersPart(ctx));
 
 export const nodeTs: ITemplate = {
   name: 'node-ts',
   describe: 'an ordinary TypeScript repository — credential scan, doc paths and symbols, lint and tests',
-  requires: ['specwarden-module-security', 'specwarden-module-docs'],
+  requires: ['@specwarden/security', '@specwarden/docs'],
 
   files: (ctx: ITemplateContext): readonly ITemplateFile[] => assembled(ctx).files,
   rules: (ctx: ITemplateContext): readonly IRule[] => assembled(ctx).rules,

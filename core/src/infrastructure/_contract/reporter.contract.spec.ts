@@ -8,8 +8,15 @@ function result(over: Partial<ICheckResult> & Pick<ICheckResult, 'meta'>): IChec
   return { verdict: { ok: true, findings: [] }, durationMs: 100, ...over };
 }
 
-const meta = (id: string, extra = {}) =>
-  ({ id, title: id, tier: 'fast' as const, zone: 'consumer' as const, capabilities: [], contractVersion: 1, ...extra });
+const meta = (id: string, extra = {}) => ({
+  id,
+  title: id,
+  tier: 'fast' as const,
+  zone: 'consumer' as const,
+  capabilities: [],
+  contractVersion: 1,
+  ...extra,
+});
 
 describe('TtyReporter', () => {
   it('renders findings verbatim between the frame lines', () => {
@@ -31,9 +38,7 @@ describe('TtyReporter', () => {
   it('marks a failing check and shows its hint', () => {
     let out = '';
     const r = new TtyReporter((t) => (out += t));
-    r.checkFinished(
-      result({ meta: meta('x', { hint: 'do the thing' }), verdict: { ok: false, findings: [] } }),
-    );
+    r.checkFinished(result({ meta: meta('x', { hint: 'do the thing' }), verdict: { ok: false, findings: [] } }));
     expect(out).toContain('❌ x FAILED');
     expect(out).toContain('💡 do the thing');
   });
@@ -71,7 +76,10 @@ describe('a reporter never prints an environment variable value', () => {
   it('TtyReporter output never contains the secret', () => {
     let out = '';
     const r = new TtyReporter((t) => (out += t));
-    const res = result({ meta: meta('env-check'), verdict: { ok: false, findings: [{ severity: 'error', message: 'a key disagrees' }] } });
+    const res = result({
+      meta: meta('env-check'),
+      verdict: { ok: false, findings: [{ severity: 'error', message: 'a key disagrees' }] },
+    });
     r.checkStarted(res.meta);
     r.checkFinished(res);
     r.runFinished([res], 500);
@@ -81,7 +89,10 @@ describe('a reporter never prints an environment variable value', () => {
   it('JsonReporter output never contains the secret', () => {
     let out = '';
     const r = new JsonReporter((t) => (out += t));
-    const res = result({ meta: meta('env-check'), verdict: { ok: false, findings: [{ severity: 'error', message: 'a key disagrees' }] } });
+    const res = result({
+      meta: meta('env-check'),
+      verdict: { ok: false, findings: [{ severity: 'error', message: 'a key disagrees' }] },
+    });
     r.checkFinished(res);
     r.runFinished([res], 500);
     expect(out).not.toContain(SECRET);

@@ -33,7 +33,12 @@ export function docPlacement(options: IDocPlacementOptions): ICheck {
 
     const placement: IFinding[] = files
       .filter((f) => !options.allowed.some((re) => testStateless(re, f)))
-      .map((file) => ({ severity: 'error', file, message: `${file} sits where the placement contract does not describe — decide: move it, or add the row to the contract.`, ruleId: options.id }));
+      .map((file) => ({
+        severity: 'error',
+        file,
+        message: `${file} sits where the placement contract does not describe — decide: move it, or add the row to the contract.`,
+        ruleId: options.id,
+      }));
 
     const links: IFinding[] = [];
     if (options.link) {
@@ -44,7 +49,13 @@ export function docPlacement(options: IDocPlacementOptions): ICheck {
         const body = ctx.files.tryRead(file);
         if (body === undefined) continue;
         for (const m of body.matchAll(re)) {
-          if (m[1] !== allow) links.push({ severity: 'error', file, message: `${file} links into ${dir} (\`${m[1]}\`) from outside it — a plan is deleted when its work ends, so nothing may point at one. Cite the document that owns the durable fact instead.`, ruleId: options.id });
+          if (m[1] !== allow)
+            links.push({
+              severity: 'error',
+              file,
+              message: `${file} links into ${dir} (\`${m[1]}\`) from outside it — a plan is deleted when its work ends, so nothing may point at one. Cite the document that owns the durable fact instead.`,
+              ruleId: options.id,
+            });
         }
       }
     }

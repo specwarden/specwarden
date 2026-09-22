@@ -20,7 +20,9 @@ const paths = (c = ctx()) => agentic.files(c).map((f) => f.path);
 const live = (c = ctx()) => agentic.files(c).filter((f) => f.path.endsWith('.check.mjs'));
 
 /** Written inside the package so the generated imports resolve as a consumer's would. */
-const scratch = mkdtempSync(join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '..', '.tmp-generated-'));
+const scratch = mkdtempSync(
+  join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '..', '.tmp-generated-'),
+);
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 const write = (name: string, body: string) => {
@@ -36,7 +38,12 @@ describe('the generated tree actually loads', () => {
       const abs = write(file.path.replace(/\//g, '-'), file.body);
       const mod = (await import(pathToFileURL(abs).href)) as { check?: { id: string } };
       expect(mod.check, `${file.path} exports no check`).toBeDefined();
-      expect(mod.check?.id).toBe(file.path.split('/').pop()?.replace(/\.check\.mjs$/, ''));
+      expect(mod.check?.id).toBe(
+        file.path
+          .split('/')
+          .pop()
+          ?.replace(/\.check\.mjs$/, ''),
+      );
     }
   });
 
@@ -45,7 +52,9 @@ describe('the generated tree actually loads', () => {
     // repository has a file that looks like a guard and guards nothing.
     const file = agentic.files(ctx()).find((f) => f.path === 'perimeter.mjs');
     const abs = write('perimeter.mjs', file?.body ?? '');
-    const mod = (await import(pathToFileURL(abs).href)) as { rules?: readonly { id: string; evaluate: (i: unknown) => { blocked: boolean } }[] };
+    const mod = (await import(pathToFileURL(abs).href)) as {
+      rules?: readonly { id: string; evaluate: (i: unknown) => { blocked: boolean } }[];
+    };
     expect(mod.rules?.length).toBe(2);
 
     const forcePush = mod.rules?.find((r) => r.id === 'no-force-push');
@@ -102,14 +111,22 @@ describe('it wires what an agentic repository actually needs', () => {
 
   it('every rule in the perimeter says what to do INSTEAD', () => {
     const body = agentic.files(ctx()).find((f) => f.path === 'perimeter.mjs')?.body ?? '';
-    for (const why of ['Push a new commit, or ask the owner', 'discards work that is not yours']) expect(body).toContain(why);
+    for (const why of ['Push a new commit, or ask the owner', 'discards work that is not yours'])
+      expect(body).toContain(why);
   });
 });
 
 describe('every live check and perimeter rule is named by a rule', () => {
   it('so a fresh tree has no orphan', () => {
-    const checkIds = live().map((f) => f.path.split('/').pop()?.replace(/\.check\.mjs$/, ''));
-    const named = new Set(agentic.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds));
+    const checkIds = live().map((f) =>
+      f.path
+        .split('/')
+        .pop()
+        ?.replace(/\.check\.mjs$/, ''),
+    );
+    const named = new Set(
+      agentic.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
+    );
     for (const id of checkIds) expect(named.has(id as string), `${id} enforces no rule`).toBe(true);
     // ...and the perimeter's own rule ids are enforcers too, which is why the engine
     // takes `otherEnforcerIds`: they resolve against the perimeter file, not the roster.

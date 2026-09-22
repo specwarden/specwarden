@@ -120,7 +120,9 @@ export function harnessChecks(
     }),
   ];
   if (!inputs.rulesDeclared) {
-    notes.push('no `rules` declared — the four rule audits (owner, coverage, orphans, enforcers) are not registered; add `rules: []` to start one.');
+    notes.push(
+      'no `rules` declared — the four rule audits (owner, coverage, orphans, enforcers) are not registered; add `rules: []` to start one.',
+    );
   }
 
   const all: ICheck[] = [

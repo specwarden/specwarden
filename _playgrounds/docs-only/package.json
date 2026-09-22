@@ -1,0 +1,13 @@
+{
+  "name": "playground-docs-only",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gate": "specwarden check"
+  },
+  "devDependencies": {
+    "specwarden": "workspace:*",
+    "@specwarden/scaffold-parts": "workspace:*",
+    "@specwarden/docs": "workspace:*"
+  }
+}

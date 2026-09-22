@@ -12,7 +12,10 @@ function run(files: Record<string, string>, opts: Partial<Parameters<typeof agen
   return check.run({ changed: [], files: source } as unknown as ICheckContext) as IVerdict;
 }
 
-const fm = (fields: Record<string, string>) => `---\n${Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join('\n')}\n---\nbody\n`;
+const fm = (fields: Record<string, string>) =>
+  `---\n${Object.entries(fields)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('\n')}\n---\nbody\n`;
 
 describe('parseFrontmatter', () => {
   it('reads flat key: value and a folded block', () => {
@@ -30,7 +33,10 @@ describe('agentDefinitions', () => {
   });
 
   it('accepts a complete definition whose name matches its file', () => {
-    expect(run({ '.claude/agents/scout.md': fm({ name: 'scout', description: 'd', tools: 'Read, Grep', model: 'haiku' }) }).ok).toBe(true);
+    expect(
+      run({ '.claude/agents/scout.md': fm({ name: 'scout', description: 'd', tools: 'Read, Grep', model: 'haiku' }) })
+        .ok,
+    ).toBe(true);
   });
 
   it('flags a missing required field', () => {
@@ -40,14 +46,20 @@ describe('agentDefinitions', () => {
   });
 
   it('flags a name that does not match the filename', () => {
-    const v = run({ '.claude/agents/scout.md': fm({ name: 'explorer', description: 'd', tools: 'Read', model: 'haiku' }) });
+    const v = run({
+      '.claude/agents/scout.md': fm({ name: 'explorer', description: 'd', tools: 'Read', model: 'haiku' }),
+    });
     expect(v.findings.some((f) => f.message.includes('does not match the filename'))).toBe(true);
   });
 
   it('flags a spawn tool on a non-orchestrator, allows it on an orchestrator', () => {
-    const leaf = run({ '.claude/agents/scout.md': fm({ name: 'scout', description: 'd', tools: 'Read, Task', model: 'haiku' }) });
+    const leaf = run({
+      '.claude/agents/scout.md': fm({ name: 'scout', description: 'd', tools: 'Read, Task', model: 'haiku' }),
+    });
     expect(leaf.findings.some((f) => f.message.includes('spawn tool'))).toBe(true);
-    const lead = run({ '.claude/agents/lead.md': fm({ name: 'lead', description: 'd', tools: 'Read, Task', model: 'opus' }) });
+    const lead = run({
+      '.claude/agents/lead.md': fm({ name: 'lead', description: 'd', tools: 'Read, Task', model: 'opus' }),
+    });
     expect(lead.ok).toBe(true);
   });
 

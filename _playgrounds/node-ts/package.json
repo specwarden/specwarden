@@ -1,0 +1,14 @@
+{
+  "name": "playground-node-ts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gate": "specwarden check"
+  },
+  "devDependencies": {
+    "specwarden": "workspace:*",
+    "@specwarden/scaffold-parts": "workspace:*",
+    "@specwarden/docs": "workspace:*",
+    "@specwarden/security": "workspace:*"
+  }
+}

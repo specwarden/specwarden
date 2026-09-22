@@ -22,7 +22,9 @@ export class ConstraintCardTooLongError extends Error {
     readonly bytes: number,
     readonly maxBytes: number,
   ) {
-    super(`the generated constraint card is ${bytes} bytes, over the ${maxBytes}-byte budget. Tighten a constraint's wording, or raise the budget deliberately.`);
+    super(
+      `the generated constraint card is ${bytes} bytes, over the ${maxBytes}-byte budget. Tighten a constraint's wording, or raise the budget deliberately.`,
+    );
   }
 }
 

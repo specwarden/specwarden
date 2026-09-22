@@ -9,7 +9,9 @@ import { type IRatchet, type IRatchetStore, type TRatchetDirection, tightenedTo 
 export class RatchetOverwriteError extends Error {
   override readonly name = 'RatchetOverwriteError';
   constructor(readonly ratchetId: string) {
-    super(`ratchet '${ratchetId}' already has a baseline; establish() will not overwrite it. Use tighten() to move it towards its target.`);
+    super(
+      `ratchet '${ratchetId}' already has a baseline; establish() will not overwrite it. Use tighten() to move it towards its target.`,
+    );
   }
 }
 

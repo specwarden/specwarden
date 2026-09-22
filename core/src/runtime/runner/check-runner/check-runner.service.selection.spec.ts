@@ -65,7 +65,10 @@ describe('CheckRunner selection', () => {
   it('--if-relevant applies the relevance filter even to a named id', async () => {
     const reg = registryOf([check({ id: 'one', when: () => false })]);
     const { reporter, ran } = recordingReporter();
-    await new CheckRunner(reg, adapters(['unrelated']), reporter).run({ ids: ['one'], ifRelevant: true }, { ci: false });
+    await new CheckRunner(reg, adapters(['unrelated']), reporter).run(
+      { ids: ['one'], ifRelevant: true },
+      { ci: false },
+    );
     expect(ran).toEqual([]); // named, but not relevant, and ifRelevant is on → skipped
   });
 
@@ -127,10 +130,14 @@ describe('CheckRunner selection', () => {
   it('declaring no trigger disables size entirely', async () => {
     const reg = registryOf([check({ id: 'x', when: () => false })]);
     const { reporter, ran } = recordingReporter();
-    const outcome = await new CheckRunner(reg, adapters(Array.from({ length: 500 }, (_, i) => `f${i}.ts`), 99999), reporter).run(
-      { tier: 'fast' },
-      { ci: false },
-    );
+    const outcome = await new CheckRunner(
+      reg,
+      adapters(
+        Array.from({ length: 500 }, (_, i) => `f${i}.ts`),
+        99999,
+      ),
+      reporter,
+    ).run({ tier: 'fast' }, { ci: false });
     expect(ran).toEqual([]);
     expect(outcome.fullRunReason).toBeUndefined();
   });
@@ -214,8 +221,10 @@ describe('CheckRunner passes the shard through to checks', () => {
         },
       }),
     ]);
-    await new CheckRunner(reg, adapters([]), recordingReporter().reporter).run({ tier: 'fast', shard: '1/3' }, { ci: false });
+    await new CheckRunner(reg, adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast', shard: '1/3' },
+      { ci: false },
+    );
     expect(seen).toBe('1/3');
   });
 });
-

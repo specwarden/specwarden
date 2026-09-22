@@ -39,7 +39,8 @@ function shardProblem(shard: string | undefined): string | undefined {
   const index = Number(parsed[1]);
   const total = Number(parsed[2]);
   if (total < 1) return `--shard "${shard}" divides the work into ${total} parts`;
-  if (index < 1 || index > total) return `--shard "${shard}" asks for part ${index} of ${total} — the index runs from 1 to ${total}`;
+  if (index < 1 || index > total)
+    return `--shard "${shard}" asks for part ${index} of ${total} — the index runs from 1 to ${total}`;
   return undefined;
 }
 
@@ -113,9 +114,7 @@ export async function check(
   // substituted for them, so overriding one does not oblige a caller to construct
   // the other five — the reason this is a socket and not a required field.
   const adapters: IEngineAdapters = { ...defaults, ...config.adapters?.(defaults, { root }) };
-  const reporter = config.reporter
-    ? config.reporter({ json: args.json, out: io.out })
-    : builtInReporter(args, env, io);
+  const reporter = config.reporter ? config.reporter({ json: args.json, out: io.out }) : builtInReporter(args, env, io);
   const runner = new CheckRunner(registry, adapters, reporter);
 
   const runnerOptions = {
@@ -164,7 +163,8 @@ export async function check(
     // Say why relevance did not apply. Without this line a run that filtered nothing
     // and a run that filtered everything print the same output, and the triggers
     // behind the full run cannot be told from the tier they replaced.
-    if (outcome.fullRunReason !== undefined && !args.json) io.out(`\nℹ full run — no relevance filter: ${outcome.fullRunReason}\n`);
+    if (outcome.fullRunReason !== undefined && !args.json)
+      io.out(`\nℹ full run — no relevance filter: ${outcome.fullRunReason}\n`);
     return outcome.exitCode;
   } catch (err) {
     if (err instanceof RunnerUsageError) {

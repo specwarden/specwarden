@@ -57,7 +57,9 @@ describe('secretScan', () => {
     const files = { 'fixtures/known.txt': `k=${AWS}` };
     expect(run(files, { allowlist: [{ file: 'fixtures/known.txt', patternId: '*' }] }).ok).toBe(true);
     // …but only for the named file, never a lookalike elsewhere.
-    expect(run({ 'other.txt': `k=${AWS}` }, { allowlist: [{ file: 'fixtures/known.txt', patternId: '*' }] }).ok).toBe(false);
+    expect(run({ 'other.txt': `k=${AWS}` }, { allowlist: [{ file: 'fixtures/known.txt', patternId: '*' }] }).ok).toBe(
+      false,
+    );
   });
 
   it('skips lockfiles, skipped extensions and binary content', () => {

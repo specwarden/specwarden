@@ -71,7 +71,10 @@ export class TtyReporter implements IReporter {
     const warned = active.filter((r) => !r.verdict.ok && r.meta.advisory).length;
     const skippedResults = results.filter((r) => r.skipped);
     const secs = `${(totalMs / 1000).toFixed(1)}s`;
-    const aside = [warned ? `${warned} warned` : '', skippedResults.length ? `${skippedResults.length} skipped` : ''].filter(Boolean);
+    const aside = [
+      warned ? `${warned} warned` : '',
+      skippedResults.length ? `${skippedResults.length} skipped` : '',
+    ].filter(Boolean);
     const suffix = aside.length ? ` (${aside.join(', ')})` : '';
 
     this.writeSlowest(active);

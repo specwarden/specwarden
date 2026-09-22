@@ -21,7 +21,9 @@ export interface ISiblingInference {
  */
 export function inferSibling(files: IFileSource, when: string, require: string): ISiblingInference {
   const matched = files.glob(when);
-  const exceptions = matched.filter((file) => !files.exists(joinDir(dirOf(file), require.replace('{name}', stem(file)))));
+  const exceptions = matched.filter(
+    (file) => !files.exists(joinDir(dirOf(file), require.replace('{name}', stem(file)))),
+  );
   const satisfied = matched.length - exceptions.length;
   return {
     when,

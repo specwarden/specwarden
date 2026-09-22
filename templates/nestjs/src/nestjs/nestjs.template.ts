@@ -1,5 +1,5 @@
 import type { IRule, ITemplate, ITemplateContext, ITemplateFile } from 'specwarden';
-import { compose, envFilesExamplePart, scriptWrappersPart, secretScanPart } from 'specwarden-scaffold-parts';
+import { compose, envFilesExamplePart, scriptWrappersPart, secretScanPart } from '@specwarden/scaffold-parts';
 
 /**
  * A starting tree for a NestJS backend.
@@ -36,9 +36,9 @@ export const nestjsTemplate: ITemplate = {
   // Demanding it of every NestJS repository would be an install to satisfy a check that
   // repository does not have.
   requires: (ctx: ITemplateContext): readonly string[] => [
-    'specwarden-plugin-nestjs',
-    'specwarden-module-security',
-    ...(ctx.composeFiles.length > 0 ? ['specwarden-module-ops'] : []),
+    '@specwarden/plugin-nestjs',
+    '@specwarden/security',
+    ...(ctx.composeFiles.length > 0 ? ['@specwarden/ops'] : []),
   ],
 
   files: (ctx: ITemplateContext): readonly ITemplateFile[] => [
@@ -57,7 +57,7 @@ export const nestjsTemplate: ITemplate = {
  * next one. Point \`ruleDocument\` at where the convention is written down — a rule
  * whose rationale lives nowhere is a rule nobody can argue with.
  */
-import { nestjs } from 'specwarden-plugin-nestjs';
+import { nestjs } from '@specwarden/plugin-nestjs';
 
 const plugin = nestjs({
   modulesRoot: 'src/modules',

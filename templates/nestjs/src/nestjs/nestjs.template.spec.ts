@@ -20,7 +20,9 @@ const paths = (c = ctx()) => nestjsTemplate.files(c).map((f) => f.path);
 const live = (c = ctx()) => nestjsTemplate.files(c).filter((f) => f.path.endsWith('.check.mjs'));
 
 /** Written inside the package so the generated imports resolve as a consumer's would. */
-const scratch = mkdtempSync(join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '..', '.tmp-generated-'));
+const scratch = mkdtempSync(
+  join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '..', '.tmp-generated-'),
+);
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe('the generated tree actually loads', () => {
@@ -32,11 +34,19 @@ describe('the generated tree actually loads', () => {
       mkdirSync(dirname(abs), { recursive: true });
       writeFileSync(abs, file.body);
 
-      const mod = (await import(pathToFileURL(abs).href)) as { check?: { id: string }; checks?: readonly { id: string }[] };
+      const mod = (await import(pathToFileURL(abs).href)) as {
+        check?: { id: string };
+        checks?: readonly { id: string }[];
+      };
       const found = mod.check ? [mod.check] : [...(mod.checks ?? [])];
       expect(found.length, `${file.path} exports no check`).toBeGreaterThan(0);
       if (mod.check) {
-        expect(mod.check.id).toBe(file.path.split('/').pop()?.replace(/\.check\.mjs$/, ''));
+        expect(mod.check.id).toBe(
+          file.path
+            .split('/')
+            .pop()
+            ?.replace(/\.check\.mjs$/, ''),
+        );
       }
     }
   });
@@ -82,7 +92,9 @@ describe('the migration guard is an example, because it is about a PIPELINE', ()
 
 describe('every live check is named by a rule', () => {
   it('including the plugin check, addressed by the id the plugin gives it', () => {
-    const named = new Set(nestjsTemplate.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds));
+    const named = new Set(
+      nestjsTemplate.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
+    );
     expect(named.has('secret-scan')).toBe(true);
     expect(named.has('nestjs/db-access-through-repositories')).toBe(true);
   });

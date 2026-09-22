@@ -63,7 +63,9 @@ export function parseDecisionLog(text: string): readonly IDecision[] {
 
 /** The one shape rule: a rejected alternative must state why. Returns the offending
  * `{ line, alternative }` entries. */
-export function rejectionsWithoutReason(decisions: readonly IDecision[]): ReadonlyArray<{ statement: string; line: number; alternative: string }> {
+export function rejectionsWithoutReason(
+  decisions: readonly IDecision[],
+): ReadonlyArray<{ statement: string; line: number; alternative: string }> {
   const out: { statement: string; line: number; alternative: string }[] = [];
   for (const d of decisions) {
     for (const r of d.rejected) {

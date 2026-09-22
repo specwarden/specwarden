@@ -69,7 +69,10 @@ describe('ratchetDirection', () => {
   });
 
   it('lets an explicitly declared ceiling override the roster', async () => {
-    const v = await run({ '.specwarden/ratchets/a.json': '{"id":"a","value":5}' }, { roster: [declaring('a', 3)], ceilings: { a: 7 } });
+    const v = await run(
+      { '.specwarden/ratchets/a.json': '{"id":"a","value":5}' },
+      { roster: [declaring('a', 3)], ceilings: { a: 7 } },
+    );
     expect(v.ok).toBe(true);
   });
 
@@ -78,13 +81,19 @@ describe('ratchetDirection', () => {
   it('a floor fails when the stored value falls BELOW it', async () => {
     // A score that only rises. Judged by the debt rule this would pass at any value,
     // which is why both of the first consumer's floors lived outside the mechanism.
-    const v = await run({ '.specwarden/ratchets/s.json': '{"id":"s","value":61}' }, { roster: [declaring('s', 68, 'up')] });
+    const v = await run(
+      { '.specwarden/ratchets/s.json': '{"id":"s","value":61}' },
+      { roster: [declaring('s', 68, 'up')] },
+    );
     expect(v.ok).toBe(false);
     expect(v.findings[0].message).toContain('below the floor 68');
   });
 
   it('a floor passes at or above its declared value', async () => {
-    const v = await run({ '.specwarden/ratchets/s.json': '{"id":"s","value":71}' }, { roster: [declaring('s', 68, 'up')] });
+    const v = await run(
+      { '.specwarden/ratchets/s.json': '{"id":"s","value":71}' },
+      { roster: [declaring('s', 68, 'up')] },
+    );
     expect(v.ok).toBe(true);
   });
 

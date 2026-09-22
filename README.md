@@ -12,8 +12,8 @@
 
 **A check that cannot fail reports success.**
 
-Every quality gate a team adds is a promise: *this class of mistake will not reach main
-again*. The promise is kept only while the check can still fail. And checks stop being
+Every quality gate a team adds is a promise: _this class of mistake will not reach main
+again_. The promise is kept only while the check can still fail. And checks stop being
 able to fail quietly, for reasons that never announce themselves:
 
 - a file glob that matches nothing exits `0`, and a green tier is indistinguishable from
@@ -24,7 +24,7 @@ able to fail quietly, for reasons that never announce themselves:
 - a gate is added to a CI workflow but not to the local hook, the two lists drift, and
   the one that runs is not the one that was reviewed.
 
-None of those produce a red run. They produce a *green* one, which is worse, because a
+None of those produce a red run. They produce a _green_ one, which is worse, because a
 green run is the signal everyone acts on. SpecWarden is built so that each of them is an
 error the harness itself raises, rather than something a person notices in six months.
 
@@ -47,7 +47,7 @@ plugins/     one stack's conventions, declared against the engine's primitives
 templates/   a tuned starting tree, so day one is one command rather than a blank file
 ```
 
-**What decides where a check goes:** if it could be *wrong* about a repository that has
+**What decides where a check goes:** if it could be _wrong_ about a repository that has
 never heard of it, it is an opinion and it ships as a module. A documentation layout, a
 plan lifecycle, a compose file, a vendor's credential format — every one of those is a
 house's decision, and a house that disagrees should not inherit it. Zones, ratchets and
@@ -57,6 +57,33 @@ That line is not theoretical. The engine once held nineteen checks, and every co
 inherited all nineteen — including five vendor credential formats it might not use, an
 English hedging vocabulary and a TypeScript declaration grammar. None of it was wrong;
 all of it was someone else's opinion arriving unasked. That is why `modules/` exists.
+
+### Every package
+
+<!-- PACKAGES:START -->
+
+| Package | Kind | What it is |
+| --- | --- | --- |
+| ◆ `specwarden` | core | A repository declares its rules; the warden proves which hold. |
+| ▸ `@specwarden/docs` | module | Documentation checks: paths, symbols, counts, placement, hygiene. |
+| ▸ `@specwarden/plans` | module | Plans and decision logs — one way of working, not the only one. |
+| ▸ `@specwarden/ops` | module | Env files, proxy upstreams, CI coverage, build order, shell scoping. |
+| ▸ `@specwarden/security` | module | Credential scanning, with a vendor library as a preset rather than a mandate. |
+| ▸ `@specwarden/agents` | module | Coding-agent role definitions. |
+| ▸ `@specwarden/openspec` | module | Reads an OpenSpec tree as the source of requirements. |
+| ▸ `@specwarden/speckit` | module | Reads a Spec Kit tree as the source of requirements. |
+| ⬡ `@specwarden/plugin-nestjs` | plugin | NestJS conventions, declared against the engine's primitives. |
+| ⚙ `@specwarden/scaffold-parts` | scaffold | The pieces every template is assembled from. |
+| ⚒ `@specwarden/template-node-ts` | template | An ordinary TypeScript repository. |
+| ⚒ `@specwarden/template-docs-only` | template | A repository whose product IS documentation. |
+| ⚒ `@specwarden/template-monorepo` | template | A pnpm workspace — lockfile, build order, dependency pins, CI coverage. |
+| ⚒ `@specwarden/template-nestjs` | template | A NestJS backend — the plugin wired, plus what a backend needs. |
+| ⚒ `@specwarden/template-agentic` | template | A repository coding agents work in — roles, docs, plans, a perimeter. |
+| ⚒ `@specwarden/template-ops` | template | Infrastructure — env files, proxy upstreams, shell scoping, runbooks. |
+| ⚒ `@specwarden/template-openspec` | template | A repository specified with OpenSpec — the spec seam wired. |
+| ⚒ `@specwarden/template-speckit` | template | A repository specified with Spec Kit — the spec seam wired. |
+
+<!-- PACKAGES:END -->
 
 ## How it works
 
@@ -80,7 +107,7 @@ an unattributed check is one nobody can argue with, relax deliberately, or retir
 **Relevance, with a reason.** A check runs when the changed-file set matches its
 predicate, when a shared build input changed, when the diff is wider than the configured
 trigger, or when the range is unknown — the last being the fail-safe. Every route to a
-full run returns a *reason*, and the CLI prints it: a full run that cannot say why it is
+full run returns a _reason_, and the CLI prints it: a full run that cannot say why it is
 one is indistinguishable from a tier nobody ever filtered.
 
 **Ratchets for debt you cannot pay today.** A check that cannot reach its target now is
@@ -90,7 +117,7 @@ back, so a green check can never get greener by moving its own bar. The one-way
 invariant is enforced by the store, not by trust.
 
 **Zones.** The engine is repository-agnostic and is checked to be: it names no host
-literal and never imports the consumer's side. Everything that knows *your* repository
+literal and never imports the consumer's side. Everything that knows _your_ repository
 lives in your config directory and nowhere else. The boundary is enforced on every run,
 which is what makes the engine safe to upgrade.
 
@@ -111,7 +138,7 @@ package the day after and lose nothing.
 
 What a template supplies is the **decisions**: which checks are worth having on day one,
 which options keep them from being noisy, and which to leave out. A check it cannot
-configure *truthfully* ships as `.example`, with what to fill in and what happens if it is
+configure _truthfully_ ships as `.example`, with what to fill in and what happens if it is
 left half-done — because a check registered with a guessed option is exactly the silent
 green this tool exists against. `init` lists those files separately, so they are a
 decision rather than something somebody finds much later.

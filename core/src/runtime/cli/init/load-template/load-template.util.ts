@@ -10,10 +10,17 @@ export interface ITemplateLoad {
   readonly problem?: string;
 }
 
-/** The package a template name lives in. One rule, so a name is enough to install by. */
-export const packageForTemplate = (name: string): string => `specwarden-template-${name}`;
+const TEMPLATE_PREFIX = '@specwarden/template-';
 
-const TEMPLATE_PREFIX = 'specwarden-template-';
+/**
+ * The package a template name lives in. One rule, so a name is enough to install by.
+ *
+ * The scope is the product's own, and this is the one place the engine is allowed to
+ * know it: `--template node-ts` has to resolve to something. The alternative is a flag
+ * naming the package in full, which puts the naming scheme into every consumer's command
+ * line instead of into one line here.
+ */
+export const packageForTemplate = (name: string): string => `${TEMPLATE_PREFIX}${name}`;
 
 /**
  * The template names this repository has actually installed, read from its manifest.
@@ -43,7 +50,7 @@ export function installedTemplates(files: IFileSource): readonly string[] {
  *
  * WHY DYNAMIC. The engine must not depend on any template: a template knows a stack,
  * and the engine's whole premise is that it knows none. So `--template node-ts` resolves
- * `specwarden-template-node-ts` at run time, and a name nobody installed is a message
+ * `@specwarden/template-node-ts` at run time, and a name nobody installed is a message
  * naming the install command — not a missing feature, and not a crash.
  *
  * WHY IT CHECKS `requires`. A template's generated files import the modules it composes.
@@ -52,7 +59,11 @@ export function installedTemplates(files: IFileSource): readonly string[] {
  * tool is kept. So the check happens BEFORE anything is written, and it names every
  * missing package at once rather than one per attempt.
  */
-export async function loadTemplate(name: string, files: IFileSource, context: ITemplateContext): Promise<ITemplateLoad> {
+export async function loadTemplate(
+  name: string,
+  files: IFileSource,
+  context: ITemplateContext,
+): Promise<ITemplateLoad> {
   const pkg = packageForTemplate(name);
 
   let mod: Record<string, unknown>;
@@ -75,7 +86,9 @@ export async function loadTemplate(name: string, files: IFileSource, context: IT
 
   const template = Object.values(mod).find(isTemplate);
   if (!template) {
-    return { problem: `${pkg} exports no template — it must export an object with name, describe, requires, files() and rules().` };
+    return {
+      problem: `${pkg} exports no template — it must export an object with name, describe, requires, files() and rules().`,
+    };
   }
 
   const manifest = files.tryRead('package.json') ?? '';

@@ -21,7 +21,9 @@ const ctx = (over: Partial<ITemplateContext> = {}): ITemplateContext => ({
 const paths = (c = ctx()) => openspecTemplate.files(c).map((f) => f.path);
 const bodyOf = (path: string, c = ctx()) => openspecTemplate.files(c).find((f) => f.path === path)?.body ?? '';
 
-const scratch = mkdtempSync(join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '..', '.tmp-generated-'));
+const scratch = mkdtempSync(
+  join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '..', '.tmp-generated-'),
+);
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe('the seam it exists for', () => {
@@ -62,13 +64,23 @@ describe('what it does NOT duplicate', () => {
 
 describe('what it adds beside the seam', () => {
   it('a credential scan and documentation paths', () => {
-    expect(paths()).toEqual(['spec-source.mjs', 'checks/security/secret-scan.check.mjs', 'checks/docs/doc-paths.check.mjs']);
+    expect(paths()).toEqual([
+      'spec-source.mjs',
+      'checks/security/secret-scan.check.mjs',
+      'checks/docs/doc-paths.check.mjs',
+    ]);
   });
 
   it('every check it writes is named by a rule', () => {
     const live = paths()
       .filter((p) => p.endsWith('.check.mjs'))
-      .map((p) => p.split('/').pop()?.replace(/\.check\.mjs$/, '') as string);
+      .map(
+        (p) =>
+          p
+            .split('/')
+            .pop()
+            ?.replace(/\.check\.mjs$/, '') as string,
+      );
     const named = new Set(
       openspecTemplate.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
     );
@@ -80,7 +92,12 @@ describe('what it adds beside the seam', () => {
       const abs = join(scratch, file.path.replace(/\//g, '-'));
       writeFileSync(abs, file.body);
       const mod = (await import(pathToFileURL(abs).href)) as { check?: { id: string } };
-      expect(mod.check?.id).toBe(file.path.split('/').pop()?.replace(/\.check\.mjs$/, ''));
+      expect(mod.check?.id).toBe(
+        file.path
+          .split('/')
+          .pop()
+          ?.replace(/\.check\.mjs$/, ''),
+      );
     }
   });
 });

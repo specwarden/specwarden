@@ -62,7 +62,13 @@ export function docHygiene(options: IDocHygieneOptions): ICheck {
       const src = ctx.files.tryRead(f);
       if (src === undefined) continue;
       text.set(f, src);
-      headings.set(f, src.split('\n').filter((l) => HEADING_RE.test(l)).map((l) => l.replace(/^#+\s*/, '').trim()));
+      headings.set(
+        f,
+        src
+          .split('\n')
+          .filter((l) => HEADING_RE.test(l))
+          .map((l) => l.replace(/^#+\s*/, '').trim()),
+      );
     }
 
     const broken: IFinding[] = [];
@@ -75,7 +81,10 @@ export function docHygiene(options: IDocHygieneOptions): ICheck {
       let inFence = false;
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        if (/^\s*```/.test(line)) { inFence = !inFence; continue; }
+        if (/^\s*```/.test(line)) {
+          inFence = !inFence;
+          continue;
+        }
         if (inFence) continue;
 
         if (/^\s*\|/.test(line) && line.length > limit) {
@@ -84,7 +93,14 @@ export function docHygiene(options: IDocHygieneOptions): ICheck {
         }
 
         for (const m of line.matchAll(REL_LINK_RE)) {
-          if (!ctx.files.exists(resolveRel(f, m[1]))) broken.push({ severity: 'error', file: f, line: i + 1, message: `${f}:${i + 1} links to \`${m[1]}\`, which does not exist.`, ruleId: options.id });
+          if (!ctx.files.exists(resolveRel(f, m[1])))
+            broken.push({
+              severity: 'error',
+              file: f,
+              line: i + 1,
+              message: `${f}:${i + 1} links to \`${m[1]}\`, which does not exist.`,
+              ruleId: options.id,
+            });
         }
 
         for (const m of line.matchAll(SECTION_PTR_RE)) {
@@ -92,7 +108,13 @@ export function docHygiene(options: IDocHygieneOptions): ICheck {
           const base = named.replace(/^.*\//, '');
           const hit = [...text.keys()].find((k) => k === named || k.endsWith('/' + base));
           if (hit && sectionsMovedIn(headings.get(hit) ?? []).has(m[2].toLowerCase())) {
-            moved.push({ severity: 'error', file: f, line: i + 1, message: `${f}:${i + 1} points at ${named} §${m[2]}, a MOVED stub — point at the document that now owns the content.`, ruleId: options.id });
+            moved.push({
+              severity: 'error',
+              file: f,
+              line: i + 1,
+              message: `${f}:${i + 1} points at ${named} §${m[2]}, a MOVED stub — point at the document that now owns the content.`,
+              ruleId: options.id,
+            });
           }
         }
       }
@@ -100,11 +122,23 @@ export function docHygiene(options: IDocHygieneOptions): ICheck {
 
     const findings: IFinding[] = [...broken, ...moved];
     if (fatCells > ratchet) {
-      const worst = [...fatByFile.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([f, n]) => `${n} ${f}`).join(', ');
-      findings.push({ severity: 'error', message: `${fatCells} table rows over ${limit} chars; the ratchet is ${ratchet}. Fix the longest tables (${worst}). Rule: skills/agent-docs/SKILL.md §3.`, ruleId: options.id });
+      const worst = [...fatByFile.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([f, n]) => `${n} ${f}`)
+        .join(', ');
+      findings.push({
+        severity: 'error',
+        message: `${fatCells} table rows over ${limit} chars; the ratchet is ${ratchet}. Fix the longest tables (${worst}). Rule: skills/agent-docs/SKILL.md §3.`,
+        ruleId: options.id,
+      });
     }
     // broken/moved links never pass; a passing verdict's only error is the fat-cell
     // count tolerated by the ratchet — frame it so the ✅ is not printed above it.
-    return frameTolerated(broken.length === 0 && moved.length === 0 && fatCells <= ratchet, findings, `the fat-cell ratchet ${ratchet}`);
+    return frameTolerated(
+      broken.length === 0 && moved.length === 0 && fatCells <= ratchet,
+      findings,
+      `the fat-cell ratchet ${ratchet}`,
+    );
   });
 }

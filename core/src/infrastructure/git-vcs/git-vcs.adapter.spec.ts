@@ -53,7 +53,10 @@ describe('GitVcs', () => {
     expect(names).toContain('feature-x'); // short of origin/feature-x
     expect(new Set(names).size).toBe(names?.length); // deduped
 
-    const none = new GitVcs(fakeRunner({ 'git for-each-ref --format=%(refname:short) refs/heads refs/remotes': ok('') }).runner, '/repo');
+    const none = new GitVcs(
+      fakeRunner({ 'git for-each-ref --format=%(refname:short) refs/heads refs/remotes': ok('') }).runner,
+      '/repo',
+    );
     expect(none.branchNames()).toBeUndefined(); // no refs → cannot tell
   });
 

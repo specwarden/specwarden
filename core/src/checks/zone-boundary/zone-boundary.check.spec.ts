@@ -12,7 +12,14 @@ const LITERALS = [
 ];
 
 function run(files: InMemoryFileSource, opts: Partial<Parameters<typeof zoneBoundary>[0]> = {}): IVerdict {
-  const check = zoneBoundary({ ...ID, productSources: 'src/**/*.ts', except: ['src/**/*.spec.ts'], forbiddenLiterals: LITERALS, consumerImport: /\.specwarden\//, ...opts });
+  const check = zoneBoundary({
+    ...ID,
+    productSources: 'src/**/*.ts',
+    except: ['src/**/*.spec.ts'],
+    forbiddenLiterals: LITERALS,
+    consumerImport: /\.specwarden\//,
+    ...opts,
+  });
   return check.run({ changed: [], files } as unknown as ICheckContext) as IVerdict;
 }
 

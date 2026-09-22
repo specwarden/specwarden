@@ -26,7 +26,8 @@ describe('openspec spec source', () => {
 
 describe('requirements', () => {
   const corpus = {
-    'openspec/specs/billing/spec.md': '## Purpose\n\n### Requirement: The system SHALL invoice monthly\n\n#### Scenario: first month\n\n### Requirement: A refund SHALL be reversible\n',
+    'openspec/specs/billing/spec.md':
+      '## Purpose\n\n### Requirement: The system SHALL invoice monthly\n\n#### Scenario: first month\n\n### Requirement: A refund SHALL be reversible\n',
     'openspec/specs/auth/spec.md': '### Requirement: A session SHALL expire\n',
   };
 

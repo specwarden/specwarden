@@ -1,0 +1,15 @@
+{
+  "name": "playground-speckit",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gate": "specwarden check"
+  },
+  "devDependencies": {
+    "specwarden": "workspace:*",
+    "@specwarden/scaffold-parts": "workspace:*",
+    "@specwarden/speckit": "workspace:*",
+    "@specwarden/security": "workspace:*",
+    "@specwarden/docs": "workspace:*"
+  }
+}

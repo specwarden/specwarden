@@ -34,7 +34,7 @@ export const specSourcePart = (framework: TSpecFramework): IPart => {
  *
  * SpecWarden never WRITES here. Reading the tool's directory is the whole relationship.
  */
-import { openspec } from 'specwarden-module-openspec';
+import { openspec } from '@specwarden/openspec';
 
 export const source = openspec({
   // root: 'openspec',
@@ -53,7 +53,7 @@ export const source = openspec({
  * normal case, and a memorised layout turns that into a source that finds nothing while
  * reporting success.
  */
-import { speckit } from 'specwarden-module-speckit';
+import { speckit } from '@specwarden/speckit';
 
 export const source = speckit({
   // root: 'specs',

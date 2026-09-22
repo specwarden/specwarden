@@ -21,7 +21,10 @@ export interface IForbidPatternOptions extends ICheckIdentity {
  * with it.
  */
 export function forbidPattern(options: IForbidPatternOptions): ICheck {
-  const re = new RegExp(options.pattern.source, options.pattern.flags.includes('g') ? options.pattern.flags : `${options.pattern.flags}g`);
+  const re = new RegExp(
+    options.pattern.source,
+    options.pattern.flags.includes('g') ? options.pattern.flags : `${options.pattern.flags}g`,
+  );
   return buildCheck(options, ['read'], (ctx) => {
     const exempt = new Set((options.except ?? []).flatMap((g) => ctx.files.glob(g)));
     const findings: IFinding[] = [];

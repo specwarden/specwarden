@@ -30,7 +30,12 @@ const ANNOTATION: Partial<Record<TSeverity, string>> = { error: 'error', warning
  * — an unescaped colon in a FILE PATH silently truncates the annotation's target.
  */
 function escapeProperty(value: string): string {
-  return value.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A').replace(/:/g, '%3A').replace(/,/g, '%2C');
+  return value
+    .replace(/%/g, '%25')
+    .replace(/\r/g, '%0D')
+    .replace(/\n/g, '%0A')
+    .replace(/:/g, '%3A')
+    .replace(/,/g, '%2C');
 }
 
 /** Escape a workflow command's message body. Same rules minus the list separators,
@@ -84,7 +89,9 @@ export class GithubReporter implements IReporter {
     if (failed.length > 0) {
       // A NOTICE rather than an error: the failures are already annotated one by one,
       // and a second error for the summary would double every count a reader sees.
-      this.write(`::notice title=specwarden::${escapeData(`${failed.length} gate(s) failed: ${failed.map((r) => r.meta.id).join(', ')}`)}\n`);
+      this.write(
+        `::notice title=specwarden::${escapeData(`${failed.length} gate(s) failed: ${failed.map((r) => r.meta.id).join(', ')}`)}\n`,
+      );
     } else {
       this.write(`::notice title=specwarden::${escapeData(`${passed} gate(s) passed in ${secs}s`)}\n`);
     }

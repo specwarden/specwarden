@@ -27,7 +27,9 @@ const requires = (c = ctx()) => (typeof ops.requires === 'function' ? ops.requir
  * run. So the files are written and IMPORTED, examples included — an `.example` that
  * cannot construct will fail on the day somebody renames it, which is the worst day.
  */
-const scratch = mkdtempSync(join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '..', '.tmp-generated-'));
+const scratch = mkdtempSync(
+  join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '..', '.tmp-generated-'),
+);
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe('the generated tree actually loads', () => {
@@ -38,7 +40,10 @@ describe('the generated tree actually loads', () => {
       writeFileSync(abs, file.body);
       const mod = (await import(pathToFileURL(abs).href)) as { check?: { id: string } };
       expect(mod.check, `${file.path} exports no check`).toBeDefined();
-      const expected = file.path.split('/').pop()?.replace(/\.check\.mjs(\.example)?$/, '');
+      const expected = file.path
+        .split('/')
+        .pop()
+        ?.replace(/\.check\.mjs(\.example)?$/, '');
       expect(mod.check?.id).toBe(expected);
     }
   });
@@ -96,7 +101,13 @@ describe('rules and requirements', () => {
   it('every live check is named by a rule, so a fresh tree has no orphan', () => {
     const live = paths()
       .filter((p) => p.endsWith('.check.mjs'))
-      .map((p) => p.split('/').pop()?.replace(/\.check\.mjs$/, '') as string);
+      .map(
+        (p) =>
+          p
+            .split('/')
+            .pop()
+            ?.replace(/\.check\.mjs$/, '') as string,
+      );
     const named = new Set(ops.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds));
     for (const id of live) expect(named.has(id), `${id} enforces no rule`).toBe(true);
   });
@@ -105,7 +116,13 @@ describe('rules and requirements', () => {
     const written = new Set(
       paths()
         .filter((p) => p.endsWith('.check.mjs'))
-        .map((p) => p.split('/').pop()?.replace(/\.check\.mjs$/, '') as string),
+        .map(
+          (p) =>
+            p
+              .split('/')
+              .pop()
+              ?.replace(/\.check\.mjs$/, '') as string,
+        ),
     );
     for (const rule of ops.rules(ctx())) {
       for (const id of (rule.enforcement as { checkIds: readonly string[] }).checkIds) {
