@@ -169,7 +169,7 @@ export async function init(
   writer.write(configPath, renderConfig(templateConfig));
   writer.write(`${CONFIG_DIR}/rules.mjs`, renderRules(live, switchedOff));
   writer.write(`${CONFIG_DIR}/README.md`, renderReadme(written));
-  writer.write(`${CONFIG_DIR}/checks/README.md`, renderChecksReadme(written));
+  writer.write(`${CONFIG_DIR}/checks/README.md`, renderChecksReadme(written, shape));
   for (const f of written) writer.write(`${CONFIG_DIR}/${f.path}`, f.body);
 
   const checkFiles = written.filter((f) => f.path.startsWith('checks/'));
@@ -185,7 +185,7 @@ export async function init(
     io.out(
       modules.length
         ? `Wired: ${modules.map((m) => m.pkg).join(', ')}\n`
-        : 'No optional module installed — the checks README lists what to add.\n',
+        : 'No optional module installed — the checks README shows what to install, and the file each one needs.\n',
     );
   }
   io.out(`Detected: ${detected(shape)}\n\n`);

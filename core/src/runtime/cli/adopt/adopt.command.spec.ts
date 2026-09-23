@@ -41,10 +41,43 @@ describe('adopt on a repository with a shape', () => {
     });
     expect(r.code).toBe(0);
     expect(r.out).toContain('package manager : pnpm\n');
-    expect(r.out).toContain('workspaces      : apps/*, libs/*\n');
+    // The globs, and how many packages they match — here none carries a manifest.
+    expect(r.out).toContain('workspaces      : apps/*, libs/* (0 packages)\n');
     expect(r.out).toContain('test runner     : jest\n');
     expect(r.out).toContain('agent router    : present\n');
     expect(r.out).toContain('doc directories : docs, doc\n');
+  });
+
+  // It said nothing of the CI workflow, the documents or the compose file — each changes
+  // what `init` writes, so the report and the tree disagreed about the repository.
+  it('reports every fact init acts on: CI and its workflows, documents, specs, compose, proxy, shell', () => {
+    const r = run({
+      'package.json': JSON.stringify({ scripts: { test: 'node --test' } }),
+      'README.md': '# a',
+      'docs/guide.md': '#',
+      '.github/workflows/deploy.yml': 'on: push',
+      '.github/workflows/ci.yml': 'on: push',
+      'openspec/specs/a/spec.md': '#',
+      'compose.yaml': 'services: {}',
+      'deploy/Caddyfile': 'x',
+      'scripts/release.sh': 'echo',
+    });
+    for (const line of [
+      'test runner     : node:test\n',
+      'ci              : github actions — .github/workflows/ci.yml, .github/workflows/deploy.yml\n',
+      'documents       : 3 markdown file(s), README.md among them\n',
+      'specs           : openspec\n',
+      'compose         : compose.yaml\n',
+      'proxy configs   : deploy/Caddyfile\n',
+      'shell scripts   : present\n',
+    ])
+      expect(r.out).toContain(line);
+  });
+
+  it('names a runner it cannot name by its script', () => {
+    expect(run({ 'package.json': JSON.stringify({ scripts: { test: 'ava' } }) }).out).toContain(
+      'test runner     : other — `ava`\n',
+    );
   });
 
   it('ends by naming the next command and saying nothing was enabled', () => {

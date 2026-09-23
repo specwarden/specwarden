@@ -133,6 +133,13 @@ export const check = commandCheck({
 });
 ```
 
+A command runs at the repository root wherever the CLI was invoked from. A package's own
+suite in a monorepo says where it lives — `cwd: 'packages/api'` — and that directory is
+verified before the command spawns, as `paths` are. `cwd` stays inside the repository (an
+absolute path or `..` is refused when the file loads), and `paths` stay relative to the
+root whatever `cwd` says. Colour codes a tool prints under
+`FORCE_COLOR` are stripped before `expect` and `refuse` read the output.
+
 **A check that could not look says so.** What it examines may not be on this machine —
 gitignored env files on a CI runner. A `defineCheck` body returns `skipped: 'why'`, and the
 run reports the check as skipped (`cannot-tell`), counted with the skips: never a pass,
@@ -183,6 +190,7 @@ specwarden check --list               # the manifest, in run order
 specwarden check --jobs 4             # overlap; a check that cannot share declares exclusive
 specwarden check --fix                # repair what is derivable, then re-run
 specwarden doctor                     # what is declared, without running any of it
+specwarden doctor --json              # the same, as one document for a script; `version` names its shape
 ```
 
 `--reporter tty|json|github`. A reporter never prints the value of an environment

@@ -12,6 +12,7 @@ import { isFixable } from '../../../domain';
 import type { TSharedBuildInput } from '../../config/config.model';
 import { type IEngineAdapters, buildContext } from '../../container';
 import { CheckRegistry } from '../../container/check-registry/check-registry.service';
+import { didYouMean } from '../../_shared/did-you-mean/did-you-mean.util';
 
 /** What the caller asked for on the command line. */
 export interface ICheckRunnerOptions {
@@ -155,7 +156,11 @@ function declaredInstead(registry: CheckRegistry, id: string): string {
     const origin = registry.originOf(check);
     return origin !== undefined && stem(origin) === id;
   });
-  if (named.length === 0) return '';
+  if (named.length === 0)
+    return didYouMean(
+      id,
+      registry.all().map((check) => check.id),
+    );
   return ` — ${registry.originOf(named[0])} declares ${named.map((check) => `'${check.id}'`).join(', ')}`;
 }
 
@@ -510,7 +515,10 @@ export class CheckRunner {
       .filter(Boolean);
     const unknown = wanted.filter((id) => !this.registry.byId(id));
     if (unknown.length > 0) {
-      throw new RunnerUsageError(`unknown check id(s) in skip: ${unknown.join(', ')}`);
+      const ids = this.registry.all().map((check) => check.id);
+      throw new RunnerUsageError(
+        `unknown check id(s) in skip: ${unknown.map((id) => `${id}${didYouMean(id, ids)}`).join(', ')}`,
+      );
     }
     return new Set(wanted);
   }

@@ -18,6 +18,8 @@ export interface IDocHygieneOptions extends IDocCheckIdentity {
 const HEADING_RE = /^#{1,6}\s/;
 const MOVED_RE = /\bMOVED\b|\bmoved (?:to|out)\b|— MOVED/i;
 const REL_LINK_RE = /\[[^\]]*\]\((\.{1,2}\/[^)\s#]+)(#[^)\s]*)?\)/g;
+/** An inline code span: a run of backticks, anything, the same run. */
+const CODE_SPAN_RE = /(`+)(?:(?!\1)[^])*?\1/g;
 const SECTION_PTR_RE = /`([^`]*?\.md)`\s*§\s*([\dA-Za-z]+)/g;
 
 /** Resolve a `./` or `../` link from a document to a repository-relative path. */
@@ -115,7 +117,11 @@ export function docHygiene(options: IDocHygieneOptions): ICheck {
             fatByFile.set(f, (fatByFile.get(f) ?? 0) + 1);
           }
 
-          for (const m of line.matchAll(REL_LINK_RE)) {
+          // A link inside a code span is an EXAMPLE of a link — `[done](./_plans-archive/done.md)`
+          // in prose about links — and was read as one, so a document explaining the syntax
+          // failed on the path it quoted. Fenced blocks were already skipped; spans now are.
+          const prose = line.replace(CODE_SPAN_RE, '');
+          for (const m of prose.matchAll(REL_LINK_RE)) {
             if (!ctx.files.exists(resolveRel(f, m[1])))
               broken.push({
                 severity: 'error',

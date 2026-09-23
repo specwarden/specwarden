@@ -293,3 +293,20 @@ describe('CheckRunner — a check that could not look', () => {
     expect(results[0].skipped).toBeUndefined();
   });
 });
+
+describe('CheckRunner selection — an unknown id close to a known one', () => {
+  // A typo was refused with no suggestion, so the reader diffed it against a list unseen.
+  it('suggests the nearest id, for --id and for SPECWARDEN_SKIP', async () => {
+    const runner = new CheckRunner(
+      registryOf([check({ id: 'no-todo' }), check({ id: 'lint' })]),
+      adapters([]),
+      recordingReporter().reporter,
+    );
+    await expect(runner.run({ ids: ['no-tod'] }, { ci: false })).rejects.toThrow(
+      "unknown check id 'no-tod' — did you mean 'no-todo'?",
+    );
+    await expect(runner.run({ all: true }, { ci: false, skip: 'lnt' })).rejects.toThrow(
+      "unknown check id(s) in skip: lnt — did you mean 'lint'?",
+    );
+  });
+});

@@ -9,7 +9,11 @@ export type { ICliIo } from './cli';
 export { detectRepo } from './cli/adopt/detect-repo/detect-repo.util';
 export type { IRepoShape, TPackageManager, TTestRunner } from './cli/adopt/detect-repo/detect-repo.util';
 export { inferSibling } from './cli/suggest/infer-sibling/infer-sibling.util';
-export type { ISiblingInference } from './cli/suggest/infer-sibling/infer-sibling.util';
+export type {
+  IInferSiblingOptions,
+  ISiblingInference,
+  TListFiles,
+} from './cli/suggest/infer-sibling/infer-sibling.util';
 export { parsePlan } from './planner/plan-parser/plan-parser.util';
 export type { IParsedPlan } from './planner/plan-parser/plan-parser.util';
 export { renderPlan } from './planner/plan-render/plan-render.util';

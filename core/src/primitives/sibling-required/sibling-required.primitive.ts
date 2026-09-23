@@ -27,6 +27,9 @@ export interface ISiblingRequiredOptions extends ICheckDeclaration {
   /** The sibling, as a template relative to the file's directory. `{name}` is the
    * file's stem (basename minus its final extension). */
   readonly require: string;
+  /** Pathspecs among the subjects that need no sibling — the tests themselves, when the
+   * subjects are every source file of a folder. */
+  readonly except?: readonly string[];
   /** How many subjects must exist for a verdict to count. Defaults to one: a rule over
    * no subject requires nothing, and it passed in silence. */
   readonly corpus?: ICorpusFloor;
@@ -40,10 +43,11 @@ export function siblingRequired(options: ISiblingRequiredOptions): ICheck {
   checkOptions('siblingRequired', options, {
     subjects: { kind: 'string', required: true },
     require: { kind: 'string', required: true },
+    except: { kind: 'array' },
     corpus: { kind: 'object' },
   });
   return buildCheck(options, ['read'], (ctx, self) => {
-    const corpus = trackedCorpus(ctx.vcs, options.subjects);
+    const corpus = trackedCorpus(ctx.vcs, options.subjects, options.except);
     const short = belowCorpusFloor(
       self.id,
       corpus.files.length,

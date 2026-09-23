@@ -107,10 +107,10 @@ describe('detectRepo — the facts an example is pointed at', () => {
     expect(shape.workspacePackages).toEqual(['packages/api', 'packages/web', 'tools']);
   });
 
-  it('keeps the test script verbatim, for a runner it cannot name', () => {
-    const shape = detectRepo(new InMemoryFileSource({ 'package.json': '{ "scripts": { "test": "node --test" } }' }));
+  it('keeps the test script verbatim, and names a runner it cannot name as other', () => {
+    const shape = detectRepo(new InMemoryFileSource({ 'package.json': '{ "scripts": { "test": "ava" } }' }));
     expect(shape.testRunner).toBe('other');
-    expect(shape.testScript).toBe('node --test');
+    expect(shape.testScript).toBe('ava');
     expect(detectRepo(new InMemoryFileSource({ 'package.json': '{ "scripts": 3 }' })).testScript).toBeUndefined();
     expect(detectRepo(new InMemoryFileSource({ 'package.json': '{ nope' })).testScript).toBeUndefined();
   });
@@ -157,5 +157,30 @@ describe('detectRepo — the facts an example is pointed at', () => {
     const shape = detectRepo(new InMemoryFileSource({ 'deploy/nginx/untracked.conf': '' }), vcs);
     expect(shape.proxyConfigs).toEqual(['deploy/nginx/site.conf']);
     expect(asked).toContain('.github/workflows/*.yml');
+  });
+});
+
+describe('detectRepo — the runners with no dependency to find', () => {
+  // `node --test` was "other", the word for a runner nobody could name.
+  it.each([
+    ['node --test', 'node:test'],
+    ['node --test test/', 'node:test'],
+    ['NODE_ENV=test node --import tsx --test src/**/*.test.ts', 'node:test'],
+    ['node test.js --testing', 'other'],
+  ])('%s → %s', (script, runner) => {
+    const pkg = JSON.stringify({ scripts: { test: script } });
+    expect(detectRepo(new InMemoryFileSource({ 'package.json': pkg })).testRunner).toBe(runner);
+  });
+
+  it('names mocha from the manifest', () => {
+    const pkg = JSON.stringify({ scripts: { test: 'mocha' }, devDependencies: { mocha: '10' } });
+    expect(detectRepo(new InMemoryFileSource({ 'package.json': pkg })).testRunner).toBe('mocha');
+  });
+
+  it('never counts an installed or built tree without version control', () => {
+    const shape = detectRepo(
+      new InMemoryFileSource({ 'node_modules/x/scripts/a.sh': 'echo', 'dist/scripts/b.sh': 'echo' }),
+    );
+    expect(shape.hasShellScripts).toBe(false);
   });
 });

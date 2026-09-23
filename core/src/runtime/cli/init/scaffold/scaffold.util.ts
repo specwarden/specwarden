@@ -121,11 +121,49 @@ function familiesOf(written: readonly IWrittenFile[]): readonly string[] {
   return [...families].map(([name, { ids, from }]) => `| \`${name}/\` | ${ids.join(', ')} | ${[...from].join(', ')} |`);
 }
 
-export function renderChecksReadme(written: readonly IWrittenFile[] = []): string {
+/** The install line for a package, in this repository's package manager. */
+function installLine(pkg: string, shape: IRepoShape): string {
+  if (shape.packageManager === 'npm') return `npm install --save-dev ${pkg}`;
+  if (shape.packageManager === 'yarn') return `yarn add --dev ${pkg}`;
+  return `pnpm add -D ${pkg}`;
+}
+
+/**
+ * With nothing installed, what to install and the file each module then needs — whole.
+ * The table said "install a module — `docPaths`, `secretScan` …", naming factories that
+ * are not in the engine and listing nothing, while `init` said the README listed what to
+ * add. `init` will not run twice over a config, so the file is the one step left.
+ */
+function startingModules(shape: IRepoShape): string {
+  const fence = '```';
+  const blocks = [SECURITY, DOCS].map((m) => {
+    const { file, body } = m.render(shape);
+    return [
+      `**\`${m.pkg}\`** — \`${installLine(m.pkg, shape)}\`, then save as \`${m.family}/${file}\`:`,
+      '',
+      `${fence}js`,
+      body.trimEnd(),
+      fence,
+    ].join('\n');
+  });
+  return [
+    '## A module to start from',
+    '',
+    'Nothing is installed yet. Each module is one install and one file:',
+    '',
+    blocks.join('\n\n'),
+    '',
+    '',
+  ].join('\n');
+}
+
+export function renderChecksReadme(written: readonly IWrittenFile[] = [], shape?: IRepoShape): string {
   const rows = familiesOf(written);
-  const table = rows.length
-    ? rows.join('\n')
-    : '| _(none yet)_ | install a module — `docPaths`, `secretScan` and the rest live in them | |';
+  const none = shape
+    ? 'see _A module to start from_ below'
+    : 'install a module, and save the check file its GUIDE shows';
+  const table = rows.length ? rows.join('\n') : `| _(none yet)_ | ${none} | |`;
+  const starting = rows.length === 0 && shape ? startingModules(shape) : '';
   return `# checks/
 
 One file per check, grouped by SUBJECT — a family is what a check is about, never
@@ -136,7 +174,7 @@ has to import or list it.
 | --- | --- | --- |
 ${table}
 
-## Adding a check
+${starting}## Adding a check
 
 Create \`<family>/<id>.check.mjs\` exporting \`check\`. The file name is its id, and
 \`rule\` is the statement it enforces, owned by the file. A module's check carries a rule of

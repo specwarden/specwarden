@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { DuplicateCheckError, commandCheck, defineCheck, forbidImport, forbidPattern, pathContract } from 'specwarden';
+import {
+  DuplicateCheckError,
+  commandCheck,
+  defineCheck,
+  forbidImport,
+  forbidPattern,
+  pathContract,
+  siblingRequired,
+} from 'specwarden';
 
 import { TREE, engine } from './repository';
 
@@ -219,6 +227,30 @@ describe('specwarden — the engine, assembled', () => {
 
     expect(outcome.exitCode).toBe(0);
     expect(outcome.results.map((r) => r.meta.id)).toEqual(['layers', 'placement']);
+  });
+
+  it('a command pointed at a directory that is not there is refused, and nothing is spawned', async () => {
+    const harness = engine([commandCheck({ id: 'api-unit', cmd: 'pnpm test', cwd: 'packages/api' })]);
+    const outcome = await harness.run({ all: true }, ENV);
+
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.results[0].verdict.findings[0].message).toContain('runs in packages/api, which is not a directory');
+    expect(harness.commands).toEqual([]);
+  });
+
+  it('a sibling rule over every source file leaves the tests it names out of its subjects', async () => {
+    const tree = { 'src/a.ts': '', 'src/a.test.ts': '', 'src/b.ts': '' };
+    const check = siblingRequired({
+      id: 'has-test',
+      subjects: 'src/**/*.ts',
+      require: '{name}.test.ts',
+      except: ['**/*.test.ts'],
+    });
+    const outcome = await engine([check], { tree }).run({ all: true }, ENV);
+
+    expect(outcome.results[0].verdict.findings.filter((f) => f.severity === 'error').map((f) => f.file)).toEqual([
+      'src/b.ts',
+    ]);
   });
 
   it('a tier is a schedule: asking for one runs only its members', async () => {

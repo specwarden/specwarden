@@ -61,6 +61,12 @@ describe('the line', () => {
     expect(cap.err()).toBe(`unknown command "bogus"\n\n${USAGE}`);
   });
 
+  it('an unknown command close to a known one says which', async () => {
+    const cap = captureIo();
+    expect(await main(['chek'], {}, dir, cap.io)).toBe(2);
+    expect(cap.err()).toContain(`unknown command "chek" — did you mean 'check'?`);
+  });
+
   it('no command at all is the usage alone, on stderr, exit 2', async () => {
     const cap = captureIo();
     expect(await main([], {}, dir, cap.io)).toBe(2);

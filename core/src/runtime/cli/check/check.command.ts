@@ -14,6 +14,7 @@ import {
 } from '../../../infrastructure';
 import { CheckRunner, RunnerUsageError } from '../../runner';
 import { selectChecks } from '../../runner/check-runner/check-runner.service';
+import { didYouMean } from '../../_shared/did-you-mean/did-you-mean.util';
 import type { CheckRegistry, IEngineAdapters } from '../../container';
 import type { IWardenConfig } from '../../config/config.model';
 import type { ICliIo } from '../_shared/cli-io/cli-io.model';
@@ -115,7 +116,8 @@ export async function check(
     // could not tell a missing check from an empty selection.
     const unknown = args.ids.filter((id) => registry.byId(id) === undefined);
     if (unknown.length > 0) {
-      io.err(`unknown check id(s): ${unknown.join(', ')}
+      const ids = registry.all().map((check) => check.id);
+      io.err(`unknown check id(s): ${unknown.map((id) => `${id}${didYouMean(id, ids)}`).join(', ')}
 `);
       return 2;
     }

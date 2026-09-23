@@ -374,11 +374,13 @@ describe('3. reporters', () => {
     expect(forced(['--tier', 'fast'])).not.toContain(ansi);
   });
 
-  it("[friction] under FORCE_COLOR a wrapped command's colour codes pass verbatim into findings, JSON included", () => {
-    // A finding is data: strip ANSI from command output (or run commands with NO_COLOR) — `expect: /^42$/` would fail here.
+  it("under FORCE_COLOR a wrapped command's colour codes are stripped from its findings, JSON included", () => {
+    // They passed verbatim — `\u001b[33m42\u001b[39m` — so a finding was not data and an
+    // `expect: /^42$/` failed on the escapes around the words.
     const [row] = (JSON.parse(forced(['--id', 'db-migrate', '--json'])) as TDoc).results;
     expect(row.ok).toBe(true);
-    expect(row.findings.map((f) => f.message)).toContain('\u001b[33m42\u001b[39m');
+    expect(row.findings.map((f) => f.message)).toContain('42');
+    expect(JSON.stringify(row)).not.toContain('\u001b');
   });
 });
 
@@ -681,18 +683,45 @@ export default defineConfig({ tiers: ['fast', 'heavy', 'nightly', 'smoke'], deny
       'ratchet-direction',
     ])
       expect(r.stdout).toMatch(new RegExp(`^${id}\\tfast\\tproduct\\t`, 'm'));
-    expect(r.stdout).toContain('rule coverage:\n  declared: 1\n  enforced: 1\n');
+    // The count names the engine's own rule — it was "declared: 1" over an empty register.
+    expect(r.stdout).toContain("rule coverage:\n  declared: 1 (the engine's own: harness-integrity)\n  enforced: 1\n");
     expect(r.stdout).toContain('checks enforcing no rule (orphans): 5');
     const refused = 'declares capability exec, which this repository denies (denyCapabilities). It was not run.';
     probe({ on: () => strict, args: ['check', '--all', '--id', 'node-says-hi'], status: 1, out: [refused] });
   });
 
-  it('[friction] `doctor --json` is not JSON — though an unknown flag is refused now', () => {
-    // `--json` on doctor should emit the roster as a document, or be refused. (`--bogus` was ignored too.)
+  it('`doctor --json` is the same report as one document, nothing on stderr; an unknown flag is refused', () => {
+    // It printed the text: `--json` was accepted and ignored.
     const r = probe({ args: ['doctor', '--json'], status: 0 });
-    expect(() => JSON.parse(r.stdout)).toThrow();
-    expect(r.stdout).toBe(cli(green, ['doctor']).stdout);
+    const doc = JSON.parse(r.stdout) as { checks: { id: string; origin: string; exclusive: boolean }[] };
+    expect(doc.checks.map((c) => c.id)).toEqual(ROSTER);
+    expect(doc.checks.find((c) => c.id === 'db-migrate')).toMatchObject({
+      exclusive: true,
+      origin: '.specwarden/checks/db-migrate.check.mjs',
+    });
+    expect(r.stderr).toBe('');
     probe({ args: ['doctor', '--bogus'], status: 2, err: ['unknown flag --bogus'], silent: true });
+  });
+
+  it('a typo in an id or a command is refused with the name it was close to', () => {
+    // It said only "unknown check id 'no-tod'", and the reader diffed it against a list unseen.
+    probe({
+      args: ['check', '--all', '--id', 'no-tod'],
+      status: 2,
+      err: ["unknown check id 'no-tod' — did you mean 'no-todo'?"],
+    });
+    probe({
+      args: ['check', '--list', '--id', 'readme-presnt'],
+      status: 2,
+      err: ["readme-presnt — did you mean 'readme-present'?"],
+    });
+    probe({
+      args: ['check', '--all'],
+      env: { SPECWARDEN_SKIP: 'style-advise' },
+      status: 2,
+      err: ["style-advise — did you mean 'style-advice'?"],
+    });
+    probe({ args: ['doctr'], status: 2, err: [`unknown command "doctr" — did you mean 'doctor'?`] });
   });
 });
 
@@ -715,6 +744,27 @@ describe('9. a command check from PowerShell and from bash', () => {
     expect(viaShell('powershell.exe', '-Command')).toEqual(verdict);
     expect(viaShell('bash', '-c')).toEqual(verdict);
     expect(viaShell('powershell.exe', '-Command', { SPECWARDEN_SHELL: 'powershell' })).toEqual(verdict);
+  });
+
+  it('`cwd` runs a command check in a package directory, and refuses one that is not there', () => {
+    // A monorepo package's own suite could only `cd` in its command line; a directory that
+    // moved ran nothing and the shell exited 0.
+    const inSrc = src(
+      'commandCheck',
+      `id: 'in-src', cmd: 'node -e "console.log(String.fromCharCode(104,105)+process.cwd())"', cwd: 'src', expect: /^hi/`,
+    );
+    const dir = withFile('.specwarden/checks/in-src.check.mjs', inSrc)();
+    const [row] = json(dir, ['check', '--all', '--id', 'in-src']).results;
+    const said = row.findings.find((f) => f.message.startsWith('hi'))?.message.slice(2) ?? '';
+    expect(said.replace(/\\/g, '/').toLowerCase()).toBe(`${dir.replace(/\\/g, '/').toLowerCase()}/src`);
+
+    const gone = withFile(
+      '.specwarden/checks/gone.check.mjs',
+      src('commandCheck', "id: 'gone', cmd: 'true', cwd: 'packages/api'"),
+    )();
+    const r = cli(gone, ['check', '--all', '--id', 'gone']);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain('gone runs in packages/api, which is not a directory here — the command was not run.');
   });
 
   it('a command check runs at the repository root, wherever the CLI was invoked from', () => {

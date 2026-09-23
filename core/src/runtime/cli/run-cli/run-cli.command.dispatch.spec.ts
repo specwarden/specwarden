@@ -51,6 +51,8 @@ describe('dispatch on a repository with no config', () => {
   });
 
   it('new scaffolds the check and its test under the consumer folder, in the named family', async () => {
+    mkdirSync(join(dir, '.specwarden'));
+    writeFileSync(join(dir, '.specwarden', 'warden.config.mjs'), 'export default {};');
     const cap = captureIo();
     expect(await main(['new', 'doc-links', '--family', 'docs'], {}, dir, cap.io)).toBe(0);
     const unit = join(dir, '.specwarden', 'checks', 'docs');
@@ -70,6 +72,14 @@ describe('dispatch on a repository with no config', () => {
     const written = join(dir, '.specwarden', 'checks');
     expect(existsSync(written)).toBe(true);
     expect(existsSync(join(nested, '.specwarden'))).toBe(false);
+  });
+
+  // It wrote a check under a `.specwarden/` that `check` then refused: a file run by nothing.
+  it('new before init is refused, exit 2, and names the step that comes first', async () => {
+    const cap = captureIo();
+    expect(await main(['new', 'x-check'], {}, dir, cap.io)).toBe(2);
+    expect(cap.err()).toContain('run `specwarden init` first; a check written now would be run by nothing.');
+    expect(existsSync(join(dir, '.specwarden'))).toBe(false);
   });
 
   it('new without an id is a usage error', async () => {

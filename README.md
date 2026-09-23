@@ -164,7 +164,7 @@ specwarden check --base <ref>     # measure the change from <ref> — a pull-req
 specwarden check --list           # what would run, in order, and why
 specwarden check --fix            # repair what is derivable, then re-run
 specwarden check --tighten        # record a passing run's measurement as the new bar
-specwarden doctor                 # the roster, capabilities, ownership, rule coverage
+specwarden doctor [--json]        # the roster, capabilities, ownership, rule coverage
 
 specwarden plan status <file> [--verify]  # a plan's phases; --verify runs each acceptance
 specwarden plan archive <file>            # refuses until the harvest is declared

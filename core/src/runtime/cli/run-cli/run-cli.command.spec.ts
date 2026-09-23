@@ -129,6 +129,9 @@ describe('main over a temp consumer config', () => {
     writeFileSync(join(dir, 'a.service.spec.ts'), '');
     writeFileSync(join(dir, 'b.service.ts'), '');
     writeFileSync(join(dir, 'b.service.spec.ts'), '');
+    // Three: two files are an anecdote, not a convention.
+    writeFileSync(join(dir, 'c.service.ts'), '');
+    writeFileSync(join(dir, 'c.service.spec.ts'), '');
     const cap = captureIo();
     expect(await main(['suggest'], {}, dir, cap.io)).toBe(0);
     expect(cap.out()).toContain('siblingRequired');

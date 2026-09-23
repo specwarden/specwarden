@@ -212,3 +212,26 @@ describe('renderReadme', () => {
     expect(readme).not.toContain('on purpose');
   });
 });
+
+describe('the checks README with nothing installed', () => {
+  // It said "install a module — `docPaths`, `secretScan` …": factories not in the engine,
+  // no package named, and `init` claiming the README listed what to add.
+  it('names each module, the install line in this package manager, and the whole file to save', () => {
+    const readme = renderChecksReadme([], shape({ packageManager: 'npm', docDirs: ['docs'] }));
+    expect(readme).toContain('| _(none yet)_ | see _A module to start from_ below | |');
+    expect(readme).toContain('## A module to start from');
+    expect(readme).toContain(
+      '**`@specwarden/security`** — `npm install --save-dev @specwarden/security`, then save as `security/secret-scan.check.mjs`:',
+    );
+    expect(readme).toContain("import { docPaths } from '@specwarden/docs';");
+    expect(readme).toContain("  docs: 'docs/**/*.md',");
+  });
+
+  it('says nothing of starting modules once a check is written', () => {
+    const readme = renderChecksReadme(
+      renderCheckFiles(shape(), availableModules(manifest('@specwarden/docs'))),
+      shape(),
+    );
+    expect(readme).not.toContain('## A module to start from');
+  });
+});

@@ -3,6 +3,7 @@ import { relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { TIERS } from '../../../domain';
+import type { IVcs } from '../../../domain';
 import { ChildProcessRunner, GitVcs, NodeFileSource, NodeFileWriter } from '../../../infrastructure';
 import { CONFIG_VERSION } from '../../../contracts/version/version.constant';
 import {
@@ -28,9 +29,22 @@ import { syncInvariants } from '../sync-invariants/sync-invariants.command';
 import { type ICliIo, defaultIo } from '../_shared/cli-io/cli-io.model';
 import { CONFIG_DIR, CONFIG_FILE, findConfig } from '../_shared/find-config/find-config.util';
 import { parseArgs } from '../_shared/parse-args/parse-args.util';
+import { didYouMean } from '../../_shared/did-you-mean/did-you-mean.util';
 
 const COMMANDS_NEEDING_CONFIG = ['check', 'doctor', 'migrate', 'sync-invariants'];
 const COMMANDS = ['adopt', 'suggest', 'init', 'new', 'perimeter', 'plan', ...COMMANDS_NEEDING_CONFIG];
+
+/**
+ * Version control for a command that reads a repository before it has a config — or none,
+ * outside a git work tree. Outside one, `ls-files` answers nothing, and `adopt`, `suggest`
+ * and `init` described an empty repository over a directory full of files; without a VCS
+ * they read the disk instead, leaving installed and built trees out.
+ */
+function vcsAt(cwd: string): IVcs | undefined {
+  const proc = new ChildProcessRunner();
+  const inside = proc.run('git', ['rev-parse', '--is-inside-work-tree'], { cwd });
+  return inside.status === 0 && inside.stdout.trim() === 'true' ? new GitVcs(proc, cwd) : undefined;
+}
 
 /** The oldest config version there has ever been. Anything below it was never a version. */
 const FIRST_CONFIG_VERSION = 1;
@@ -57,7 +71,7 @@ export const USAGE =
   '           [--all] [--if-relevant] [--relevance] [--list] [--fix] [--tighten]\n' +
   '           [--reporter tty|json|github] [--json] [--show-skipped]\n' +
   '    new    <check-id> [--family <folder>]   scaffold a check and its test\n' +
-  '    doctor                           the roster, capabilities, ownership, rule coverage\n\n' +
+  '    doctor [--json]                  the roster, capabilities, ownership, rule coverage\n\n' +
   '  occasionally\n' +
   '    plan   status <file> [--verify]  the phases, and each acceptance run with --verify\n' +
   '    plan   archive <file>            refuse until the harvest is declared and resolves\n' +
@@ -119,19 +133,23 @@ export async function main(
   // The VCS port goes with it: what a template writes depends on what the CHECKS will
   // see, and a check reads tracked files rather than the filesystem.
   if (args.command === 'init')
-    return init(
-      new NodeFileSource(cwd),
-      new NodeFileWriter(cwd),
-      io,
-      args.template,
-      new GitVcs(new ChildProcessRunner(), cwd),
-    );
-  if (args.command === 'adopt') return adopt(new NodeFileSource(cwd), io);
-  if (args.command === 'suggest') return suggest(new NodeFileSource(cwd), io);
+    return init(new NodeFileSource(cwd), new NodeFileWriter(cwd), io, args.template, vcsAt(cwd));
+  if (args.command === 'adopt') return adopt(new NodeFileSource(cwd), io, vcsAt(cwd));
+  if (args.command === 'suggest') return suggest(new NodeFileSource(cwd), io, vcsAt(cwd));
   // Scaffolding a check needs a consumer directory, not a loaded config: the point is
   // to work on the repository that is still assembling one.
   if (args.command === 'new') {
     const found = findConfig(cwd);
+    // Refused before a config exists: it wrote a check under a `.specwarden/` that `check`
+    // then refused as having no config — a file run by nothing, with no word of why.
+    // An id is asked for first — a missing one is the usage, not a missing config.
+    if (!found && args.positionals[0] !== undefined) {
+      io.err(
+        `no ${CONFIG_DIR}/${CONFIG_FILE} found from ${cwd} upward — run \`specwarden init\` first; ` +
+          'a check written now would be run by nothing.\n',
+      );
+      return 2;
+    }
     const at = found?.root ?? cwd;
     return newCheck(new NodeFileSource(at), new NodeFileWriter(at), io, args.positionals[0], {
       consumerDir: CONFIG_DIR,
@@ -145,7 +163,9 @@ export async function main(
   if (args.command === undefined || !COMMANDS.includes(args.command)) {
     // The command that was not understood, named: the reader should not have to diff
     // what they typed against the list below.
-    io.err(`${args.command === undefined ? '' : `unknown command "${args.command}"\n\n`}${USAGE}`);
+    const named =
+      args.command === undefined ? '' : `unknown command "${args.command}"${didYouMean(args.command, COMMANDS)}\n\n`;
+    io.err(`${named}${USAGE}`);
     return 2;
   }
   const found = findConfig(cwd);
@@ -253,6 +273,6 @@ export async function main(
     throw err;
   }
 
-  if (args.command === 'doctor') return doctor({ ...config, rules }, registry, io);
+  if (args.command === 'doctor') return doctor({ ...config, rules }, registry, io, { json: args.json });
   return check(args, config, registry, found.root, env, io);
 }

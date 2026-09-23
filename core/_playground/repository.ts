@@ -8,6 +8,7 @@ import {
   InMemoryFileSource,
   type IVcs,
   SystemClock,
+  testContext,
 } from 'specwarden';
 
 /**
@@ -45,7 +46,10 @@ export function vcs(changed: readonly string[] | undefined, tracked: readonly st
     // exactly the checkouts where the diff could not be computed.
     changedFiles: () => changed as readonly string[],
     changedLineCount: () => changed?.length,
-    trackedFiles: () => tracked,
+    // Filtered by the pathspec, the way git filters it — the test kit's reading, which the
+    // VCS contract spec holds to git's. It returned every tracked file for any pathspec, so
+    // a primitive's `except` "exempted" files the pathspec never matched.
+    trackedFiles: (pathspec?: string) => testContext({ tracked }).vcs.trackedFiles(pathspec),
   };
 }
 

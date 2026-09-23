@@ -97,6 +97,14 @@ export interface ICommandCheckSpec {
    */
   readonly paths?: readonly string[];
   /**
+   * The directory the command runs in, relative to the repository root — `packages/api`.
+   * Absent, the root. A command check runs at the root wherever the CLI was invoked from,
+   * so a package's own suite in a monorepo says where it lives; the directory is verified
+   * through the file port before the command spawns, like `paths`, because a `cd` into a
+   * directory that moved runs nothing and a shell that shrugs exits 0.
+   */
+  readonly cwd?: string;
+  /**
    * What the output must contain for a zero exit to be believed.
    *
    * A command's exit code answers "did I fail", never "did I do anything". Between
@@ -118,6 +126,12 @@ export interface ICommandCheckSpec {
   readonly refuse?: readonly (RegExp | IOutputRefusal)[];
 }
 
+/** CSI sequences (colour, cursor) and OSC sequences (titles, hyperlinks), as a terminal
+ * reads them. */
+// eslint-disable-next-line no-control-regex
+const ANSI = /\u001b\[[0-?]*[ -/]*[@-~]|\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g;
+const stripAnsi = (text: string): string => text.replace(ANSI, '');
+
 /** What `commandCheck` takes beside the identity, checked by name when the file loads. */
 const SPEC_OPTIONS = {
   cmd: { kind: 'string', required: true },
@@ -126,6 +140,7 @@ const SPEC_OPTIONS = {
   shardable: { kind: 'boolean' },
   needs: { kind: 'array' },
   paths: { kind: 'array' },
+  cwd: { kind: 'string' },
   expect: { kind: ['regexp', 'array'] },
   refuse: { kind: 'array' },
 } as const;
@@ -166,6 +181,14 @@ export class CommandCheck implements ICheck {
 
   constructor(private readonly spec: ICommandCheckSpec) {
     checkOptions('commandCheck', spec, SPEC_OPTIONS);
+    // Inside the repository, relative to its root — refused at load otherwise. An absolute
+    // path passed the directory check as itself and spawned beneath the root, and `..` ran
+    // the command outside the repository the check is about.
+    if (spec.cwd !== undefined && (/^([a-z]:)?[\\/]/i.test(spec.cwd) || spec.cwd.split(/[\\/]/).includes('..'))) {
+      throw new CheckOptionsError(
+        `commandCheck${spec.id ? ` '${spec.id}'` : ''}: \`cwd\` must be a directory inside the repository, relative to its root — got "${spec.cwd}".`,
+      );
+    }
     const expected = spec.expect === undefined ? [] : Array.isArray(spec.expect) ? spec.expect : [spec.expect];
     const refused = (spec.refuse ?? []).map((r) => (r instanceof RegExp ? r : (r as Partial<IOutputRefusal>)?.pattern));
     if (![...expected, ...refused].every((p) => p instanceof RegExp)) {
@@ -190,7 +213,7 @@ export class CommandCheck implements ICheck {
     // the run hanging forever, and the deadline is what makes that a failure with a
     // name instead of a job that burns its whole budget in silence.
     this.timeoutSec = spec.timeoutSec;
-    this.capabilities = spec.paths?.length ? ['exec', 'read'] : ['exec'];
+    this.capabilities = spec.paths?.length || spec.cwd !== undefined ? ['exec', 'read'] : ['exec'];
     this.relevant = resolveWhen(spec.when);
   }
 
@@ -217,11 +240,34 @@ export class CommandCheck implements ICheck {
       };
     }
 
+    const dir = this.spec.cwd?.replace(/\\/g, '/').replace(/\/+$/, '');
+    if (dir !== undefined && dir !== '' && dir !== '.' && !ctx.files.isDirectory(dir)) {
+      return {
+        ok: false,
+        findings: [
+          {
+            severity: 'error' as const,
+            file: dir,
+            message: `${this.id} runs in ${dir}, which is not a directory here — the command was not run.`,
+            ruleId: this.id,
+          },
+        ],
+      };
+    }
+
     const cmd = this.spec.shardable && ctx.shard ? `${this.spec.cmd} --shard=${ctx.shard}` : this.spec.cmd;
     const shell = this.spec.shell ?? platformShell();
     // Non-blocking when the adapter offers it, so a concurrent run actually overlaps;
     // a synchronous spawn holds the event loop and would make concurrency a no-op.
-    const options = { env: this.spec.env, timeoutSec: this.spec.timeoutSec };
+    // An ABSOLUTE directory: a relative one resolves against the process's own directory,
+    // which is wherever the CLI was invoked from — the defect `cwd` exists to avoid.
+    const options = {
+      env: this.spec.env,
+      timeoutSec: this.spec.timeoutSec,
+      ...(dir === undefined || dir === '' || dir === '.'
+        ? {}
+        : { cwd: ctx.files.root() === '' ? dir : `${ctx.files.root().replace(/[\\/]+$/, '')}/${dir}` }),
+    };
     if (typeof ctx.proc.runAsync === 'function') {
       return ctx.proc
         .runAsync(shell.command, shellArgv(shell, cmd), options)
@@ -249,7 +295,10 @@ export class CommandCheck implements ICheck {
       };
     }
 
-    const output = `${result.stdout}${result.stderr}`.trim();
+    // Colour codes stripped: a tool under FORCE_COLOR (or a TTY-sniffing one) wrote them
+    // verbatim into findings and JSON, and an `expect` written against the words did not
+    // match the words between the escapes.
+    const output = stripAnsi(`${result.stdout}${result.stderr}`).trim();
     const findings = output === '' ? [] : [{ severity: 'info' as const, message: output, ruleId: this.id }];
 
     if (result.status === 0) {

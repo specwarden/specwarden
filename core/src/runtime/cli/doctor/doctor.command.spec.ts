@@ -138,8 +138,84 @@ describe('rule coverage', () => {
     expect(run({}, [aCheck('a')]).out).not.toContain('rule coverage');
   });
 
+  // An empty rules.mjs printed "declared: 1, enforced: 1" — a rule nobody could find.
+  it("names the engine's own rule beside the count", () => {
+    const harness = rule('harness-integrity', { checkIds: ['a'] });
+    expect(run({ rules: [harness] }, [aCheck('a')]).out).toContain(
+      "  declared: 1 (the engine's own: harness-integrity)\n",
+    );
+    expect(run({ rules: [rule('mine', { checkIds: ['a'] })] }, [aCheck('a')]).out).toContain('  declared: 1\n');
+  });
+
   it('a fully covered register does not mask an ownership conflict — the exit code is what CI reads', () => {
     const r = run({ ownership: { tasks: 'nobody' }, rules: [rule('x', { checkIds: ['a'] })] }, [aCheck('a')]);
     expect(r.code).toBe(1);
+  });
+});
+
+describe('doctor --json', () => {
+  // `--json` was accepted and ignored: the text was all a script had to parse.
+  it('is the same report as one document, and runs nothing', () => {
+    const registry = new CheckRegistry({
+      originOf: (c) => (c.id === 'a' ? '.specwarden/checks/a.check.mjs' : undefined),
+    });
+    registry.registerAll([
+      aCheck('a', {
+        advisory: true,
+        capabilities: ['exec'],
+        rule: { statement: 's', owner: '@specwarden/docs', implied: true },
+      }),
+    ]);
+    let out = '';
+    const code = doctor(
+      { denyCapabilities: ['exec'], rules: [rule('harness-integrity', { checkIds: ['a'] })] },
+      registry,
+      { out: (t) => (out += t), err: () => {} },
+      { json: true },
+    );
+
+    expect(code).toBe(0);
+    expect(JSON.parse(out)).toEqual({
+      version: 1,
+      checks: [
+        {
+          id: 'a',
+          title: 'a title',
+          tier: 'fast',
+          zone: 'consumer',
+          capabilities: ['exec'],
+          denied: true,
+          advisory: true,
+          exclusive: false,
+          origin: '.specwarden/checks/a.check.mjs',
+          rule: { statement: 's', owner: '@specwarden/docs', implied: true },
+        },
+      ],
+      denyCapabilities: ['exec'],
+      rules: {
+        declared: 1,
+        engine: ['harness-integrity'],
+        enforced: 1,
+        notMechanizable: 0,
+        unenforcedWithoutReason: 0,
+        orphans: [],
+      },
+    });
+  });
+
+  it('exits 1 on an ownership conflict, as the text does, and names it in the document', () => {
+    let out = '';
+    const code = doctor(
+      { ownership: { tasks: 'openspec' } },
+      new CheckRegistry(),
+      { out: (t) => (out += t), err: () => {} },
+      {
+        json: true,
+      },
+    );
+    expect(code).toBe(1);
+    expect((JSON.parse(out) as { ownership: { conflicts: string[] } }).ownership.conflicts[0]).toContain(
+      "role 'tasks'",
+    );
   });
 });

@@ -135,10 +135,12 @@ describe('1. adopt', () => {
     expect(r.stdout).toContain('Nothing is enabled for you.');
   });
 
-  // Should: name the language, the workflow and the README's path references — init detects the workflow.
-  it('[friction] reports `node --test` as "other" and says nothing of the CI workflow or the README', () => {
-    expect(r.stdout).toContain('test runner     : other');
-    expect(r.stdout).not.toMatch(/github|workflow|README/i);
+  // It reported `node --test` as "other" and said nothing of the workflow or the README,
+  // though `init` acts on both.
+  it('names node:test, the CI workflow and the documents — the facts init acts on', () => {
+    expect(r.stdout).toContain('test runner     : node:test\n');
+    expect(r.stdout).toContain('ci              : github actions — .github/workflows/ci.yml\n');
+    expect(r.stdout).toContain('documents       : 2 markdown file(s), README.md among them\n');
     expect(initRun.stdout).toContain('github actions');
   });
 
@@ -162,11 +164,20 @@ describe('2. suggest', () => {
     );
   const suggestOver = (extra: Tree) => warden(repo(extra, { initialised: false }), ['suggest']);
 
-  // Should: know one habit an ordinary repository has — it only knows `*.service.ts`/`*.controller.ts`.
-  it('[friction] has nothing to say about an ordinary TypeScript repository', () => {
-    const r = suggestOver({});
+  // It knew only `*.service.ts` and `*.controller.ts`, and an ordinary repository whose
+  // every module sat beside its test got "nothing to suggest".
+  it("knows an ordinary TypeScript repository's habit: every src file beside its test", () => {
+    const tested: Tree = {
+      'src/util.test.ts': 'test\n',
+      'src/format.test.ts': 'test\n',
+      'src/types.test.ts': 'test\n',
+    };
+    const r = suggestOver(tested);
     expect(r.status).toBe(0);
-    expect(r.stdout).toContain('No convention crossed the consistency threshold');
+    expect(r.stdout).toContain('100% of src/**/*.ts have {name}.test.ts (3 of 3).');
+    expect(r.stdout).toContain('Save as .specwarden/checks/tests/ts-has-test.check.mjs:');
+    // With none of them tested, it says nothing — that is not a habit.
+    expect(suggestOver({}).stdout).toContain('No convention crossed the consistency threshold');
   });
 
   it('proposes a convention followed 100%, and one at 90% with its exception named', () => {
@@ -180,9 +191,12 @@ describe('2. suggest', () => {
     expect(most.stdout).toContain('exceptions: src/s9.service.ts');
   });
 
-  // Should: mention the near miss ("85% of … — below the 90% threshold") rather than stay silent.
-  it('[friction] says nothing at all about a convention followed 85%', () => {
-    expect(suggestOver(services(20, 17)).stdout).toContain('nothing to suggest');
+  // It said "nothing to suggest" — the words for a repository with no habit at all.
+  it('names a convention followed 85% as a near miss, with what is missing, and proposes nothing', () => {
+    const out = suggestOver(services(20, 17)).stdout;
+    expect(out).toContain('nothing to suggest');
+    expect(out).toContain('Near misses — followed, but below the 90% a suggestion needs:');
+    expect(out).toMatch(/85% of \*\*\/\*\.service\.ts have \{name\}\.spec\.ts \(17 of 20\); missing: /);
   });
 
   // It was refused as "exports no check" — it did export one, only without an id. The file
@@ -230,16 +244,20 @@ describe('3. init, no template', () => {
     expect(doctor.status).toBe(0);
   });
 
-  // Should: say 0 declared — or name the harness's own rule — when rules.mjs is empty.
-  it('[friction] doctor counts "declared: 1, enforced: 1" over an empty rule register, unnamed', () => {
-    expect(doctor.stdout).toContain('  declared: 1\n  enforced: 1\n');
+  // It counted "declared: 1, enforced: 1" over an empty rules.mjs, the rule unnamed.
+  it("doctor names the engine's own rule beside the count", () => {
+    expect(doctor.stdout).toContain("  declared: 1 (the engine's own: harness-integrity)\n  enforced: 1\n");
   });
 
-  // Should: the checks README should list the modules to install; `docPaths`/`secretScan` are not in the engine.
-  it('[friction] init says "the checks README lists what to add" — it lists nothing, and names factories not installed', () => {
-    expect(initRun.stdout).toContain('the checks README lists what to add');
-    expect(INIT['.specwarden/checks/README.md']).toContain('_(none yet)_');
-    expect(INIT['.specwarden/checks/README.md']).toContain('`docPaths`, `secretScan`');
+  // It said the README "lists what to add"; the README listed nothing and named factories
+  // the engine does not have.
+  it('init points at the checks README, and the README names each module, its install line and its file', () => {
+    expect(initRun.stdout).toContain('the checks README shows what to install, and the file each one needs.');
+    const readme = INIT['.specwarden/checks/README.md'];
+    expect(readme).toContain('## A module to start from');
+    expect(readme).toContain('`pnpm add -D @specwarden/security`, then save as `security/secret-scan.check.mjs`');
+    expect(readme).toContain("import { docPaths } from '@specwarden/docs';");
+    expect(readme).not.toContain('`docPaths`, `secretScan`');
   });
 
   // It carried an id, a title and no rule, and pasted it turned orphan-check red.
@@ -337,13 +355,13 @@ describe('4. new no-todo-in-src --family hygiene', () => {
     expect(warden(dir, ['new', 'Bad_Id']).stderr).toContain("'Bad_Id' is not a usable check id.");
   });
 
-  // Should: refuse (or offer init) — the check it writes is run by nothing until a config exists.
-  it('[friction] `new` before `init` writes a check under a .specwarden/ that `check` then refuses', () => {
+  // It wrote a check under a .specwarden/ that `check` then refused — a file run by nothing.
+  it('`new` before `init` is refused, exit 2, names init, and writes nothing', () => {
     const bare = repo({}, { initialised: false });
-    expect(warden(bare, ['new', 'x-y']).status).toBe(0);
-    const r = warden(bare, ['check']);
+    const r = warden(bare, ['new', 'x-y']);
     expect(r.status).toBe(2);
-    expect(r.stderr).toContain('no .specwarden/warden.config.mjs found');
+    expect(r.stderr).toContain('run `specwarden init` first; a check written now would be run by nothing.');
+    expect(existsSync(join(bare, '.specwarden'))).toBe(false);
   });
 });
 
@@ -677,12 +695,11 @@ describe('9. newcomer mistakes', () => {
     expect(r.stdout).toContain("names owner 'docs/CONVENTIONS.md', whose document docs/CONVENTIONS.md does not exist");
   });
 
-  // Should: suggest the nearest id ("did you mean no-todo?").
-  it('[friction] `--id` with a typo exits 2 with no suggestion', () => {
+  // It exited 2 with no suggestion.
+  it('`--id` with a typo exits 2 and names the id it was close to', () => {
     const r = one('hygiene/no-todo.check.mjs', NO_TODO, ['check', '--id', 'no-tod']);
     expect(r.status).toBe(2);
-    expect(r.stderr).toContain("unknown check id 'no-tod'");
-    expect(r.stderr).not.toMatch(/did you mean|no-todo\b/);
+    expect(r.stderr).toContain("unknown check id 'no-tod' — did you mean 'no-todo'?");
   });
 
   // They were silently not discovered: green over a TODO.

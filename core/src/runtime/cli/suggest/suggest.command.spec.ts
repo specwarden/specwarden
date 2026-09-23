@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { InMemoryFileSource } from '../../../infrastructure';
+import { testContext } from '../../../testing';
 import { suggest } from './suggest.command';
 
 /** The engine's own barrel, which a pasted file's `from 'specwarden'` resolves to. */
@@ -25,6 +26,16 @@ function services(n: number, withSpec: number): Record<string, string> {
     const name = `s${String(i).padStart(3, '0')}`;
     tree[`src/${name}.service.ts`] = '';
     if (i < withSpec) tree[`src/${name}.service.spec.ts`] = '';
+  }
+  return tree;
+}
+
+/** `n` controllers under `api/`, each beside its spec. */
+function controllers(n: number): Record<string, string> {
+  const tree: Record<string, string> = {};
+  for (let i = 0; i < n; i++) {
+    tree[`api/c${i}.controller.ts`] = '';
+    tree[`api/c${i}.controller.spec.ts`] = '';
   }
   return tree;
 }
@@ -87,12 +98,12 @@ describe('what suggest proposes', () => {
   });
 
   it('names a controller convention after what it pairs', () => {
-    const r = run({ 'api/a.controller.ts': '', 'api/a.controller.spec.ts': '' });
+    const r = run(controllers(3));
     expect(r.out).toContain('.specwarden/checks/tests/controller-has-spec.check.mjs');
   });
 
   it('reports each candidate convention on its own — controllers as well as services', () => {
-    const r = run({ 'api/a.controller.ts': '', 'api/a.controller.spec.ts': '' });
+    const r = run(controllers(3));
     expect(r.out).toContain('**/*.controller.ts');
     expect(r.out).not.toContain('**/*.service.ts have');
   });
@@ -115,5 +126,78 @@ describe('what suggest refuses to propose', () => {
     for (const tree of [{}, services(4, 4)]) {
       expect(run(tree).out).toContain('Nothing was enabled.');
     }
+  });
+});
+
+describe('suggest — the habits of an ordinary repository', () => {
+  const source = (n: number, withTest: number, style = 'test'): Record<string, string> => {
+    const tree: Record<string, string> = { 'src/index.ts': 'export {};\n', 'src/types.d.ts': 'export {};\n' };
+    for (let i = 0; i < n; i++) {
+      tree[`src/m${i}.ts`] = 'export {};\n';
+      if (i < withTest) tree[`src/m${i}.${style}.ts`] = 'test\n';
+    }
+    return tree;
+  };
+
+  // It knew only `*.service.ts` and `*.controller.ts`: an ordinary TypeScript repository
+  // whose every module sits beside its test got "nothing to suggest".
+  it('proposes "every src file beside its test", leaving the tests, index and declarations out', () => {
+    const r = run(source(4, 4));
+    expect(r.out).toContain('100% of src/**/*.ts have {name}.test.ts (4 of 4).');
+    expect(r.out).toContain('Save as .specwarden/checks/tests/ts-has-test.check.mjs:');
+    expect(r.out).toContain("  except: ['**/*.test.ts', '**/*.spec.ts', '**/index.ts', '**/*.d.ts'],");
+    // The one-line summary states the same rule the file does.
+    expect(r.out).toContain(
+      "require: '{name}.test.ts', except: ['**/*.test.ts', '**/*.spec.ts', '**/index.ts', '**/*.d.ts'] }), ratchet 0.",
+    );
+  });
+
+  it('proposes the spelling the repository uses — spec, not test — and only that one', () => {
+    const r = run(source(4, 4, 'spec'));
+    expect(r.out).toContain('ts-has-spec.check.mjs');
+    expect(r.out).not.toContain('ts-has-test');
+  });
+
+  it('does not propose the folder-wide rule twice over services that are the whole folder', () => {
+    const r = run(services(4, 4));
+    expect(r.out).toContain('service-has-spec.check.mjs');
+    expect(r.out).not.toContain('ts-has-spec');
+  });
+
+  it('proposes nothing from fewer than three files — an anecdote, not a convention', () => {
+    expect(run(source(2, 2)).out).toContain('nothing to suggest');
+  });
+
+  // An 85% habit read "nothing to suggest", the words for a repository with no habit.
+  it('names a near miss, with what is missing, and proposes nothing', () => {
+    const r = run(services(20, 17));
+    expect(r.out).toContain('No convention crossed the consistency threshold — nothing to suggest.');
+    expect(r.out).toContain('Near misses — followed, but below the 90% a suggestion needs:');
+    expect(r.out).toContain('  85% of **/*.service.ts have {name}.spec.ts (17 of 20); missing: src/s017.service.ts');
+    expect(r.out).not.toContain('siblingRequired');
+  });
+
+  it('says nothing of a habit below 70% — that is not a habit', () => {
+    expect(run(services(10, 6)).out).not.toContain('Near misses');
+  });
+});
+
+describe('suggest — what it measures', () => {
+  // It globbed the disk: an installed package's services counted as this repository's.
+  it('reads the tracked files when there is version control, as the check it proposes will', () => {
+    const tree = { ...services(4, 4), 'node_modules/pkg/x.service.ts': '', 'node_modules/pkg/y.service.ts': '' };
+    const tracked = Object.keys(tree).filter((f) => !f.startsWith('node_modules/'));
+    let out = '';
+    suggest(
+      new InMemoryFileSource(tree),
+      { out: (t) => (out += t), err: () => {} },
+      testContext({ tree, tracked }).vcs,
+    );
+    expect(out).toContain('100% of **/*.service.ts have {name}.spec.ts (4 of 4).');
+  });
+
+  it('leaves installed and built trees out when there is no version control', () => {
+    const r = run({ ...services(4, 4), 'node_modules/pkg/x.service.ts': '', 'dist/y.service.ts': '' });
+    expect(r.out).toContain('(4 of 4)');
   });
 });

@@ -70,6 +70,9 @@ Not optional where it applies. Each is one line, and each closes a whole family:
 - **`paths: [...]`** on `commandCheck` — the files a command is pointed at are verified
   through the file port _before_ it is spawned. A test runner handed a path it cannot
   find runs the rest and exits 0.
+- **`cwd`** on `commandCheck` — the directory the command runs in, relative to the root;
+  verified the same way before it spawns, because a `cd` into a directory that moved runs
+  nothing and exits 0.
 - **`expect` / `refuse`** on `commandCheck` — what the output must contain for a zero
   exit to be believed, and the phrases a tool prints when it silently did nothing.
 

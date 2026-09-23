@@ -45,6 +45,17 @@ describe('docHygiene — relative links', () => {
   it('does not read a link inside a code fence — an example is not a pointer', async () => {
     expect((await run({ 'a.md': '```\n[x](./gone.md)\n```\n' })).ok).toBe(true);
   });
+
+  // A span was read as a link: prose explaining the syntax failed on the path it quoted.
+  it('does not read a link inside an inline code span, of one backtick or several', async () => {
+    expect((await run({ 'a.md': 'Written as `[done](./gone.md)`, it is caught.\n' })).ok).toBe(true);
+    expect((await run({ 'a.md': 'Or ``[x](./gone.md) with a ` inside``.\n' })).ok).toBe(true);
+  });
+
+  it('still reads the link beside a code span on the same line', async () => {
+    const verdict = await run({ 'a.md': 'See `code` and [gone](./gone.md).\n' });
+    expect(verdict.ok).toBe(false);
+  });
 });
 
 describe('docHygiene — pointers into MOVED stubs', () => {

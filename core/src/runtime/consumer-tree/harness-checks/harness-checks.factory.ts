@@ -68,6 +68,9 @@ export const HARNESS_CHECK_IDS = [
   'zone-boundary',
 ] as const;
 
+/** The id of the rule the harness declares for its own checks — doctor names it apart. */
+export const HARNESS_RULE_ID = 'harness-integrity';
+
 /**
  * The checks the harness runs on ITSELF, assembled from convention.
  *
@@ -177,7 +180,7 @@ export function harnessChecks(
   const rules: IRule[] = checks.length
     ? [
         {
-          id: 'harness-integrity',
+          id: HARNESS_RULE_ID,
           statement:
             'Every rule names an owner document that exists and an enforcer that exists; a check enforces a declared rule; a ratchet only turns down.',
           owner: options.ruleOwner ?? `${inputs.consumerDir}/README.md`,

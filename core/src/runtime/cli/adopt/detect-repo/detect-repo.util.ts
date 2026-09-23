@@ -1,7 +1,7 @@
 import type { IFileSource, IVcs } from '../../../../domain';
 
 export type TPackageManager = 'pnpm' | 'npm' | 'yarn';
-export type TTestRunner = 'vitest' | 'jest' | 'other';
+export type TTestRunner = 'vitest' | 'jest' | 'mocha' | 'node:test' | 'other';
 export type TCi = 'github' | 'gitlab';
 export type TSpecFramework = 'openspec' | 'speckit';
 
@@ -54,7 +54,12 @@ export interface IRepoShape {
 export function detectRepo(files: IFileSource, vcs?: IVcs): IRepoShape {
   // Asked the way a CHECK will ask it: tracked files where there is a VCS port, the disk
   // only as the fallback for a caller without one.
-  const find = (glob: string): readonly string[] => (vcs ? vcs.trackedFiles(glob) : files.glob(glob));
+  // The disk, without a VCS, never includes an installed or built tree: a `.sh` inside
+  // `node_modules/` was "this repository has shell scripts".
+  const find = (glob: string): readonly string[] =>
+    vcs
+      ? vcs.trackedFiles(glob)
+      : files.glob(glob).filter((f) => !/(^|\/)(node_modules|dist|build|coverage)\//.test(f));
   const workspaces = detectWorkspaces(files);
   return {
     packageManager: detectPackageManager(files),
@@ -64,7 +69,7 @@ export function detectRepo(files: IFileSource, vcs?: IVcs): IRepoShape {
     workflows: detectWorkflows(find),
     proxyConfigs: unique(PROXY_GLOBS.flatMap(find)),
     envSamples: ENV_SAMPLES.filter((f) => files.exists(f)),
-    testRunner: detectTestRunner(files),
+    testRunner: detectTestRunner(files, scriptsOf(files).test),
     hasAgentRouter: files.exists('AGENTS.md') || files.exists('CLAUDE.md'),
     docDirs: ['docs', 'doc'].filter((d) => files.isDirectory(d)),
     ci: detectCi(files),
@@ -171,10 +176,17 @@ function detectWorkspaces(files: IFileSource): readonly string[] {
   return [];
 }
 
-function detectTestRunner(files: IFileSource): TTestRunner | undefined {
+/**
+ * The test runner, from the manifest. `node --test` is Node's own runner and has no
+ * dependency to find, so it is read from the `test` script: it was "other", the word for
+ * a runner nobody could name, for the runner every Node install ships.
+ */
+function detectTestRunner(files: IFileSource, testScript: string | undefined): TTestRunner | undefined {
   const pkg = files.tryRead('package.json');
   if (pkg === undefined) return undefined;
   if (/["']vitest["']/.test(pkg)) return 'vitest';
   if (/["']jest["']/.test(pkg)) return 'jest';
-  return /"test"\s*:/.test(pkg) ? 'other' : undefined;
+  if (/["']mocha["']/.test(pkg)) return 'mocha';
+  if (testScript !== undefined && /\bnode\b[^|&;]*\s--test\b/.test(testScript)) return 'node:test';
+  return testScript !== undefined ? 'other' : undefined;
 }
