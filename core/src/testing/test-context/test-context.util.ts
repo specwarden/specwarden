@@ -95,7 +95,14 @@ function fakeVcs(options: ITestContextOptions, matching: (pathspec: string) => r
       // something different from what the real check will see is worse than no test.
       // A test that says nothing about version control usually means "the tree is the
       // repository", and making that the default keeps the common case to one option.
-      return matching(pathspec ?? '**/*');
+      //
+      // An EMPTY pathspec is "every tracked file" to git, and a check scanning the whole
+      // tree passes exactly that — `trackedFiles(options.scan ?? '')` is the shipped
+      // shape. Forwarded to a glob it matches nothing, so the check examines an empty
+      // corpus and reports green: this product's own central failure, inside the fixture
+      // meant to prove that a check can fail. Caught when a credential scan passed over
+      // a tree with a credential in it.
+      return matching(pathspec ? pathspec : '**/*');
     },
   };
 }

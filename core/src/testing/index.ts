@@ -11,3 +11,5 @@
  */
 export { MissingTestPortError, errorsOf, runCheck, testContext } from './test-context/test-context.util';
 export type { ITestContext, ITestContextOptions } from './test-context/test-context.util';
+export { publishedFactories, uncoveredFactories } from './published-factories/published-factories.util';
+export type { IPublishedFactoriesOptions, TFactoryProbe } from './published-factories/published-factories.util';

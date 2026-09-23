@@ -13,11 +13,16 @@ This repository's own facts. The engine is the package; everything here is yours
   baseline/           DATA — same reasoning
 ```
 
-Every declaration above may instead live in its OWN FOLDER together with its test —
-`perimeter/perimeter.mjs` beside `perimeter/perimeter.test.mjs`, the folder named for the
+Every declaration above may instead live in its OWN FOLDER together with its test: a
+`perimeter` folder holding `perimeter.mjs` beside `perimeter.test.mjs`, named for the
 stem before the first dot. The engine resolves both layouts, so a house style that keeps a
 tested file and its test together does not have to argue with the CLI. A check under
 `checks/` is discovered at any depth and needs no permission at all.
+
+*(That example names a folder and two files rather than two paths on purpose: a
+`doc-paths` check reads any backticked path carrying a slash as a claim that the file
+exists, and this document is scaffolded into trees that write no perimeter. A starter tree
+that fails the first gate it ships with teaches the wrong thing about the gate.)*
 
 ## The one rule about this folder
 

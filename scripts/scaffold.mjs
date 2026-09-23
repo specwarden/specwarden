@@ -101,10 +101,29 @@ const tsconfig = () =>
     {
       $schema: 'https://json.schemastore.org/tsconfig',
       extends: '../../tsconfig.base.json',
-      compilerOptions: { rootDir: 'src', outDir: 'dist' },
-      include: ['src/**/*'],
-      // Specs never reach `dist`; excluding them is what keeps a test out of the
-      // published type surface.
+      // `noEmit`, because this program is for CHECKING. What ships is produced by the
+      // bundler, which reads its own entry list — so a rootDir wide enough to hold the
+      // playground costs nothing at build time and buys the typecheck below.
+      compilerOptions: { noEmit: true },
+      /**
+       * The playground is part of the package's PROGRAM.
+       *
+       * It is a consumer written against the package's own published surface, so a
+       * renamed export breaks the typecheck HERE — before somebody installs it. Left
+       * outside the program, a playground compiles against nothing and proves nothing.
+       */
+      include: ['src/**/*', '_playground/**/*'],
+      /**
+       * The UNIT specs stay outside the program, and the playground stays in.
+       *
+       * A unit spec is written against internals with fixture shapes a production file
+       * must not have — `skills/typescript/SKILL.md` owns that rule, and pulling them in
+       * produced forty errors about test scaffolding the first time this was tried.
+       *
+       * The playground is the opposite case: it is a CONSUMER, written against the
+       * package's published surface, so typechecking it is the only place a renamed
+       * export is caught before somebody installs it.
+       */
       exclude: ['dist', 'src/**/*.spec.ts'],
     },
     null,
@@ -116,6 +135,43 @@ const tsconfigFor = (pkg) =>
   pkgDir(pkg).split('/').length === 1
     ? tsconfig().replace('../../tsconfig.base.json', '../tsconfig.base.json')
     : tsconfig();
+
+// ── vitest.config.ts ────────────────────────────────────────────────────────────────
+
+/**
+ * The test runner, for both suites a package has. Eighteen byte-identical copies of this
+ * existed before it was generated.
+ *
+ * GENERATED from `scripts/registry.mjs`. Edit the registry.
+ */
+const VITEST_CONFIG = [
+  "import { defineConfig } from 'vitest/config';",
+  '',
+  '/**',
+  ' * Two suites, one runner.',
+  ' *',
+  ' * A spec under `src/` is the UNIT suite: does this unit behave as described.',
+  ' * A spec under `_playground/` is the PLAYGROUND: does everything this package',
+  ' * PUBLISHES work, wired the way a consumer wires it, against a repository shaped like',
+  ' * theirs.',
+  ' *',
+  ' * The second is not the first with more steps. A unit suite passes over a package whose',
+  ' * factory was renamed and never re-exported, because it imports the unit by path; the',
+  ' * playground imports the PACKAGE, so it cannot.',
+  ' *',
+  ' * `include` is pinned rather than left to the default, so the runner never picks up',
+  ' * compiled tests a build emitted into `dist`.',
+  ' *',
+  ' * GENERATED from `scripts/registry.mjs`. Edit the registry.',
+  ' */',
+  'export default defineConfig({',
+  '  test: {',
+  "    include: ['src/**/*.spec.ts', '_playground/**/*.spec.ts'],",
+  "    environment: 'node',",
+  '  },',
+  '});',
+  '',
+].join('\n');
 
 // ── tsup.config.ts ──────────────────────────────────────────────────────────────────
 
@@ -292,6 +348,7 @@ export function generated() {
     const dir = pkgDir(pkg);
     out.set(`${dir}/package.json`, manifest(pkg));
     out.set(`${dir}/tsconfig.json`, tsconfigFor(pkg));
+    out.set(`${dir}/vitest.config.ts`, VITEST_CONFIG);
     out.set(`${dir}/tsup.config.ts`, tsupConfig(pkg));
     out.set(`${dir}/README.md`, readme(pkg));
     out.set(`${dir}/LICENSE`, LICENSE);

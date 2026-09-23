@@ -40,6 +40,12 @@ package.
 
 All three are written by `pnpm scaffold` and compared by `pnpm check:skills`.
 
+**Format the guide BEFORE you scaffold.** `reference.md` is a byte copy of `GUIDE.md`,
+and the formatter reflows tables and code samples — so editing a guide and running
+`pnpm scaffold` first copies the unformatted text, the formatter then rewrites the source
+only, and `scaffold-drift` fails on a file nobody touched. The order is
+`pnpm format && pnpm scaffold`.
+
 ## 4. One name, three places
 
 The folder, the plugin manifest and the frontmatter must all say the same thing. When

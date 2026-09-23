@@ -24,6 +24,17 @@ describe('testContext', () => {
     expect(ctx.vcs.trackedFiles('**/*.md')).toEqual(['a.md', 'docs/b.md']);
   });
 
+  it('an EMPTY pathspec is every tracked file, as it is to git', () => {
+    // `trackedFiles(options.scan ?? '')` is the shipped shape of a check that scans the
+    // whole tree. Forwarded to a glob, an empty string matches nothing — so the check
+    // examines an empty corpus and reports green, inside the fixture whose whole job is
+    // to prove that a check can fail. Found when a credential scan passed over a tree
+    // with a credential in it.
+    const ctx = testContext({ tree: { 'a.md': 'A', 'docs/b.md': 'B' } });
+
+    expect(ctx.vcs.trackedFiles('')).toHaveLength(2);
+  });
+
   it('takes an explicit tracked set, including one that differs from the tree', () => {
     const ctx = testContext({ tree: { 'a.md': 'A' }, tracked: ['ghost.md'] });
 
