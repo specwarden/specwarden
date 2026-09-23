@@ -103,7 +103,7 @@ describe('PerimeterEngine fails open', () => {
 describe('writeRule', () => {
   const journal = writeRule({ id: 'migration-journal', match: (fp) => (/_journal\.json$/.test(fp) ? fp : null) });
   it('blocks a write to the forbidden file and ignores a shell', () => {
-    expect(journal.evaluate({ tool: 'Write', writePath: 'be/drizzle/meta/_journal.json' }).blocked).toBe(true);
+    expect(journal.evaluate({ tool: 'Write', writePath: 'server/drizzle/meta/_journal.json' }).blocked).toBe(true);
     expect(journal.evaluate({ tool: 'Write', writePath: 'src/x.ts' }).blocked).toBe(false);
     expect(journal.evaluate(bash('cat _journal.json')).blocked).toBe(false); // not a file tool
   });

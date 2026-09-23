@@ -130,7 +130,9 @@ export function buildOrderFollowsDeps(options: IBuildOrderOptions): ICheck {
 
       // No graph means no manifests were read: the packages directory moved, or the scope
       // prefix no longer matches. Either way every ordering below would pass vacuously.
-      if (graph.size === 0) {
+      // Counted over IN-SCOPE names: the graph keeps every manifest it read, so a scope that
+      // matched no package still left it non-empty and the second case passed in silence.
+      if (![...graph.keys()].some((name) => name.startsWith(options.scopePrefix))) {
         return {
           ok: false,
           findings: [

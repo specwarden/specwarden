@@ -90,11 +90,10 @@ export class RunnerUsageError extends Error {
  * What a run MEASURED, for the ratchet store.
  *
  * The verdict's own statement wins; counting error findings is the fallback. That
- * order is the fix for a defect the first consumer carried live: three checks
- * summarised their violations into a single line and reported the real number on the
- * verdict, in a field nothing read. Counting findings instead gave zero on every
- * passing run, so `--tighten` would have rewritten thresholds of 17 and 37 down to 0
- * and failed the very next ordinary run — a command whose whole purpose is to record
+ * order is the fix for a real defect: a check that summarises its violations into a
+ * single line reports the real number on the verdict, and counting findings instead
+ * gives zero on every passing run — so `--tighten` would rewrite a tolerated count
+ * down to 0 and fail the very next ordinary run — a command whose whole purpose is to record
  * the truth, recording a fiction.
  */
 function measurementOf(verdict: IVerdict): number {

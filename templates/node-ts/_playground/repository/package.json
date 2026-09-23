@@ -1,0 +1,17 @@
+{
+  "name": "slugline",
+  "version": "2.3.1",
+  "description": "Turns a title into a URL slug, and says why when it cannot.",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "lint": "node scripts/lint.mjs",
+    "test": "node --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@specwarden/docs": "^0.1.0",
+    "@specwarden/security": "^0.1.0",
+    "@specwarden/template-node-ts": "^0.1.0",
+    "specwarden": "^0.1.0"
+  }
+}

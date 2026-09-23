@@ -15,6 +15,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { KINDS, ORIGIN, PACKAGES, TOOLCHAIN, byName, pkgDeps, pkgDir, pkgName } from './registry.mjs';
+import { generateLlmsIndex } from './llms.mjs';
 import { generatedSkillFiles } from './skills.mjs';
 
 const ROOT = process.cwd();
@@ -124,7 +125,13 @@ const tsconfig = () =>
        * package's published surface, so typechecking it is the only place a renamed
        * export is caught before somebody installs it.
        */
-      exclude: ['dist', 'src/**/*.spec.ts'],
+      /**
+       * A template's playground carries a REPOSITORY — the stranger's tree `init` is run
+       * in — and that tree is a fixture, not a consumer of this package: its sources
+       * import an ORM nobody here installs, on purpose, because that is what the nestjs
+       * plugin exists to catch.
+       */
+      exclude: ['dist', 'src/**/*.spec.ts', '_playground/repository/**'],
     },
     null,
     2,
@@ -142,36 +149,63 @@ const tsconfigFor = (pkg) =>
  * The test runner, for both suites a package has. Eighteen byte-identical copies of this
  * existed before it was generated.
  *
- * GENERATED from `scripts/registry.mjs`. Edit the registry.
+ * The coverage thresholds come from the package's registry entry, so the ratchet sits in
+ * ONE file beside the measurement that set it. They were absent everywhere before — the
+ * `test:coverage` script existed in every manifest and could not even start, because
+ * nothing installed the provider — so "coverage is a ratchet" was a sentence in a skill
+ * and nowhere else.
  */
-const VITEST_CONFIG = [
-  "import { defineConfig } from 'vitest/config';",
-  '',
-  '/**',
-  ' * Two suites, one runner.',
-  ' *',
-  ' * A spec under `src/` is the UNIT suite: does this unit behave as described.',
-  ' * A spec under `_playground/` is the PLAYGROUND: does everything this package',
-  ' * PUBLISHES work, wired the way a consumer wires it, against a repository shaped like',
-  ' * theirs.',
-  ' *',
-  ' * The second is not the first with more steps. A unit suite passes over a package whose',
-  ' * factory was renamed and never re-exported, because it imports the unit by path; the',
-  ' * playground imports the PACKAGE, so it cannot.',
-  ' *',
-  ' * `include` is pinned rather than left to the default, so the runner never picks up',
-  ' * compiled tests a build emitted into `dist`.',
-  ' *',
-  ' * GENERATED from `scripts/registry.mjs`. Edit the registry.',
-  ' */',
-  'export default defineConfig({',
-  '  test: {',
-  "    include: ['src/**/*.spec.ts', '_playground/**/*.spec.ts'],",
-  "    environment: 'node',",
-  '  },',
-  '});',
-  '',
-].join('\n');
+export function vitestConfig(pkg) {
+  const t = pkg.coverage;
+  if (!t) throw new Error(`${pkgName(pkg)} has no \`coverage\` in the registry — every package carries its ratchet.`);
+  const thresholds = `{ statements: ${t.statements}, branches: ${t.branches}, functions: ${t.functions}, lines: ${t.lines} }`;
+  return [
+    "import { defineConfig } from 'vitest/config';",
+    '',
+    '/**',
+    ' * Two suites, one runner.',
+    ' *',
+    ' * A spec under `src/` is the UNIT suite: does this unit behave as described.',
+    ' * A spec under `_playground/` is the PLAYGROUND: does everything this package',
+    ' * PUBLISHES work, wired the way a consumer wires it, against a repository shaped like',
+    ' * theirs.',
+    ' *',
+    ' * The second is not the first with more steps. A unit suite passes over a package whose',
+    ' * factory was renamed and never re-exported, because it imports the unit by path; the',
+    ' * playground imports the PACKAGE, so it cannot.',
+    ' *',
+    ' * `include` is pinned rather than left to the default, so the runner never picks up',
+    ' * compiled tests a build emitted into `dist`.',
+    ' *',
+    ' * COVERAGE IS A RATCHET, not a target: add the missing test, never lower a threshold.',
+    ' * Each number is the measurement minus one point, floored. Two runs of an unchanged',
+    ' * suite differ in the hundredths on the async paths, and a threshold nailed to the best',
+    ' * observation fails on a coin toss — a check that cries wolf stops being read.',
+    ' *',
+    ` * Measured ${t.measured}.`,
+    ' *',
+    ' * GENERATED from `scripts/registry.mjs`. Edit the registry.',
+    ' */',
+    'export default defineConfig({',
+    '  test: {',
+    "    // `_playground/*.spec.ts` and not `**`: a template's playground holds a stranger's",
+    "    // repository, and nothing in it is this package's test.",
+    "    include: ['src/**/*.spec.ts', '_playground/*.spec.ts'],",
+    "    environment: 'node',",
+    '    coverage: {',
+    "      provider: 'v8',",
+    "      include: ['src/**/*.ts'],",
+    '      // A spec and its helpers are the instrument, not the subject: counted, they',
+    '      // report themselves as covered and lift the number that gates real code.',
+    "      exclude: ['src/**/*.spec.ts', 'src/**/*.spec-helpers.ts'],",
+    "      reporter: ['text-summary', 'json-summary'],",
+    `      thresholds: ${thresholds},`,
+    '    },',
+    '  },',
+    '});',
+    '',
+  ].join('\n');
+}
 
 // ── tsup.config.ts ──────────────────────────────────────────────────────────────────
 
@@ -348,7 +382,7 @@ export function generated() {
     const dir = pkgDir(pkg);
     out.set(`${dir}/package.json`, manifest(pkg));
     out.set(`${dir}/tsconfig.json`, tsconfigFor(pkg));
-    out.set(`${dir}/vitest.config.ts`, VITEST_CONFIG);
+    out.set(`${dir}/vitest.config.ts`, vitestConfig(pkg));
     out.set(`${dir}/tsup.config.ts`, tsupConfig(pkg));
     out.set(`${dir}/README.md`, readme(pkg));
     out.set(`${dir}/LICENSE`, LICENSE);
@@ -358,6 +392,10 @@ export function generated() {
   // into one map so the drift check has ONE thing to compare and cannot audit half of
   // what the scaffolder writes.
   for (const [rel, text] of generatedSkillFiles()) out.set(rel, text);
+  // The index a model is handed. It was generated by a function nothing called, so the
+  // committed copy had already drifted from it — a missing guide, a stale description —
+  // the day it was first compared. In this map, `scaffold-drift` compares it like the rest.
+  out.set('llms.txt', generateLlmsIndex());
   return out;
 }
 

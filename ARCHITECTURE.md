@@ -1,11 +1,10 @@
 # specwarden
 
-The quality-gate harness, as a small monorepo, laid out the way lanka lays one out: an
-ENGINE that knows nothing about any repository, and packages beside it that know one
-thing each.
+The quality-gate harness, as a small monorepo: an ENGINE that knows nothing about any
+repository, and packages beside it that know one thing each.
 
 ```
-packages/specwarden/
+specwarden/
   core/            the engine — ports, primitives, the runner, the CLI, and only the
                    checks that verify the harness ITSELF (zones, ratchets, the rules)
   modules/         optional functionality a repository chooses
@@ -28,6 +27,7 @@ packages/specwarden/
     ops/           infrastructure — env files, proxy upstreams, shell scoping, runbooks
     openspec/      a repository specified with OpenSpec — the spec seam wired
     speckit/       a repository specified with Spec Kit — the spec seam wired
+  _playgrounds/    the ONE root playground: every package composed, through the CLI
 ```
 
 A TEMPLATE emits FILES — the same ordinary `checks/<family>/<id>.check.mjs` the engine
@@ -65,8 +65,10 @@ That test found three such breaks the day it was written, and three more when th
 landed — including two `.example` files that would have failed on the day somebody
 renamed them, which is the worst possible day.
 
-All eight produce a tree that is GREEN on `check --all` with nothing edited in between —
-verified end to end, per template, in a scratch directory.
+Every template produces a tree that is GREEN on `check --all` with nothing edited in between —
+over a repository of the kind it is for, which each template carries in its own
+`_playground/repository/`. The same proof plants one defect per check it wrote and requires
+exactly that check to go red; `_playgrounds/README.md` lists what that found on day one.
 
 **What decides where a check goes:** if it could be WRONG about a repository that has
 never heard of it, it is an opinion and it ships as a module. A documentation layout, a
@@ -81,7 +83,7 @@ that was wrong; all of it was someone else's opinion arriving unasked.
 
 Everything that knows THIS repository lives outside this folder, in `.specwarden/` at the
 root: the gate list, the check bodies configured with local facts, the declared rules, the
-perimeter and the ratchets. `scripts/README.md` states that boundary from the other side.
+perimeter and the ratchets. `.specwarden/README.md` states that boundary from the other side.
 
 ## Why it is shaped this way
 
@@ -90,7 +92,7 @@ heavy gate has a CI job" is true of any project with a gate list and a CI; "the 
 `ci.yml` and the arbiter is `ci-ok`" is true of exactly one. Keeping the first in `core/`
 and the second in a consumer's config is what makes the first REUSABLE, and it is enforced
 rather than trusted: the `zone-boundary` check fails a product source that names a host
-literal — `be/`, `fe/`, an ORM, a domain noun — anywhere, comments included.
+literal — a workspace path, an ORM, a domain noun — anywhere, comments included.
 
 A plugin sits between the two. NestJS conventions are not this project's and not the
 engine's: any codebase drawing the line "a module reaches the database through a repository"
@@ -106,9 +108,7 @@ never seen.
 
 ## How a file is placed
 
-Three rules, and they are the same three the rest of this repository already follows —
-`be/src/modules/**`, `adat-reports/_guard/`, and the lanka monorepo each arrived at
-them separately.
+Three rules, followed in every package here and checked where a machine can check them.
 
 **1. A unit gets a folder.** Not a file beside twenty siblings. The folder is
 kebab-case and named for the unit; the file inside repeats that name and adds the role:
@@ -170,7 +170,7 @@ was until you opened it. Those four are gone, and the rules above are what close
 | ------------------------------------------------------ | ------------------------------------------------------------------------- |
 | how the engine works, and how to add a check or a rule | `core/README.md`                                                          |
 | what a plugin may declare                              | `plugins/nestjs/src/nestjs/nestjs.plugin.ts` — the header is the contract |
-| where a repository's own facts go                      | `scripts/README.md` and `.specwarden/`                                    |
+| where a repository's own facts go                      | `.specwarden/README.md`                                                   |
 
 ## Speed
 

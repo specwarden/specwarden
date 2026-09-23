@@ -33,9 +33,9 @@ describe('scanCounts — the four classes', () => {
   });
 
   it('class 1: a threshold is exempt only in the documents the allowlist names', () => {
-    const allowed = [{ match: /\b15 files\b/i, paths: ['be/testing/README.md'] }];
+    const allowed = [{ match: /\b15 files\b/i, paths: ['server/testing/README.md'] }];
 
-    expect(claims('Split a directory at 15 files.', { file: 'be/testing/README.md', allowed })).toEqual([]);
+    expect(claims('Split a directory at 15 files.', { file: 'server/testing/README.md', allowed })).toEqual([]);
     expect(claims('Split a directory at 15 files.', { file: 'skills/x/SKILL.md', allowed })).toEqual(['15 files']);
   });
 

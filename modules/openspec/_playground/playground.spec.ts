@@ -22,25 +22,28 @@ const filesOf = (tree: Record<string, string>) => testContext({ tree }).files;
 
 /** A repository with OpenSpec installed and a capability described. */
 const INSTALLED: Record<string, string> = {
-  'openspec/specs/gaps/spec.md': [
-    '# gaps',
+  'openspec/specs/billing/spec.md': [
+    '# billing',
     '',
-    '### Requirement: The system SHALL freeze a pot once the round closes',
+    '### Requirement: The system SHALL freeze an invoice once the period closes',
     '',
-    'A frozen pot is forever.',
+    'A frozen invoice is never edited again.',
     '',
-    '### Requirement: The system SHALL refuse a second claim on one slot',
+    '### Requirement: The system SHALL refuse a second refund of one payment',
   ].join('\n'),
-  'openspec/changes/miniapp-337/tasks.md': ['# tasks', '', '- [x] write the migration', '- [ ] wire the gateway'].join(
-    '\n',
-  ),
+  'openspec/changes/add-invoice-freeze/tasks.md': [
+    '# tasks',
+    '',
+    '- [x] write the migration',
+    '- [ ] wire the gateway',
+  ].join('\n'),
 };
 
 /** The same repository before OpenSpec was ever installed. */
 const ABSENT: Record<string, string> = { 'README.md': '# a repository with no openspec tree\n' };
 
 /** Installed, described nothing. The state an empty list would render invisible. */
-const EMPTY: Record<string, string> = { 'openspec/specs/gaps/spec.md': '# gaps\n\nStill to be written.\n' };
+const EMPTY: Record<string, string> = { 'openspec/specs/billing/spec.md': '# billing\n\nStill to be written.\n' };
 
 describe('@specwarden/openspec', () => {
   it('reads requirements out of a capability, one id per heading', () => {
@@ -50,8 +53,8 @@ describe('@specwarden/openspec', () => {
     expect(result.items).toHaveLength(2);
     // Prefixed by the capability, because OpenSpec identifies a requirement by its
     // wording and two capabilities may word one the same way.
-    expect(result.items[0]?.id).toMatch(/^gaps#/);
-    expect(result.items[0]?.statement).toContain('freeze a pot');
+    expect(result.items[0]?.id).toMatch(/^billing#/);
+    expect(result.items[0]?.statement).toContain('freeze an invoice');
   });
 
   it('reads tasks, and which of them are done', () => {
@@ -81,7 +84,7 @@ describe('@specwarden/openspec', () => {
   });
 
   it('a fork that words its headings differently says so, instead of going silent', () => {
-    const tree = { 'openspec/specs/gaps/spec.md': '## Rule: the pot is frozen once the round closes\n' };
+    const tree = { 'openspec/specs/billing/spec.md': '## Rule: an invoice is frozen once the period closes\n' };
 
     expect(openspec().requirements(filesOf(tree)).items).toEqual([]);
     expect(

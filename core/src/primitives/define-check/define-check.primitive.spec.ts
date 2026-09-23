@@ -7,7 +7,7 @@ import { type TCheckOutcome, defineCheck } from './define-check.primitive';
 /**
  * What is pinned here is everything a check body would otherwise have written for
  * itself — and every one of these cases is a shape that was written by hand, wrongly
- * or inconsistently, somewhere in the first consumer's check corpus.
+ * or inconsistently, somewhere in a corpus of hand-written checks.
  */
 
 const error = (message: string, over: Partial<IFinding> = {}): IFinding => ({ severity: 'error', message, ...over });

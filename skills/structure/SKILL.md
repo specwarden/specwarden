@@ -81,7 +81,7 @@ consumer wants one import and a config file.
 1. an entry in `scripts/registry.mjs` — kind, description, summary, deps;
 2. `pnpm scaffold` — the manifest, the tsconfig, the build config, the README and the
    licence are written for you;
-3. `src/index.ts` and the code;
+3. `<pkg>/src/index.ts` and the code;
 4. a changeset, when it is user-visible.
 
 Do **not** hand-write a `package.json`. It is generated, `pnpm check:drift` fails when it

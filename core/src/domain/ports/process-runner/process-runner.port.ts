@@ -1,9 +1,8 @@
 /**
  * The subprocess port. A check that shells out (a linter, a compiler) does it
  * through this, and only if it declared the `exec` capability — the engine hands
- * a non-`exec` check a runner whose `run` throws. Synchronous, matching the
- * legacy guards and keeping the runner's output order deterministic for golden
- * comparison; a future async need is a reason to revise the port, which is
+ * a non-`exec` check a runner whose `run` throws. Synchronous, keeping the
+ * runner's output order deterministic for golden comparison; a future async need is a reason to revise the port, which is
  * declared temporary until three guards have driven it.
  */
 export interface IProcessOptions {

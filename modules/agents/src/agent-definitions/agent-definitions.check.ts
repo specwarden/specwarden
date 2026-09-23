@@ -55,7 +55,17 @@ export function agentDefinitions(options: IAgentDefinitionsOptions): ICheck {
       return { ok: true, findings: [{ severity: 'info', message: `no ${options.agentsDir}, nothing to verify` }] };
     }
 
-    for (const entry of ctx.files.list(options.agentsDir).filter((f) => f.endsWith('.md'))) {
+    const definitions = ctx.files.list(options.agentsDir).filter((f) => f.endsWith('.md'));
+    // Empty is valid too — a folder made before its first role — but a blank pass reads as
+    // "every definition is sound", so it says it read none.
+    if (definitions.length === 0) {
+      return {
+        ok: true,
+        findings: [{ severity: 'info', message: `no agent definition in ${options.agentsDir}, nothing to verify` }],
+      };
+    }
+
+    for (const entry of definitions) {
       const rel = `${options.agentsDir}/${entry}`;
       const fields = parseFrontmatter(ctx.files.read(rel));
       if (!fields) {

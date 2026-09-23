@@ -7,10 +7,9 @@ import type { ICliIo } from '../_shared/cli-io/cli-io.model';
  * WHAT IT IS FOR. Adding a check is four edits in four places: the body, a test for
  * it, a rule saying what it enforces, and — if it is ratcheted — a threshold file.
  * Nothing about that is hard, and all of it is easy to get subtly wrong the first
- * time. Measured in the first consumer: sixteen check files hand-wrote the identity
- * ceremony, one of them froze the contract version as a literal, 34 findings named
- * their rule and the rest did not, and 23 tests were written without touching the
- * engine's own testing kit. Every one of those is a default, and a scaffold is where
+ * time: the identity ceremony hand-written, the contract version frozen as a literal,
+ * findings that name their rule beside findings that do not, a test that never touches
+ * the engine's own testing kit. Every one of those is a default, and a scaffold is where
  * a default is cheapest to set.
  *
  * WHAT IT WRITES, and what it deliberately does not. It writes the body and its test,

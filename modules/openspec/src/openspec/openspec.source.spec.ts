@@ -87,3 +87,62 @@ describe('requirements', () => {
     expect(result.items).toEqual([{ id: 'x#moved', statement: 'moved' }]);
   });
 });
+
+describe('what the source could see', () => {
+  it('skips a capability folder with no spec file, and still reads the others', () => {
+    const result = openspec().requirements(
+      new InMemoryFileSource({
+        'openspec/specs/drafts/notes.md': '### Requirement: not in a spec file\n',
+        'openspec/specs/auth/spec.md': '### Requirement: A session SHALL expire\n',
+      }),
+    );
+
+    expect(result.items.map((i) => i.id)).toEqual(['auth#a-session-shall-expire']);
+  });
+
+  it('skips a change with no tasks.md, and still reads the others', () => {
+    const result = openspec().tasks(
+      new InMemoryFileSource({
+        'openspec/changes/idea/proposal.md': '- [ ] not a task list',
+        'openspec/changes/add-x/tasks.md': '- [ ] the one task',
+      }),
+    );
+
+    expect(result.items).toEqual([{ id: 'add-x#1', title: 'the one task', done: false }]);
+  });
+
+  it('reports found-but-empty TASKS with a note too — a bare empty list reads as "all done"', () => {
+    // The contract `requirements()` was fixed to keep, which `tasks()` still broke:
+    // `{ found: true, items: [] }` and nothing else, for a changes folder with no task.
+    const result = openspec().tasks(new InMemoryFileSource({ 'openspec/changes/idea/proposal.md': '# idea' }));
+
+    expect(result.found).toBe(true);
+    expect(result.items).toEqual([]);
+    expect(result.note).toContain('holds no task checkbox');
+  });
+
+  it('carries no note when tasks were found', () => {
+    const result = openspec().tasks(new InMemoryFileSource({ 'openspec/changes/a/tasks.md': '- [x] done' }));
+
+    expect(result.note).toBeUndefined();
+  });
+
+  it('reads EVERY heading with a `/g` grammar, not every second one', () => {
+    // `exec` on a global regex resumes from `lastIndex`; carried from one line into the
+    // next it made alternate headings invisible — and an invisible requirement is one the
+    // reconciliation never proposes an invariant for.
+    const result = openspec({ requirementHeading: /^###\s+Requirement:\s*(.+?)\s*$/g }).requirements(
+      new InMemoryFileSource({
+        'openspec/specs/x/spec.md': ['### Requirement: one', '### Requirement: two', '### Requirement: three'].join(
+          '\n',
+        ),
+      }),
+    );
+
+    expect(result.items.map((i) => i.statement)).toEqual(['one', 'two', 'three']);
+  });
+
+  it('names itself, so a reconciliation can say which source found nothing', () => {
+    expect(openspec().name).toBe('openspec');
+  });
+});

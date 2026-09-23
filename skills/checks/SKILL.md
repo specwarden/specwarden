@@ -38,7 +38,14 @@ Not optional where it applies. Each is one line, and each closes a whole family:
 - **`expect` / `refuse`** on `commandCheck` — what the output must contain for a zero
   exit to be believed, and the phrases a tool prints when it silently did nothing.
 
-None is on by default, because only the check knows what its own corpus should look like.
+On `defineCheck` and `commandCheck` none is on by default, because only the check knows what
+its own corpus should look like. **The primitives are the exception**: `forbidPattern`,
+`forbidImport`, `referencesResolve`, `sourcesAgree` and `zoneBoundary` refuse an empty
+corpus by default and print how many files a clean pass examined, because their corpus IS
+their one glob — and every one of them passed in silence over a glob that matched nothing,
+which made the things sold as the cure the place the defect lived. A consumer who expects an
+empty set says so: `corpus: { atLeast: 0 }`.
+
 All of them are cheaper than the incident.
 
 ## 4. Read the world only through the ports

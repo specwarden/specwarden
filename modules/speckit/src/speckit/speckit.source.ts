@@ -66,7 +66,15 @@ export function speckit(options: ISpeckitOptions = {}): ISpecSource {
           if (m) items.push({ id: `${feature}#${m[1]}`, statement: m[2] });
         }
       }
-      return { found: true, items };
+      // Found, and empty, says so: a bare empty list is what a requirement format that
+      // drifted from `- **FR-001**: …` looks like, and it reads as "nothing to reconcile".
+      return items.length > 0
+        ? { found: true, items }
+        : {
+            found: true,
+            items,
+            note: `${root}/ holds no requirement line (\`- **FR-001**: …\`) in any \`${specFile}\` — nothing to reconcile against.`,
+          };
     },
 
     tasks(files: IFileSource): ISpecSourceResult<ISpecTask> {
@@ -84,7 +92,9 @@ export function speckit(options: ISpeckitOptions = {}): ISpecSource {
           items.push({ id: `${feature}#${n}`, title: m[2], done: m[1].toLowerCase() === 'x' });
         }
       }
-      return { found: true, items };
+      return items.length > 0
+        ? { found: true, items }
+        : { found: true, items, note: `${root}/ holds no task checkbox in any \`${tasksFile}\` yet.` };
     },
   };
 }

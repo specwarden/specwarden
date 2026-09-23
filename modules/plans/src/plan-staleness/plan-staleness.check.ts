@@ -95,15 +95,27 @@ export const DEFAULT_ARCHIVE_HEADER: readonly IArchiveHeaderField[] = [
 
 const lastGroup = (match: RegExpExecArray | null): string | undefined => (match ? match[match.length - 1] : undefined);
 
+/**
+ * A consumer's declaration regex without `g` or `y`. Either flag makes `exec` and `test`
+ * resume from `lastIndex`, which survives from one plan to the next: with `/g`, every
+ * second plan's status read as undeclared and every second archive entry as missing a
+ * field it carried.
+ */
+const stateless = (re: RegExp): RegExp =>
+  re.global || re.sticky ? new RegExp(re.source, re.flags.replace(/[gy]/g, '')) : re;
+
 export function planStaleness(options: IPlanStalenessOptions): ICheck {
   const ratchet = options.undeclaredStatusRatchet ?? 0;
   // Resolved once, here, so every use below reads one name rather than repeating a
   // fallback — and a house convention passed in wins over the default silently, which
   // is the only place a default should ever be invisible.
-  const branchDeclaration = options.branchDeclaration ?? DEFAULT_BRANCH_DECLARATION;
-  const statusDeclaration = options.statusDeclaration ?? DEFAULT_STATUS_DECLARATION;
+  const branchDeclaration = stateless(options.branchDeclaration ?? DEFAULT_BRANCH_DECLARATION);
+  const statusDeclaration = stateless(options.statusDeclaration ?? DEFAULT_STATUS_DECLARATION);
   const activeStatuses = options.activeStatuses ?? DEFAULT_ACTIVE_STATUSES;
-  const archiveHeader = options.archiveHeader ?? DEFAULT_ARCHIVE_HEADER;
+  const archiveHeader = (options.archiveHeader ?? DEFAULT_ARCHIVE_HEADER).map((field) => ({
+    ...field,
+    pattern: stateless(field.pattern),
+  }));
   const mayCiteArchive = options.mayCiteArchive ?? [`${options.plansDir}/README.md`, `${options.archiveDir}/README.md`];
 
   return {
@@ -197,7 +209,7 @@ export function planStaleness(options: IPlanStalenessOptions): ICheck {
       }
 
       const archiveLink = new RegExp(`${options.archiveDir.replace(/[/\\]/g, '[/\\\\]')}\\/([\\w.-]+)\\.md`, 'g');
-      for (const file of ctx.vcs.trackedFiles('*.md')) {
+      for (const file of ctx.vcs.trackedFiles('**/*.md')) {
         if (file.startsWith(`${options.archiveDir}/`)) continue;
         if (mayCiteArchive.includes(file)) continue;
         const source = ctx.files.tryRead(file);

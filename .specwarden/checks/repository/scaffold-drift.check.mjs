@@ -7,7 +7,8 @@
  */
 import { defineCheck } from 'specwarden';
 
-import { generated, withPackageTable } from '../../../scripts/scaffold.mjs';
+import { driftProblems } from '../../../scripts/check-scaffold-drift.mjs';
+import { generated } from '../../../scripts/scaffold.mjs';
 
 export const check = defineCheck({
   id: 'scaffold-drift',
@@ -25,36 +26,16 @@ export const check = defineCheck({
   when: { under: ['scripts/', 'core/', 'modules/', 'plugins/', 'templates/'], ending: ['README.md'] },
   hint: 'Change `scripts/registry.mjs` and run `pnpm scaffold`. A direct edit to a generated file does not survive the next run.',
   run: (ctx) => {
-    const findings = [];
     const files = generated();
-
-    for (const [rel, expected] of files) {
-      const actual = ctx.files.tryRead(rel);
-      if (actual === undefined) {
-        findings.push({ severity: 'error', file: rel, message: `${rel} is missing — run \`pnpm scaffold\`.` });
-        continue;
-      }
-      if (actual === expected) continue;
-      const a = actual.split('\n');
-      const b = expected.split('\n');
-      const at = a.findIndex((line, i) => line !== b[i]);
-      findings.push({
-        severity: 'error',
-        file: rel,
-        line: at + 1,
-        message: `${rel} differs from the registry at line ${at + 1}: committed ${JSON.stringify(a[at] ?? '(end)')}, generated ${JSON.stringify(b[at] ?? '(end)')}.`,
-      });
-    }
-
-    const readme = ctx.files.tryRead('README.md');
-    if (readme !== undefined && withPackageTable(readme) !== readme) {
-      findings.push({
-        severity: 'error',
-        file: 'README.md',
-        message: 'the package table is out of date — run `pnpm scaffold`.',
-      });
-    }
-
+    // ONE definition of drift, shared with `node scripts/check-scaffold-drift.mjs`. This
+    // body used to carry its own copy, and the copy kept a bug the script had fixed: a file
+    // differing only by a dropped final newline was reported at "line 0", naming nothing.
+    const findings = driftProblems(files, (rel) => ctx.files.tryRead(rel)).map((problem) => ({
+      severity: 'error',
+      file: problem.slice(0, problem.indexOf(':')),
+      line: Number(/at line (\d+)/.exec(problem)?.[1]) || undefined,
+      message: problem.replace(/\n\s+/g, ' — '),
+    }));
     return { findings, examined: files.size, unit: 'generated file(s)' };
   },
 });

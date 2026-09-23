@@ -31,7 +31,7 @@ import { type TWhen, buildCheck, frameTolerated, resolveWhen } from '../_shared'
  * WHEN TO REACH FOR `defineCheck` INSTEAD. This adapter exists to carry a function that
  * already exists, in the shape it already has, and it flattens everything to an `error`
  * with no line number. A check written new wants findings — severities, locations, an
- * examined count — and `defineCheck` takes those. Sixteen checks in the first consumer
+ * examined count — and `defineCheck` takes those. Sixteen checks in a corpus of real ones
  * abandoned this adapter for a hand-written object literal, and every one of them did so
  * for something the literal could express and this could not.
  */

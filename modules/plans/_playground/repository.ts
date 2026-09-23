@@ -15,25 +15,25 @@ const plan = (body: string): string => body;
 
 const LIVE_PLAN = plan(
   [
-    '# MINIAPP-337 — meetings and results',
+    '# PLAT-337 — burst allowance',
     '',
     '**Status:** active',
-    '**Branch:** miniapp-337_meetings-and-results',
+    '**Branch:** plat-337_burst-allowance',
     '',
-    '### Decision: results are ticked, never typed',
+    '### Decision: the limit is per tenant, never global',
     '',
-    '- Rejected: a free-text amount field — a typed number reconciles against nothing, and the',
-    '  round has to close on a total that the row already knows.',
+    '- Rejected: one global bucket — a noisy tenant would spend every quiet tenant’s',
+    '  allowance, and the one who complains is never the one who caused it.',
     '',
-    '## Phase 1 — the row becomes the tick',
+    '## Phase 1 — the bucket',
     '',
-    'The read screen mirrors the form.',
+    'The bucket refills at a fixed rate.',
     '',
     '```bash',
     'pnpm gate --id unit',
     '```',
     '',
-    '## Phase 2 — the results table',
+    '## Phase 2 — per tenant',
     '',
     '```bash',
     'pnpm gate --id typecheck',
@@ -43,20 +43,20 @@ const LIVE_PLAN = plan(
 
 /** An archived plan carrying the header that makes it readable years later. */
 const ARCHIVED_PLAN = [
-  '# MINIAPP-266 — the back-navigation facade',
+  '# PLAT-266 — the retry budget',
   '',
   '**Started:** 2026-05-04',
   '**Finished:** 2026-06-18',
-  '**Branch:** miniapp-266_back-facade',
-  '**Harvested:** the facade contract moved into src/NAVIGATION_MODULE.md',
-  '**Left open:** the Android hardware-back case on a full-screen route',
+  '**Branch:** plat-266_retry-budget',
+  '**Harvested:** the retry contract moved into src/RETRY_MODULE.md',
+  '**Left open:** a per-tenant override for the budget',
 ].join('\n');
 
 /** A repository whose plans folder satisfies all three checks. */
 export const CLEAN: Record<string, string> = {
-  'docs/_plans/MINIAPP-337-meetings-and-results.md': LIVE_PLAN,
+  'docs/_plans/PLAT-337-burst-allowance.md': LIVE_PLAN,
   'docs/_plans/README.md': 'The contract for this folder. See [the archive](../_archive/README.md).\n',
-  'docs/_archive/MINIAPP-266-back-facade.md': ARCHIVED_PLAN,
+  'docs/_archive/PLAT-266-retry-budget.md': ARCHIVED_PLAN,
   'docs/_archive/README.md': 'What an archived plan must carry.\n',
 };
 
@@ -71,17 +71,17 @@ export const BROKEN: Record<string, string> = {
   //             a phase with no acceptance command has no definition of done.
   // decision-log-shape: a rejection with no reason — precisely the fact that lives only
   // in the plan and is lost when it is archived without harvest.
-  'docs/_plans/MINIAPP-337-meetings-and-results.md': [
-    '# MINIAPP-337 — meetings and results',
+  'docs/_plans/PLAT-337-burst-allowance.md': [
+    '# PLAT-337 — burst allowance',
     '',
     '**Status:** active',
-    '**Branch:** miniapp-337_merged-and-deleted',
+    '**Branch:** plat-337_merged-and-deleted',
     '',
-    '### Decision: results are ticked, never typed',
+    '### Decision: the limit is per tenant, never global',
     '',
-    '- Rejected: a free-text amount field',
+    '- Rejected: one global bucket',
     '',
-    '## Phase 1 — the row becomes the tick',
+    '## Phase 1 — the bucket',
     '',
     'Roughly 6 hours of work.',
     '',
@@ -89,20 +89,20 @@ export const BROKEN: Record<string, string> = {
     'pnpm gate --id no-such-gate',
     '```',
     '',
-    '## Phase 2 — the results table',
+    '## Phase 2 — per tenant',
     '',
     'No command says when this is finished.',
   ].join('\n'),
   'docs/_plans/README.md': 'The contract for this folder.\n',
   // plan-staleness: an archive entry that does not say what was harvested and what was
   // left open is a slower delete — the reader cannot tell how far to trust it.
-  'docs/_archive/MINIAPP-266-back-facade.md': '# MINIAPP-266 — the back-navigation facade\n\nDone.\n',
+  'docs/_archive/PLAT-266-retry-budget.md': '# PLAT-266 — the retry budget\n\nDone.\n',
   'docs/_archive/README.md': 'What an archived plan must carry.\n',
 };
 
 /** The branches this checkout can resolve. The live plan's branch is here; the broken
  * one's is not, which is the whole of the staleness case. */
-export const BRANCHES = ['main', 'miniapp-337_meetings-and-results'];
+export const BRANCHES = ['main', 'plat-337_burst-allowance'];
 
 /** The check ids a plan's acceptance may name — the run's own roster, in a real run. */
 export const KNOWN_GATE_IDS = ['unit', 'typecheck', 'lint'];

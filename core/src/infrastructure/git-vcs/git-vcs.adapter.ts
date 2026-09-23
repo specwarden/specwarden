@@ -1,4 +1,5 @@
 import type { IProcessRunner, IVcs } from '../../domain';
+import { asGitGlob } from './git-pathspec/git-pathspec.util';
 
 /**
  * Git behind the VCS port. It runs git through the process port rather than
@@ -97,8 +98,14 @@ export class GitVcs implements IVcs {
     return [`${oldest}^`, 'HEAD'];
   }
 
+  /**
+   * Always in git's GLOB mode. Git's default pathspec lets `*` cross directories and reads
+   * `**` as two of them, so `**\/*.md` skipped every root document and `src/**\/*.ts`
+   * skipped `src/index.ts` — while every test ran against a globstar reading and passed.
+   * `git-pathspec.util.ts` owns the meaning; the contract spec holds both sides to it.
+   */
   trackedFiles(pathspec?: string): readonly string[] {
-    const args = pathspec !== undefined ? ['ls-files', pathspec] : ['ls-files'];
+    const args = pathspec ? ['ls-files', '--', asGitGlob(pathspec)] : ['ls-files'];
     const r = this.proc.run('git', args, { cwd: this.cwd });
     return r.status === 0 ? this.lines(r.stdout) : [];
   }

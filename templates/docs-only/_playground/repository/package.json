@@ -1,0 +1,11 @@
+{
+  "name": "northwind-handbook",
+  "version": "1.4.0",
+  "private": true,
+  "description": "How the Northwind platform team works: onboarding, runbooks, decisions.",
+  "devDependencies": {
+    "@specwarden/docs": "^0.1.0",
+    "@specwarden/template-docs-only": "^0.1.0",
+    "specwarden": "^0.1.0"
+  }
+}

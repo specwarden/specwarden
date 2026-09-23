@@ -1,0 +1,15 @@
+services:
+  proxy:
+    image: nginx:1.27
+    volumes:
+      - ./deploy/nginx/upstreams.conf:/etc/nginx/conf.d/upstreams.conf:ro
+    ports:
+      - '443:443'
+    depends_on:
+      - api
+  api:
+    image: ghcr.io/harbor/api:${API_TAG}
+    env_file: .env
+  worker:
+    image: ghcr.io/harbor/worker:${API_TAG}
+    env_file: .env

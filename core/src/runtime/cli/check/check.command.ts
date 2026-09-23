@@ -82,6 +82,14 @@ export async function check(
   io: ICliIo,
 ): Promise<number> {
   if (args.list) {
+    // An id that names nothing is refused here exactly as a run refuses it. It was dropped
+    // in silence, so `--list --id typo` printed nothing and exited 0 — a listing that
+    // could not tell a missing check from an empty selection.
+    const unknown = args.ids.filter((id) => registry.byId(id) === undefined);
+    if (unknown.length > 0) {
+      io.err(`unknown check id(s): ${unknown.join(', ')}\n`);
+      return 2;
+    }
     const selected: readonly ICheck[] = args.ids.length
       ? args.ids.map((id) => registry.byId(id)).filter((c): c is ICheck => c !== undefined)
       : args.tier

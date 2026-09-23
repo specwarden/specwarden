@@ -27,7 +27,7 @@ export function ruleOwnerFindings(
 ): readonly IFinding[] {
   const findings: IFinding[] = [];
   for (const rule of rules) {
-    // An owner may be a path plus a section (`AGENTS.md § Migration Rule`); check the path.
+    // An owner may be a path plus a section (`AGENTS.md § Releases`); check the path.
     const path = rule.owner.split('§')[0].split(' ')[0].trim();
     if (path.includes('/') || path.endsWith('.md')) {
       if (!files.exists(path)) {

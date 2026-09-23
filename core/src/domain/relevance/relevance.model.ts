@@ -3,11 +3,11 @@
  *
  * A `when` is the quietest thing in a check. It decides whether the check runs at
  * all, it is never itself checked, and when it is wrong the symptom is a green run
- * — which is the failure mode this whole engine exists against. Measured in the
- * first consumer: 36 of 86 predicates were one of two shapes ("a path under this
- * prefix" / "a file matching this pattern"), all of them hand-written against two
- * helpers the consumer had to author and maintain itself, in a file that also had to
- * re-derive the repository root and got that wrong in ten check bodies at once.
+ * — which is the failure mode this whole engine exists against. Most predicates are one
+ * of two shapes ("a path under this prefix" / "a file matching this pattern"), and
+ * hand-written each time they need helpers the consumer has to author and maintain,
+ * in a file that also has to re-derive the repository root — the part that goes wrong
+ * in every body at once.
  *
  * So the two shapes are declarable, the helpers ship with the engine, and a
  * predicate remains available for everything else — an escape hatch, not the default

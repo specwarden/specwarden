@@ -20,9 +20,13 @@ pnpm-lock.yaml
 LICENSE
 **/LICENSE
 llms.txt
-_playgrounds/
 CLAUDE.md
 README.md
 
 # Scratch trees a template test writes and deletes.
 **/.tmp-generated-*/
+
+# A template playground's REPOSITORY is a stranger's tree: its formatting is theirs, and its
+# `.specwarden/` is written by `init` and compared byte for byte by the `playgrounds` gate —
+# a file prettier reflowed there would fail that gate on the next run.
+**/_playground/repository/

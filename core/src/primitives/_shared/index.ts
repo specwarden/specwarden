@@ -14,6 +14,8 @@
  */
 export { buildCheck } from './build-check/build-check.util';
 export { frameTolerated, verdictFrom } from './verdict/verdict.util';
+export { belowCorpusFloor, examinedNote, withExaminedNote } from './corpus-floor/corpus-floor.util';
+export type { ICorpusFloor } from './corpus-floor/corpus-floor.util';
 export { readAll, readTracked } from './corpus/corpus.util';
 export type { IDocument } from './corpus/corpus.util';
 export { changedContaining, changedEnding, changedUnder, resolveWhen } from '../../domain';

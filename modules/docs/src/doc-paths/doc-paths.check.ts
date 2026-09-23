@@ -1,10 +1,11 @@
 import type { ICheck, ICheckIdentity, IFinding } from 'specwarden';
 import { buildCheck, lineOf, verdictFrom } from 'specwarden';
+import { nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
 
 export interface IDocPathsOptions extends ICheckIdentity {
-  /** git pathspec selecting the documentation corpus (e.g. `*.md`). Tracked files
-   * only, exactly as the legacy guard's `git ls-files` — a filesystem glob would
-   * pull in node_modules and generated trees. */
+  /** git pathspec selecting the documentation corpus (e.g. `**\/*.md`). Tracked files
+   * only, as `git ls-files` lists them — a filesystem glob would pull in node_modules
+   * and generated trees. */
   readonly docs: string;
   /** Directory prefixes whose documents are skipped — snapshots and archives that
    * quote dead paths as their subject, and generated trees verified elsewhere. */
@@ -15,10 +16,10 @@ export interface IDocPathsOptions extends ICheckIdentity {
   /** Workspace-root prefixes a document may legitimately omit, tried in addition to
    * the document's own directory and every ancestor of it. */
   readonly prefixes?: readonly string[];
-  /** Sibling-checkout prefixes (`adat-reports/`) a document may point into. Those
-   * live OUTSIDE this repository, so the engine cannot see them; a reference into
-   * one is assumed to resolve — matching the legacy guard's behaviour when the
-   * sibling is not checked out. A scoped-package specifier (`@scope/pkg/…`, three
+  /** Sibling-checkout prefixes (`reports/`) a document may point into. Those live
+   * OUTSIDE this repository, so the engine cannot see them; a reference into one is
+   * assumed to resolve, because the sibling is usually not checked out beside it and
+   * "cannot see" must not become "does not exist". A scoped-package specifier (`@scope/pkg/…`, three
    * or more segments) is treated the same way: it names a file in an installed
    * package, not in this tree. */
   readonly externalPrefixes?: readonly string[];
@@ -61,8 +62,11 @@ export function docPaths(options: IDocPathsOptions): ICheck {
 
   return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx) => {
     const findings: IFinding[] = [];
-    for (const file of ctx.vcs.trackedFiles(options.docs)) {
-      if (skipDirs.some((d) => file.startsWith(d))) continue;
+    // What is SCANNED, after the skipped trees: a skip list that swallowed the whole corpus
+    // leaves this check as unable to fail as a pathspec that matched nothing.
+    const corpus = ctx.vcs.trackedFiles(options.docs).filter((file) => !skipDirs.some((d) => file.startsWith(d)));
+    if (corpus.length === 0) return nothingExamined(options.id, options.docs);
+    for (const file of corpus) {
       const content = ctx.files.read(file);
       const dir = file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '';
       const ws = file.split('/')[0];

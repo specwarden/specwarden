@@ -1,0 +1,35 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      '@specwarden/docs':
+        specifier: link:../../../../modules/docs
+        version: link:../../../../modules/docs
+      '@specwarden/ops':
+        specifier: link:../../../../modules/ops
+        version: link:../../../../modules/ops
+      '@specwarden/security':
+        specifier: link:../../../../modules/security
+        version: link:../../../../modules/security
+      '@specwarden/template-monorepo':
+        specifier: link:../..
+        version: link:../..
+      specwarden:
+        specifier: link:../../../../core
+        version: link:../../../../core
+
+  packages/api:
+    dependencies:
+      '@acme/money':
+        specifier: workspace:*
+        version: link:../money
+
+  packages/money: {}
+
+  packages/web: {}

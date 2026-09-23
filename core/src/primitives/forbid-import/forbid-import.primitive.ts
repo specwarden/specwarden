@@ -1,9 +1,21 @@
 import type { ICheck, ICheckIdentity, IFinding } from '../../domain';
-import { IMPORT_RE, buildCheck, lineOf, matchesSpecifier, verdictFrom } from '../_shared';
+import {
+  type ICorpusFloor,
+  IMPORT_RE,
+  belowCorpusFloor,
+  buildCheck,
+  withExaminedNote,
+  lineOf,
+  matchesSpecifier,
+  verdictFrom,
+} from '../_shared';
 
 export interface IForbidImportOptions extends ICheckIdentity {
   /** Glob of files the ban applies to. */
   readonly from: string;
+  /** How many files `from` must match for a verdict to count. Defaults to one: a ban
+   * over zero files bans nothing, and it passed in silence before this existed. */
+  readonly corpus?: ICorpusFloor;
   /** The forbidden module: a string (exact, or a prefix when followed by `/`) or a
    * RegExp tested against the import specifier. */
   readonly to: string | RegExp;
@@ -18,9 +30,17 @@ export interface IForbidImportOptions extends ICheckIdentity {
 export function forbidImport(options: IForbidImportOptions): ICheck {
   return buildCheck(options, ['read'], (ctx) => {
     const exempt = new Set((options.except ?? []).flatMap((g) => ctx.files.glob(g)));
+    const files = ctx.files.glob(options.from).filter((file) => !exempt.has(file));
+    const short = belowCorpusFloor(
+      options.id,
+      files.length,
+      options.corpus,
+      `\`${options.from}\` matched nothing to scan`,
+    );
+    if (short) return short;
+
     const findings: IFinding[] = [];
-    for (const file of ctx.files.glob(options.from)) {
-      if (exempt.has(file)) continue;
+    for (const file of files) {
       const content = ctx.files.read(file);
       for (const m of content.matchAll(IMPORT_RE)) {
         if (matchesSpecifier(m[1], options.to)) {
@@ -34,6 +54,6 @@ export function forbidImport(options: IForbidImportOptions): ICheck {
         }
       }
     }
-    return verdictFrom(findings, ctx.ratchet ?? options.ratchet);
+    return verdictFrom(withExaminedNote(findings, options.id, files.length), ctx.ratchet ?? options.ratchet);
   });
 }

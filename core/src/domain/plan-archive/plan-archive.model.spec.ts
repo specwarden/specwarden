@@ -7,7 +7,7 @@ describe('parseHarvest', () => {
   it('reads "what → where" entries and detects bare claims', () => {
     const text = [
       '## Harvest',
-      '- the context-bag decision → be/ARCHITECTURE.md',
+      '- the request-scope decision → server/ARCHITECTURE.md',
       '- Harvested: yes',
       '## Next',
       '- not in the section → nowhere.md',
@@ -15,7 +15,7 @@ describe('parseHarvest', () => {
     const h = parseHarvest(text);
     expect(h.present).toBe(true);
     expect(h.entries).toHaveLength(1); // the entry after "## Next" is outside the section
-    expect(h.entries[0]).toMatchObject({ what: 'the context-bag decision', where: 'be/ARCHITECTURE.md' });
+    expect(h.entries[0]).toMatchObject({ what: 'the request-scope decision', where: 'server/ARCHITECTURE.md' });
     expect(h.bareClaims).toHaveLength(1);
   });
 
@@ -25,10 +25,10 @@ describe('parseHarvest', () => {
 });
 
 describe('archiveReadiness', () => {
-  const files = new InMemoryFileSource({ 'be/ARCHITECTURE.md': '# arch', 'AGENTS.md': '# router' });
+  const files = new InMemoryFileSource({ 'server/ARCHITECTURE.md': '# arch', 'AGENTS.md': '# router' });
 
   it('is ready when every destination resolves', () => {
-    const r = archiveReadiness('## Harvest\n- x → be/ARCHITECTURE.md\n- y → AGENTS.md § Rules\n', files);
+    const r = archiveReadiness('## Harvest\n- x → server/ARCHITECTURE.md\n- y → AGENTS.md § Rules\n', files);
     expect(r.ready).toBe(true);
     expect(r.reasons).toEqual([]);
   });

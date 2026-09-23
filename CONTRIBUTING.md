@@ -18,16 +18,18 @@ installs with.
 
 ## The shape of the repository
 
-| Where               | What                                                        |
-| ------------------- | ----------------------------------------------------------- |
-| `core/`             | the engine. Depends on nothing                              |
-| `modules/<name>/`   | opinions a repository chooses                               |
-| `plugins/<name>/`   | one stack's conventions                                     |
-| `templates/<name>/` | starting trees; `_parts/` is what they are assembled from   |
-| `_playgrounds/`     | one scaffolded repository per template, committed and green |
-| `skills/`           | the canon — one folder per rule                             |
-| `scripts/`          | the executable half of the canon, plus the package registry |
-| `.specwarden/`      | this repository, checked by the engine                      |
+| Where                | What                                                                           |
+| -------------------- | ------------------------------------------------------------------------------ |
+| `core/`              | the engine. Depends on nothing                                                 |
+| `modules/<name>/`    | opinions a repository chooses                                                  |
+| `plugins/<name>/`    | one stack's conventions                                                        |
+| `templates/<name>/`  | starting trees; `_parts/` is what they are assembled from                      |
+| `<pkg>/_playground/` | each package proved as a consumer uses it; a template's over a real repository |
+| `_playgrounds/`      | the ONE root playground: every package composed, through the CLI               |
+| `.changeset/`        | pending changesets — how a version is cut                                      |
+| `skills/`            | the canon — one folder per rule                                                |
+| `scripts/`           | the executable half of the canon, plus the package registry                    |
+| `.specwarden/`       | this repository, checked by the engine                                         |
 
 `AGENTS.md` routes to the rule that owns each decision. Read it before the first change.
 
@@ -37,11 +39,13 @@ Nothing below is edited by hand:
 
 - every package's `package.json`, `tsconfig.json`, `tsup.config.ts`, `README.md`, `LICENSE`
 - the package table in the root `README.md`
-- every `.claude-plugin/plugin.json` and the marketplace listing them
+- every `<pkg>/.claude-plugin/plugin.json` and the marketplace listing them
 - `CLAUDE.md`
-- every tree under `_playgrounds/`
+- `llms.txt`
+- every `templates/<name>/_playground/repository/.specwarden/`
 
-Change `scripts/registry.mjs` (or the template, for a playground) and run `pnpm scaffold`.
+Change `scripts/registry.mjs` and run `pnpm scaffold` — or, for a template playground, change
+the template and run `node scripts/playgrounds.mjs --write <name>`.
 A direct edit does not survive the next run — which is why the window between the edit and
 that run is closed by a gate rather than by memory.
 
@@ -49,7 +53,7 @@ that run is closed by a gate rather than by memory.
 
 1. an entry in `scripts/registry.mjs` — kind, description, summary, deps;
 2. `pnpm scaffold`;
-3. `src/index.ts` and the code;
+3. `<pkg>/src/index.ts` and the code;
 4. a changeset, if it is user-visible.
 
 The kind decides the npm name, the directory and the dependency on the engine. The
@@ -68,10 +72,13 @@ exactly one claim on a global name — and `@specwarden/*` for everything else.
 ## Tests
 
 ```bash
-pnpm test             # every package, one at a time
+pnpm test             # every package, one at a time — unit suites and playgrounds
+pnpm test:coverage    # the same, above each package's ratchet (what the unit gate runs)
 pnpm test:scripts     # the repository's own guard scripts
-pnpm test:coverage
 ```
+
+Each package's coverage thresholds live in its registry entry and only rise. What each kind
+of test answers, and what it must assert, is `skills/testing/SKILL.md`.
 
 Sequential is enforced rather than described: each vitest already fans out across every
 core, and two heavy suites at once dies with a terminated worker rather than an assertion

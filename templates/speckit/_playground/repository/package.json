@@ -1,0 +1,17 @@
+{
+  "name": "doorman",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Passwordless sign-in: magic links and the sessions they open. Specified with Spec Kit.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@specwarden/docs": "^0.1.0",
+    "@specwarden/security": "^0.1.0",
+    "@specwarden/speckit": "^0.1.0",
+    "@specwarden/template-speckit": "^0.1.0",
+    "specwarden": "^0.1.0"
+  }
+}

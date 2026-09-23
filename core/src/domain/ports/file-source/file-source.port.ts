@@ -5,9 +5,9 @@
  * repository shape (`InMemoryFileSource`), the only way to prove the engine does
  * not assume this project's layout without standing up a second project.
  *
- * PATH NORMALIZATION LIVES HERE. The legacy guards each carried their own
- * platform hack (a Windows drive-root special-case computed inline); a port
- * puts that knowledge in one adapter, so a check speaks one canonical spelling
+ * PATH NORMALIZATION LIVES HERE. A check that reads files itself carries its own
+ * platform hack — a Windows drive-root special-case computed inline; a port puts
+ * that knowledge in one adapter, so a check speaks one canonical spelling
  * (forward slashes, relative to the source root) and never learns the platform.
  */
 

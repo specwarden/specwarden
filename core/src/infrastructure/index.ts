@@ -19,3 +19,4 @@ export {
   formatBlock,
   claudeAgentRuntime,
 } from './agent-runtime/claude/claude.adapter';
+export { forgetPlatformShell, platformShell } from './platform-shell/platform-shell.adapter';

@@ -103,9 +103,9 @@ buildOrderFollowsDeps({
   title: '…',
   tier: 'fast',
   packagesDir: 'packages',
-  scopePrefix: '@app/',
+  scopePrefix: '@acme/',
   containerFiles: '*Dockerfile*',
-  buildInvocation: String.raw`--filter\s+(@app\/[a-z0-9-]+)\s+run\s+build`,
+  buildInvocation: String.raw`--filter\s+(@acme\/[a-z0-9-]+)\s+run\s+build`,
   when: () => true,
 });
 ```

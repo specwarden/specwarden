@@ -139,20 +139,20 @@ export const check = fromResult({
       const all = { ...deps.dependencies, ...deps.devDependencies };
       for (const name of FROZEN) {
         const spec = all[name];
-        if (spec && RANGE.test(spec)) failures.push(\\\`\\\${path}: \\\${name} is \\\${spec} — frozen packages are declared exactly\\\`);
+        if (spec && RANGE.test(spec)) failures.push(\`\${path}: \${name} is \${spec} — frozen packages are declared exactly\`);
       }
     }
     for (const { group, packages } of COORDINATED) {
       const seen = new Map();
       for (const { path, deps } of manifests) {
         const all = { ...deps.dependencies, ...deps.devDependencies };
-        for (const name of packages) if (all[name]) seen.set(\\\`\\\${name}@\\\${all[name]}\\\`, path);
+        for (const name of packages) if (all[name]) seen.set(\`\${name}@\${all[name]}\`, path);
       }
       const versions = new Set([...seen.keys()].map((k) => k.split('@').pop()));
-      if (versions.size > 1) failures.push(\\\`group \\\${group} disagrees: \\\${[...seen.keys()].join(', ')}\\\`);
+      if (versions.size > 1) failures.push(\`group \${group} disagrees: \${[...seen.keys()].join(', ')}\`);
     }
     // An empty policy checks nothing — say so rather than reporting a clean pass.
-    const notes = FROZEN.length + COORDINATED.length === 0 ? ['no policy declared yet — this check is inert'] : [\\\`\\\${manifests.length} manifest(s) read\\\`];
+    const notes = FROZEN.length + COORDINATED.length === 0 ? ['no policy declared yet — this check is inert'] : [\`\${manifests.length} manifest(s) read\`];
     return { failures, notes };
   },
 });

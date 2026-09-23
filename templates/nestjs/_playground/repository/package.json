@@ -1,0 +1,24 @@
+{
+  "name": "ledger-api",
+  "version": "0.9.0",
+  "private": true,
+  "description": "Invoices and their totals, behind a NestJS HTTP API.",
+  "type": "module",
+  "scripts": {
+    "start": "node dist/main.js",
+    "test": "node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/typeorm": "^11.0.0",
+    "typeorm": "^0.3.20"
+  },
+  "devDependencies": {
+    "@specwarden/ops": "^0.1.0",
+    "@specwarden/plugin-nestjs": "^0.1.0",
+    "@specwarden/security": "^0.1.0",
+    "@specwarden/template-nestjs": "^0.1.0",
+    "specwarden": "^0.1.0"
+  }
+}

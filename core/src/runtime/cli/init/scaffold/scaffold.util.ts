@@ -189,24 +189,33 @@ Then \`specwarden check --list\` shows it — the moment the file exists.
 }
 
 export function renderRules(modules: readonly IKnownModule[] = [], extra: readonly IRule[] = []): string {
-  const quote = (s: string) => s.replace(/'/g, "\\'");
-  const asSource = (id: string, statement: string, owner: string, checkIds: readonly string[]): string =>
+  // A single-quoted JS literal. The backslash goes first, or the escapes added after it
+  // would themselves be escaped; a line break would end the literal mid-statement.
+  const quote = (s: string) =>
+    s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n');
+  // A not-mechanizable rule keeps its REASON. Rendered as `checkIds: []` it became a rule
+  // neither enforced nor excused — the one state the coverage audit refuses.
+  const enforcementSource = (e: IRule['enforcement']): string =>
+    'notMechanizable' in e
+      ? `{ notMechanizable: '${quote(e.notMechanizable)}' }`
+      : `{ checkIds: [${e.checkIds.map((c) => `'${quote(c)}'`).join(', ')}] }`;
+  const asSource = (id: string, statement: string, owner: string, enforcement: IRule['enforcement']): string =>
     [
       '  {',
-      `    id: '${id}',`,
+      `    id: '${quote(id)}',`,
       `    statement: '${quote(statement)}',`,
-      `    owner: '${owner}',`,
-      `    enforcement: { checkIds: [${checkIds.map((c) => `'${c}'`).join(', ')}] },`,
+      `    owner: '${quote(owner)}',`,
+      `    enforcement: ${enforcementSource(enforcement)},`,
       '  },',
     ].join('\n');
 
   const generated = [
-    ...modules.map((m) => asSource(m.rule.id, m.rule.statement, '.specwarden/README.md', [m.rule.checkId])),
+    ...modules.map((m) =>
+      asSource(m.rule.id, m.rule.statement, '.specwarden/README.md', { checkIds: [m.rule.checkId] }),
+    ),
     // A template's rules arrive already owned by the caller — it knows where the README
     // it just wrote is; the template does not.
-    ...extra.map((r) =>
-      asSource(r.id, r.statement, r.owner, (r.enforcement as { checkIds?: readonly string[] }).checkIds ?? []),
-    ),
+    ...extra.map((r) => asSource(r.id, r.statement, r.owner, r.enforcement)),
   ].join('\n');
   return `/**
  * What this repository has DECIDED — separate from what it can check.

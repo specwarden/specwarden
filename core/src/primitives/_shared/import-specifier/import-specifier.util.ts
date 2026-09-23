@@ -6,10 +6,12 @@
  * what the other still catches — silently, since both would keep reporting green.
  */
 
-/** Matches the specifier of an ES import / re-export or a CommonJS require. Global,
- * so `matchAll` walks every import; `matchAll` clones it, so the shared `lastIndex`
- * never leaks between files. */
-export const IMPORT_RE = /(?:import\s+[^'"]*from\s*|import\s*|require\s*\(\s*|export\s+[^'"]*from\s*)['"]([^'"]+)['"]/g;
+/** Matches the specifier of an ES import / re-export, a dynamic `import('…')` or a
+ * CommonJS require. Global, so `matchAll` walks every import; `matchAll` clones it, so
+ * the shared `lastIndex` never leaks between files. The dynamic form loads a module as
+ * surely as the static one, and without it a ban held for every spelling but that one. */
+export const IMPORT_RE =
+  /(?:import\s+[^'"]*from\s*|import\s*\(\s*|import\s*|require\s*\(\s*|export\s+[^'"]*from\s*)['"]([^'"]+)['"]/g;
 
 /** `re.test(s)` without the statefulness a global regex carries. A consumer may pass a
  * `/g` regex, and `.test` on one advances `lastIndex`, so the NEXT call against a

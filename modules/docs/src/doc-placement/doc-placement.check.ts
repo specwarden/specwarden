@@ -1,5 +1,6 @@
 import type { ICheck, ICheckContext, ICheckIdentity, IFinding, IVerdict } from 'specwarden';
 import { buildCheck, frameTolerated, testStateless } from 'specwarden';
+import { nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
 
 export interface IDocPlacementOptions extends ICheckIdentity {
   /** git pathspec for the markdown corpus. */
@@ -30,6 +31,9 @@ export function docPlacement(options: IDocPlacementOptions): ICheck {
   const ratchet = options.ratchet ?? 0;
   return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx: ICheckContext): IVerdict => {
     const files = ctx.vcs.trackedFiles(options.docs);
+    // Zero documents is a failure: a pathspec that stopped matching would otherwise
+    // report every document correctly placed, over a corpus of none.
+    if (files.length === 0) return nothingExamined(options.id, options.docs);
 
     const placement: IFinding[] = files
       .filter((f) => !options.allowed.some((re) => testStateless(re, f)))

@@ -60,9 +60,13 @@ export const rules = [
   },
   {
     id: 'a-template-produces-a-green-tree',
-    statement: 'every template scaffolds a repository that passes `check --all` with nothing edited in between',
+    statement:
+      'every template, run over a repository of its kind, writes a tree that passes `check --all` with nothing edited in between — and every check it writes has been seen to fail',
     owner: 'skills/playgrounds/SKILL.md',
-    enforcement: { checkIds: ['playgrounds'] },
+    // Two halves: `playgrounds` holds the committed tree to what init writes today; the
+    // template's own playground spec, run by `unit`, proves that tree green and each of its
+    // checks red once.
+    enforcement: { checkIds: ['playgrounds', 'unit'] },
     zone: 'consumer',
   },
   {
@@ -88,6 +92,14 @@ export const rules = [
     zone: 'consumer',
   },
 
+  {
+    id: 'a-landed-plan-is-harvested-and-deleted',
+    statement:
+      'a plan whose work has landed is harvested into the canon and deleted — an active plan’s branch resolves',
+    owner: 'skills/plans/SKILL.md',
+    enforcement: { checkIds: ['plan-staleness'] },
+    zone: 'consumer',
+  },
   {
     id: 'a-version-is-cut-by-a-changeset',
     statement: 'a released version comes from a changeset, never from an edited manifest',

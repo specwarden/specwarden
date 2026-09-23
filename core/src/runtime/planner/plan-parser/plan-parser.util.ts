@@ -9,12 +9,16 @@ import type { IFinding, IPlan, IPlanPhase, TPlanStatus } from '../../../domain';
  *
  * The anchor is the ACCEPTANCE COMMAND, not a checkbox: a phase without one has no
  * definition of done, which is the concrete thing this parser complains about.
+ *
+ * The keywords are English and only English. A plan vocabulary in another language is a
+ * house's decision, and the engine carries no house's decisions: a repository whose plans
+ * are written otherwise checks them with `@specwarden/plans`, whose patterns it supplies.
  */
 
-const STATUS_RE = /^\*\*(?:Status|Статус):\*\*\s*`?(draft|active|черновик|активен)`?/im;
-const BRANCH_RE = /^\*\*(?:Branch|Ветка):\*\*\s*`?([^\s`]+)`?/im;
-const PHASE_RE = /^##\s+(?:Фаза|Phase)\s+(\S+?)\s*[—–-]\s*(.+?)\s*$/;
-const ACCEPTANCE_RE = /^\*\*(?:Приёмка|Acceptance)\.?:?\*\*\s*(.+?)\s*$/;
+const STATUS_RE = /^\*\*Status:\*\*\s*`?(draft|active)`?/im;
+const BRANCH_RE = /^\*\*Branch:\*\*\s*`?([^\s`]+)`?/im;
+const PHASE_RE = /^##\s+Phase\s+(\S+?)\s*[—–-]\s*(.+?)\s*$/;
+const ACCEPTANCE_RE = /^\*\*Acceptance\.?:?\*\*\s*(.+?)\s*$/;
 
 export interface IParsedPlan {
   readonly plan: IPlan;
@@ -24,8 +28,8 @@ export interface IParsedPlan {
 function normalizeStatus(raw: string | undefined): TPlanStatus | undefined {
   if (raw === undefined) return undefined;
   const lower = raw.toLowerCase();
-  if (lower === 'draft' || lower === 'черновик') return 'draft';
-  if (lower === 'active' || lower === 'активен') return 'active';
+  if (lower === 'draft') return 'draft';
+  if (lower === 'active') return 'active';
   return undefined;
 }
 

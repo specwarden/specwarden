@@ -49,38 +49,6 @@ export const BROKEN: Record<string, string> = {
   'THINGS_MODULE.md': '# things\n\nAt the root, where the contract does not put it.\n',
 };
 
-/**
- * What version control answers, for a tree.
- *
- * A FUNCTION rather than a list, because several of these checks ask `trackedFiles` with
- * a pathspec and act on what comes back. Handed a flat list, every one of them would see
- * every file — so a placement check would judge the README against a contract written
- * for module documents, and the playground would fail for a reason the consumer never
- * meets.
- *
- * The matcher is git's pathspec in the only two forms these checks use: a `**` that
- * crosses directories and a `*` that does not.
- */
-export const tracked =
-  (tree: Record<string, string>) =>
-  (pathspec?: string): string[] => {
-    const files = Object.keys(tree);
-    if (pathspec === undefined) return files;
-    // `**/` matches ZERO or more directories, which is the whole reason it is written
-    // rather than `*/`: `**/*.md` is meant to include the README at the root. Translated
-    // as a plain wildcard it demands a slash, the root file drops out of the corpus, and
-    // the check then passes over a tree it never read — which is the exact failure this
-    // package exists to catch, reproduced inside its own fixture.
-    const escape = (s: string) => s.replace(/[.+^${}()|[\]\\]/g, '\\$&');
-    const source = pathspec
-      .replace(/\*\*\//g, '\u0000')
-      .split('\u0000')
-      .map((part) => part.split('*').map(escape).join('[^/]*'))
-      .join('(?:[^/]+/)*');
-    const re = new RegExp(`^${source}$`);
-    return files.filter((f) => re.test(f));
-  };
-
 /** The factories this playground claims to exercise. */
 export const COVERED = ['docPaths', 'docSymbols', 'docCounts', 'docPlacement', 'docHygiene'];
 

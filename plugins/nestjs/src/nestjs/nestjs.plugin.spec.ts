@@ -50,7 +50,12 @@ describe('nestjs plugin', () => {
 
   it('exempts the repository layer, which is the layer that is supposed to import it', () => {
     const files = new InMemoryFileSource(
-      { 'src/modules/user/repositories/user.repository.ts': "import { eq } from 'drizzle-orm';" },
+      {
+        'src/modules/user/repositories/user.repository.ts': "import { eq } from 'drizzle-orm';",
+        // A module file the ban still applies to, so the corpus is not empty — a ban whose
+        // every file is exempt is refused, and rightly.
+        'src/modules/user/user.service.ts': "import { UserRepository } from './repositories/user.repository';",
+      },
       '',
     );
 

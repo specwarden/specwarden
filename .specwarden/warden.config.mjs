@@ -5,9 +5,7 @@
  * somebody else's repository: one list, a check that cannot fail is a defect, a rule
  * without an enforcer is a wish. A repository that made those arguments while keeping
  * its own guards as eleven loose scripts in a `check` chain would be making them from
- * a position it had not tested. It would also be the second consumer the README admits
- * this engine has never had — and the first real extraction is what finds the things
- * `zone-boundary` cannot.
+ * a position it had not tested.
  *
  * So the guards are CHECKS. The pure logic stays in `scripts/` where a person can run
  * it directly; `checks/` wraps each one, and the engine decides what runs, in what
@@ -65,21 +63,19 @@ export default defineConfig({
      *
      * This is the only repository that hosts them, so it is the only one that can run
      * this check — and it is the check that keeps `core/` liftable. The forbidden
-     * literals are the names of the repository the engine was extracted FROM: if one
-     * reappears in a product source, a fact about that repository has come back into
-     * the engine, and the extraction has silently started to reverse.
+     * literals are facts about THIS repository: its package registry, its playgrounds,
+     * its own gates. The engine is installed into repositories that have none of them,
+     * so a product source that names one has learned where it is being built — and
+     * every consumer would inherit a path that means nothing in their tree.
      */
     zone: {
       productSources: 'core/src/**/*.ts',
       except: ['core/src/**/*.spec.ts'],
       consumerImport: /\.specwarden\//,
       forbiddenLiterals: [
-        {
-          label: 'a host workspace of the repository this was extracted from',
-          pattern: /(^|[^\w])(be|fe|landing_mkt|outreach-console)\//m,
-        },
-        { label: '@app/* — a shared package of that repository', pattern: /@app\// },
-        { label: 'drizzle (that repository’s ORM)', pattern: /\bdrizzle\b/i },
+        { label: 'this repository’s package registry', pattern: /scripts\/registry\.mjs/ },
+        { label: 'this repository’s playgrounds', pattern: /_playgrounds\/|@specwarden-playgrounds\// },
+        { label: 'this repository’s own gates', pattern: /checks\/repository\// },
       ],
     },
   },

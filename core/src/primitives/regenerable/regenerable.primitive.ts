@@ -1,5 +1,4 @@
 import {
-  DEFAULT_SHELL,
   shellArgv,
   type ICheck,
   type ICheckContext,
@@ -9,6 +8,7 @@ import {
   type IProcessResult,
   type IShell,
 } from '../../domain';
+import { platformShell } from '../../infrastructure';
 import { buildCheck, verdictFrom } from '../_shared';
 
 export interface IRegenerableOptions extends ICheckIdentity {
@@ -30,15 +30,15 @@ export interface IRegenerableOptions extends ICheckIdentity {
    * every check would then lose the check itself rather than just the repair. A
    * consumer that wants the repair says so and accepts the capability.
    *
-   * The repair is exact and cannot drift from the verdict: the check already holds
-   * the generator's output, and the fix writes THAT, not a second invocation.
+   * The repair is exact: it writes the generator's output, byte for byte — from a fresh
+   * invocation, because the tree may have moved since the verdict (see `fix` below).
    */
   readonly fixable?: boolean;
 }
 
 /**
  * A generated artifact still matches what its generator produces — `router-mirror`,
- * `module-map`, `fe-map`. The failure mode this ends is a generated file hand-edited
+ * a generated package table, a derived manifest. The failure mode this ends is a generated file hand-edited
  * out of sync, which reads as correct until the next regeneration silently reverts it.
  *
  * It declares `exec` (it runs the generator) and `read` (it reads the artifact), plus
@@ -53,7 +53,7 @@ export interface IRegenerableOptions extends ICheckIdentity {
  * not already wrong about.
  */
 export function regenerable(options: IRegenerableOptions): ICheck {
-  const shell = options.shell ?? DEFAULT_SHELL;
+  const shell = options.shell ?? platformShell();
   const generate = (ctx: ICheckContext): IProcessResult =>
     ctx.proc.run(shell.command, shellArgv(shell, options.by), { timeoutSec: options.timeoutSec });
 

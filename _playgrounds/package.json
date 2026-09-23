@@ -1,0 +1,29 @@
+{
+  "name": "@specwarden-playgrounds/workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Every published package in one consumer config, over one repository — in-process and through the CLI.",
+  "scripts": {
+    "test": "vitest run",
+    "//test:coverage": "The same run: this package publishes nothing, so there is nothing of its own to cover. It carries the script because the `unit` gate runs `pnpm -r run test:coverage`, and pnpm skips a package without the script in silence.",
+    "test:coverage": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@specwarden/agents": "workspace:*",
+    "@specwarden/docs": "workspace:*",
+    "@specwarden/openspec": "workspace:*",
+    "@specwarden/ops": "workspace:*",
+    "@specwarden/plans": "workspace:*",
+    "@specwarden/plugin-nestjs": "workspace:*",
+    "@specwarden/security": "workspace:*",
+    "@specwarden/speckit": "workspace:*",
+    "specwarden": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}

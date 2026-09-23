@@ -1,0 +1,18 @@
+{
+  "name": "acme-platform",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The acme platform: a money library, the api that uses it, and the web client.",
+  "type": "module",
+  "scripts": {
+    "lint": "node scripts/lint.mjs",
+    "test": "node --test packages/*/test/*.test.ts"
+  },
+  "devDependencies": {
+    "@specwarden/docs": "link:../../../../modules/docs",
+    "@specwarden/ops": "link:../../../../modules/ops",
+    "@specwarden/security": "link:../../../../modules/security",
+    "@specwarden/template-monorepo": "link:../..",
+    "specwarden": "link:../../../../core"
+  }
+}

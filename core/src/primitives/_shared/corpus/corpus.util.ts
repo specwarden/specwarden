@@ -3,11 +3,10 @@ import type { IFileSource, IVcs } from '../../../domain';
 /**
  * Reading a set of documents to check, rather than one file at a time.
  *
- * WHY THIS IS IN THE ENGINE. Measured across the first consumer's check bodies: the
- * same four-line incantation appeared in eleven of them — list, read, drop the
- * unreadable, keep the pairs — and twelve bodies skipped the port entirely and
- * reached for the platform's own file API, which is the version that cannot be run
- * against a constructed tree and therefore cannot be unit-tested at all. A helper is
+ * WHY THIS IS IN THE ENGINE. Without it every documentation check repeats the same
+ * four-line incantation — list, read, drop the unreadable, keep the pairs — or skips the
+ * port and reaches for the platform's own file API, which is the version that cannot be
+ * run against a constructed tree and therefore cannot be unit-tested at all. A helper is
  * what makes the port the path of least resistance instead of the long way round.
  *
  * Nothing here knows what is being read. The caller supplies the pattern, which is

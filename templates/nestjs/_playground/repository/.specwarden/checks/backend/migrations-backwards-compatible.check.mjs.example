@@ -1,0 +1,41 @@
+/**
+ * `migrations-backwards-compatible` — a migration the OLD code can survive.
+ *
+ * Ships as `.example` because it depends on a fact about your PIPELINE, not about
+ * NestJS: if the deploy runs migrations BEFORE the container swap, then for a moment
+ * the old code meets the new schema, and `DROP COLUMN`, `RENAME COLUMN` and a
+ * tightened `NOT NULL` all break it. If your deploy swaps first, this check is wrong
+ * for you — delete it rather than adapting it.
+ *
+ * Rename to `.check.mjs` when the first is true. The expand-contract alternative it
+ * pushes you toward is two deploys, and that is the point.
+ */
+import { fromResult } from 'specwarden';
+
+/** The three statements the old code cannot survive, each with what to do instead. */
+const UNSAFE = [
+  { pattern: /\bDROP\s+COLUMN\b/i, why: 'the old code still selects it — drop it in a later deploy' },
+  { pattern: /\bRENAME\s+COLUMN\b/i, why: 'add the new column, backfill, then remove the old one' },
+  { pattern: /\bSET\s+NOT\s+NULL\b/i, why: 'the old code still writes NULL — tighten after it is gone' },
+];
+
+export const check = fromResult({
+  id: 'migrations-backwards-compatible',
+  title: 'no migration breaks the code still running during the deploy',
+  tier: 'fast',
+  when: (changed) => changed.some((f) => f.startsWith('migrations/')),
+  hint: 'Use expand-contract across two deploys. The rule is in docs/architecture.md.',
+  run: (ctx) => {
+    const files = ctx.vcs.trackedFiles('migrations/**/*.sql');
+    const failures = [];
+    for (const file of files) {
+      const sql = ctx.files.tryRead(file) ?? '';
+      for (const { pattern, why } of UNSAFE) {
+        if (pattern.test(sql)) failures.push({ file, message: `${pattern.source} — ${why}` });
+      }
+    }
+    // An empty corpus is reported, never passed over: a glob matching nothing is the
+    // commonest way a check stops checking without anybody noticing.
+    return { failures, notes: [`${files.length} migration file(s) read`] };
+  },
+});

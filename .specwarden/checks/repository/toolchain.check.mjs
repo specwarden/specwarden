@@ -59,12 +59,16 @@ export const checks = [
 
   commandCheck({
     id: 'unit',
-    title: 'every package proves its own behaviour',
+    title: 'every package proves its own behaviour, above its coverage ratchet',
     tier: 'heavy',
     // Sequential, and ENFORCED rather than described: `pnpm -r` runs four packages at a
     // time by default and each vitest already fans out across every core. Two heavy
     // suites at once is how a run dies with a terminated worker rather than an assertion.
-    cmd: 'pnpm -r --workspace-concurrency=1 run test',
+    //
+    // `test:coverage`, never bare `test`: a threshold that nothing turns is a number in a
+    // file. Each package's generated vitest config carries its ratchet, and this is the
+    // one place it is turned.
+    cmd: 'pnpm -r --workspace-concurrency=1 run test:coverage',
     refuse: NO_PACKAGE_MATCHED,
     // A suite that ran nothing prints no totals. Requiring the word is what tells "all
     // green" apart from "vitest matched no test file and exited 0".

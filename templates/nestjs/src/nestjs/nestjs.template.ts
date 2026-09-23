@@ -62,6 +62,10 @@ import { nestjs } from '@specwarden/plugin-nestjs';
 const plugin = nestjs({
   modulesRoot: 'src/modules',
   ormPackage: 'typeorm',
+  // Where the ORM IS the point: the repository that queries, the entity whose decorators
+  // map the table, and a spec. An entity cannot be written without importing \`typeorm\`,
+  // so leaving it out made the first run red on every TypeORM service there is.
+  allowedFrom: ['**/repositories/**', '**/*.entity.ts', '**/*.spec.ts'],
   ratchetId: 'nestjs-db-access',
   ratchet: 0,
   ruleDocument: 'docs/architecture.md',
@@ -105,12 +109,12 @@ export const check = fromResult({
     for (const file of files) {
       const sql = ctx.files.tryRead(file) ?? '';
       for (const { pattern, why } of UNSAFE) {
-        if (pattern.test(sql)) failures.push({ file, message: \\\`\\\${pattern.source} — \\\${why}\\\` });
+        if (pattern.test(sql)) failures.push({ file, message: \`\${pattern.source} — \${why}\` });
       }
     }
     // An empty corpus is reported, never passed over: a glob matching nothing is the
     // commonest way a check stops checking without anybody noticing.
-    return { failures, notes: [\\\`\\\${files.length} migration file(s) read\\\`] };
+    return { failures, notes: [\`\${files.length} migration file(s) read\`] };
   },
 });
 `,

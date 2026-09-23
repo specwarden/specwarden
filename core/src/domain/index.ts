@@ -86,8 +86,8 @@ export type {
 } from './ports';
 
 // How a command line becomes a process — one type, one default, every caller optional.
-export { DEFAULT_SHELL, shellArgv, shellStartFailure } from './shell/shell.model';
-export type { IShell } from './shell/shell.model';
+export { DEFAULT_SHELL, resolveShell, shellArgv, shellFlag, shellStartFailure } from './shell/shell.model';
+export type { IShell, IShellEnvironment } from './shell/shell.model';
 
 // A template — a starting tree for a kind of repository, emitted as ordinary files.
 export type { ITemplate, ITemplateContext, ITemplateFile } from './template/template.model';

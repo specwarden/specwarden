@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-import { DEFAULT_SHELL, archiveReadiness, shellArgv } from '../../../domain';
+import { archiveReadiness, shellArgv } from '../../../domain';
 import type { IProcessRunner, IShell } from '../../../domain';
-import { ChildProcessRunner, NodeFileSource } from '../../../infrastructure';
+import { ChildProcessRunner, NodeFileSource, platformShell } from '../../../infrastructure';
 import { parsePlan } from '../../planner/plan-parser/plan-parser.util';
 import type { ICliIo } from '../_shared/cli-io/cli-io.model';
 
@@ -68,10 +68,18 @@ export async function planStatus(
     return findings.some((f) => f.severity === 'error') ? 1 : 0;
   }
 
+  // `--verify` over a plan with nothing to run verified nothing, and said so with exit 0.
+  // That is the reading this whole product exists against: "every acceptance passed" over
+  // zero acceptances. A plan with no runnable acceptance is refused as unverifiable.
+  if (!plan.phases.some((phase) => phase.acceptance !== undefined)) {
+    io.out('  ❌ no phase declares an acceptance command — there is nothing to verify\n');
+    return 1;
+  }
+
   let failed = findings.filter((f) => f.severity === 'error').length;
   for (const phase of plan.phases) {
     if (phase.acceptance === undefined) continue;
-    const shell: IShell = DEFAULT_SHELL;
+    const shell: IShell = platformShell();
     const result = proc.run(shell.command, shellArgv(shell, phase.acceptance), { cwd });
     const ok = result.status === 0;
     io.out(`  ${ok ? '✅' : '❌'} ${phase.title} — ${phase.acceptance}\n`);

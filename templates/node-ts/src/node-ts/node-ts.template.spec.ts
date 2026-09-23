@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { afterAll, describe, expect, it } from 'vitest';
 
 import type { ITemplateContext } from 'specwarden';
 
@@ -42,7 +45,7 @@ describe('it emits a tree, not a config', () => {
   });
 
   it('imports only from the packages it declares it requires', () => {
-    const allowed = new Set(['specwarden', ...nodeTs.requires]);
+    const allowed = new Set(['specwarden', ...(nodeTs.requires as readonly string[])]);
     for (const f of nodeTs.files(ctx())) {
       for (const [, pkg] of f.body.matchAll(/^import .* from '([^']+)';$/gm)) {
         expect(allowed.has(pkg), `${f.path} imports ${pkg}`).toBe(true);
@@ -151,5 +154,37 @@ describe('a wrapper is written only when the script exists', () => {
     expect((suite?.enforcement as { checkIds: readonly string[] }).checkIds).toEqual(['unit']);
     // ...and disappears entirely when neither exists, so no rule names a missing check
     expect(nodeTs.rules(ctx({ scripts: [] })).some((r) => r.id === 'the-suite-and-the-linter-pass')).toBe(false);
+  });
+});
+
+/**
+ * A template emits STRINGS, and a typechecker never reads them: an option renamed in a
+ * module leaves the template compiling and the tree throwing on its first run. So every
+ * file is written and IMPORTED — examples included, renamed as a consumer would rename
+ * them, because the day an example is switched on is the worst day to find it does not parse.
+ *
+ * Written inside the package so the generated imports resolve as a consumer's would.
+ */
+const scratch = mkdtempSync(
+  join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '..', '.tmp-generated-'),
+);
+afterAll(() => rmSync(scratch, { recursive: true, force: true }));
+
+describe('the generated tree actually loads', () => {
+  it('every live check and every example, renamed, imports and exports the id its file promises', async () => {
+    const files = nodeTs.files(ctx()).filter((f) => /\.check\.mjs(\.example)?$/.test(f.path));
+    expect(files.length).toBeGreaterThan(0);
+
+    for (const file of files) {
+      const abs = join(scratch, file.path.replace(/\//g, '-').replace(/\.example$/, ''));
+      writeFileSync(abs, file.body);
+      const mod = (await import(pathToFileURL(abs).href)) as { check?: { id: string } };
+      expect(mod.check?.id, `${file.path} does not load as a check`).toBe(
+        file.path
+          .split('/')
+          .pop()
+          ?.replace(/\.check\.mjs(\.example)?$/, ''),
+      );
+    }
   });
 });

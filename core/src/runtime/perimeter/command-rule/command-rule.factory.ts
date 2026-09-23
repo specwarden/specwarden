@@ -29,8 +29,8 @@ function reason(meta: IRuleMeta, hit: string): string {
 }
 
 /** A perimeter rule over a shell command: the engine parses the command and offers
- * each segment's words to `match`. This is where the four existing command rules
- * (volume flag, db:push, protected branch, no-verify) are declared as data. */
+ * each segment's words to `match`. This is where a repository's command rules —
+ * a protected branch, a skipped hook — are declared as data. */
 export function commandRule(spec: ICommandRuleSpec): IPerimeterRule {
   return {
     id: spec.id,
@@ -48,8 +48,8 @@ export function commandRule(spec: ICommandRuleSpec): IPerimeterRule {
   };
 }
 
-/** A perimeter rule over a file write — the migration-journal rule, expressed
- * against the file-editing tools rather than a shell redirection. */
+/** A perimeter rule over a file write — a generated file nobody may hand-edit,
+ * say — expressed against the file-editing tools rather than a shell redirection. */
 export function writeRule(spec: IWriteRuleSpec): IPerimeterRule {
   return {
     id: spec.id,

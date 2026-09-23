@@ -20,7 +20,22 @@ export interface IDecisionLogShapeOptions extends ICheckIdentity {
 export function decisionLogShape(options: IDecisionLogShapeOptions): ICheck {
   return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx) => {
     const findings: IFinding[] = [];
-    for (const file of ctx.vcs.trackedFiles(options.docs)) {
+    const docs = ctx.vcs.trackedFiles(options.docs);
+    // Zero documents is a failure, not a clean run: a `docs` pathspec left pointing at a
+    // folder that moved would otherwise report every rejection reasoned, over none.
+    if (docs.length === 0) {
+      return {
+        ok: false,
+        findings: [
+          {
+            severity: 'error',
+            ruleId: options.id,
+            message: `no document matched \`${options.docs}\` — this check examined nothing, and a check that examined nothing cannot fail.`,
+          },
+        ],
+      };
+    }
+    for (const file of docs) {
       const src = ctx.files.tryRead(file);
       if (src === undefined) continue;
       for (const r of rejectionsWithoutReason(parseDecisionLog(src))) {

@@ -15,10 +15,10 @@
 
 /** The compose file. Two services: one behind the proxy, one that verifies the handshake. */
 const COMPOSE = `services:
-  be:
-    image: example/be
+  api:
+    image: example/api
     env_file:
-      - be/.env.\${MODE}
+      - api/.env.\${MODE}
   edge:
     image: example/edge
     env_file:
@@ -33,10 +33,10 @@ const EDGE_CONFIG = 'auth:\n  secret: ${EDGE_SECRET}\n';
 /** The workspace graph the image has to respect: contracts imports i18n. */
 const MANIFESTS: Record<string, string> = {
   'packages/contracts/package.json': JSON.stringify({
-    name: '@app/contracts',
-    dependencies: { '@app/i18n': 'workspace:*' },
+    name: '@org/contracts',
+    dependencies: { '@org/i18n': 'workspace:*' },
   }),
-  'packages/i18n/package.json': JSON.stringify({ name: '@app/i18n' }),
+  'packages/i18n/package.json': JSON.stringify({ name: '@org/i18n' }),
 };
 
 /** A workflow that runs the cheap tier, fans the heavy gates out, and gathers them. */
@@ -74,15 +74,15 @@ export const CLEAN: Record<string, string> = {
   // A key each file owns alone is fine; a key BOTH carry must carry the same value, so
   // the port is named per service rather than twice with two values.
   '.env.prod': 'EDGE_SECRET=s\nEDGE_PORT=8080\n',
-  'be/.env.prod': 'EDGE_SECRET=s\nBE_PORT=3000\n',
+  'api/.env.prod': 'EDGE_SECRET=s\nAPI_PORT=3000\n',
   // Local runs the proxy ON THE HOST, so it names loopback; deployed runs it among the
   // services, so it names the service. Each file is wrong in the other's world.
   'caddy/Caddyfile.local': 'reverse_proxy localhost:3000\n',
-  'caddy/Caddyfile.prod': 'reverse_proxy be:3000\n',
+  'caddy/Caddyfile.prod': 'reverse_proxy api:3000\n',
   // i18n before contracts, because contracts imports it.
   Dockerfile:
-    'FROM node:24-alpine\nRUN pnpm --filter @app/i18n run build \\\n    && pnpm --filter @app/contracts run build\n',
-  '.github/workflows/ci.yml': WORKFLOW(['be-unit', 'fe-unit']),
+    'FROM node:24-alpine\nRUN pnpm --filter @org/i18n run build \\\n    && pnpm --filter @org/contracts run build\n',
+  '.github/workflows/ci.yml': WORKFLOW(['api-unit', 'web-unit']),
   'scripts/deploy.sh':
     '#!/usr/bin/env bash\nset -Eeuo pipefail\n\nmain() {\n  local target\n  target="$1"\n  echo "$target"\n}\n\nmain "$@"\n',
 };
@@ -92,16 +92,16 @@ export const BROKEN: Record<string, string> = {
   ...CLEAN,
   // env-pairing: the SENDER has the secret and the VERIFIER does not. This is the defect
   // the check was written for — both services start, and every signed request is refused.
-  'be/.env.prod': 'BE_PORT=3000\n',
+  'api/.env.prod': 'API_PORT=3000\n',
   // caddy-upstreams: a container service name in the file whose proxy runs on the host.
-  // DNS for `be` does not exist there, so it is a 502 on a page that never opened.
-  'caddy/Caddyfile.local': 'reverse_proxy be:3000\n',
+  // DNS for `api` does not exist there, so it is a 502 on a page that never opened.
+  'caddy/Caddyfile.local': 'reverse_proxy api:3000\n',
   // workspace-build-order: contracts built before the package it imports. Compiles from a
   // warm local checkout, fails in a clean image — which is the only place it runs.
   Dockerfile:
-    'FROM node:24-alpine\nRUN pnpm --filter @app/contracts run build\nRUN pnpm --filter @app/i18n run build\n',
+    'FROM node:24-alpine\nRUN pnpm --filter @org/contracts run build\nRUN pnpm --filter @org/i18n run build\n',
   // gate-coverage: a heavy gate no job names. It is not run, and nothing says so.
-  '.github/workflows/ci.yml': WORKFLOW(['be-unit']),
+  '.github/workflows/ci.yml': WORKFLOW(['api-unit']),
   // shell-local-scope: `local` in the main block, which is not a function. Bash refuses
   // it at run time, in the deploy script, on the deploy.
   'scripts/deploy.sh': '#!/usr/bin/env bash\nset -Eeuo pipefail\n\nlocal target\ntarget="$1"\necho "$target"\n',
@@ -109,8 +109,8 @@ export const BROKEN: Record<string, string> = {
 
 /** The heavy gates CI is reconciled against. */
 export const GATES = [
-  { id: 'be-unit', title: 'BE unit', tier: 'heavy' },
-  { id: 'fe-unit', title: 'FE unit', tier: 'heavy' },
+  { id: 'api-unit', title: 'API unit', tier: 'heavy' },
+  { id: 'web-unit', title: 'web unit', tier: 'heavy' },
 ];
 
 /** The factories this playground claims to exercise. */
@@ -138,7 +138,7 @@ export const PROBE = {
   // env-files-agree
   composeFile: 'docker-compose.yml',
   modes: ['prod'],
-  verifierService: 'be',
+  verifierService: 'api',
   declaredKeys: () => new Set<string>(),
   // upstreams-resolve
   fileFor: (mode: string) => `caddy/Caddyfile.${mode}`,
@@ -153,9 +153,9 @@ export const PROBE = {
   gates: () => GATES,
   // build-order-follows-deps
   packagesDir: 'packages',
-  scopePrefix: '@app/',
+  scopePrefix: '@org/',
   containerFiles: '*Dockerfile*',
-  buildInvocation: String.raw`--filter\s+(@app\/[a-z0-9-]+)\s+run\s+build`,
+  buildInvocation: String.raw`--filter\s+(@org\/[a-z0-9-]+)\s+run\s+build`,
   // shell-local-scope
   pathspecs: ['scripts/*.sh'],
 };

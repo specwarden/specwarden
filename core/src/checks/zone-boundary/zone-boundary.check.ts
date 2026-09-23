@@ -1,5 +1,14 @@
 import type { ICheck, ICheckIdentity, IFinding } from '../../domain';
-import { IMPORT_RE, buildCheck, lineOf, matchesSpecifier, verdictFrom } from '../../primitives/_shared';
+import {
+  type ICorpusFloor,
+  IMPORT_RE,
+  belowCorpusFloor,
+  buildCheck,
+  withExaminedNote,
+  lineOf,
+  matchesSpecifier,
+  verdictFrom,
+} from '../../primitives/_shared';
 
 /** A host-repository token a product-zone source may never contain, with a human
  * label. WHICH tokens are "the host" is a fact about the host, so the set is
@@ -21,6 +30,9 @@ export interface IZoneBoundaryOptions extends ICheckIdentity {
    * C. A string prefix or a RegExp tested against the specifier. Optional: some
    * layouts express the barrier by literals alone. */
   readonly consumerImport?: string | RegExp;
+  /** How many product sources the sweep must cover for its verdict to count. Defaults
+   * to one: a barrier sweeping no source is not a barrier, and it passed in silence. */
+  readonly corpus?: ICorpusFloor;
 }
 
 /** The first match of `pattern` in `content` as a global search, or `undefined`.
@@ -45,9 +57,17 @@ function firstMatch(content: string, pattern: RegExp): RegExpExecArray | null {
 export function zoneBoundary(options: IZoneBoundaryOptions): ICheck {
   return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx) => {
     const exempt = new Set((options.except ?? []).flatMap((g) => ctx.files.glob(g)));
+    const files = ctx.files.glob(options.productSources).filter((file) => !exempt.has(file));
+    const short = belowCorpusFloor(
+      options.id,
+      files.length,
+      options.corpus,
+      `\`${options.productSources}\` matched no product source to sweep`,
+    );
+    if (short) return short;
+
     const findings: IFinding[] = [];
-    for (const file of ctx.files.glob(options.productSources)) {
-      if (exempt.has(file)) continue;
+    for (const file of files) {
       const content = ctx.files.read(file);
 
       if (options.consumerImport !== undefined) {
@@ -77,6 +97,6 @@ export function zoneBoundary(options: IZoneBoundaryOptions): ICheck {
         }
       }
     }
-    return verdictFrom(findings, ctx.ratchet ?? options.ratchet);
+    return verdictFrom(withExaminedNote(findings, options.id, files.length), ctx.ratchet ?? options.ratchet);
   });
 }

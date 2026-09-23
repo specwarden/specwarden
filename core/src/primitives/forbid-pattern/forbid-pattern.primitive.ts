@@ -1,9 +1,20 @@
 import type { ICheck, ICheckIdentity, IFinding } from '../../domain';
-import { buildCheck, lineOf, testStateless, verdictFrom } from '../_shared';
+import {
+  type ICorpusFloor,
+  belowCorpusFloor,
+  buildCheck,
+  withExaminedNote,
+  lineOf,
+  testStateless,
+  verdictFrom,
+} from '../_shared';
 
 export interface IForbidPatternOptions extends ICheckIdentity {
   /** Glob of files scanned. */
   readonly in: string;
+  /** How many files `in` must match for a verdict to count. Defaults to one: a ban over
+   * zero files bans nothing, and it passed in silence before this existed. */
+  readonly corpus?: ICorpusFloor;
   /** The pattern that must not appear. Made global internally, so a bare RegExp is fine. */
   readonly pattern: RegExp;
   /** Matches that ARE allowed (a lookalike that is not the real thing). */
@@ -15,8 +26,8 @@ export interface IForbidPatternOptions extends ICheckIdentity {
 }
 
 /**
- * A pattern must not occur in a set of files — `secret-scan`, `log-error-bindings`,
- * `story-strings`. The `allow` escape hatch is the half that is usually skipped: a
+ * A pattern must not occur in a set of files — `secret-scan`, a banned API, a debug
+ * call left behind. The `allow` escape hatch is the half that is usually skipped: a
  * check with false positives is one somebody turns off, taking the true positives
  * with it.
  */
@@ -27,9 +38,17 @@ export function forbidPattern(options: IForbidPatternOptions): ICheck {
   );
   return buildCheck(options, ['read'], (ctx) => {
     const exempt = new Set((options.except ?? []).flatMap((g) => ctx.files.glob(g)));
+    const files = ctx.files.glob(options.in).filter((file) => !exempt.has(file));
+    const short = belowCorpusFloor(
+      options.id,
+      files.length,
+      options.corpus,
+      `\`${options.in}\` matched nothing to scan`,
+    );
+    if (short) return short;
+
     const findings: IFinding[] = [];
-    for (const file of ctx.files.glob(options.in)) {
-      if (exempt.has(file)) continue;
+    for (const file of files) {
       const content = ctx.files.read(file);
       for (const m of content.matchAll(re)) {
         if (options.allow && testStateless(options.allow, m[0])) continue;
@@ -42,6 +61,6 @@ export function forbidPattern(options: IForbidPatternOptions): ICheck {
         });
       }
     }
-    return verdictFrom(findings, ctx.ratchet ?? options.ratchet);
+    return verdictFrom(withExaminedNote(findings, options.id, files.length), ctx.ratchet ?? options.ratchet);
   });
 }

@@ -46,11 +46,10 @@ export interface IVerdict {
    * the other shape a real check takes — summarise the violations, emit one line,
    * and report the number in words.
    *
-   * Three checks in the first consumer wrote `ratchet: { value }` on their verdicts
-   * expecting it to be read, and it was not: nothing in the engine looked at the
-   * key. Both of their branches then reported zero error findings whenever they
-   * PASSED under the ratchet, so `--tighten` would have rewritten thresholds of 17
-   * and 37 down to 0 and failed the very next ordinary run. A field a caller
+   * A check that summarises its violations into one line writes the real count on its
+   * verdict, expecting it to be read. Before this field nothing read it: such a check
+   * reported zero error findings whenever it PASSED under its ratchet, so `--tighten`
+   * would have rewritten a tolerated count down to 0 and failed the very next run. A field a caller
    * invents is a field the caller needed; this is that field, read where it was
    * always meant to be.
    *

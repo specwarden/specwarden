@@ -14,8 +14,7 @@ here; nothing about it lives in `core/`.
 Every argument specwarden makes is about somebody else's repository: one list, a check
 that cannot fail is a defect, a rule without an enforcer is a wish. Making those arguments
 while keeping our own guards as loose scripts in a shell chain would be making them from a
-position we had not tested — and this is also the second consumer the README admits the
-engine has never had.
+position we had not tested.
 
 ## Where the logic lives
 

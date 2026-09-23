@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ICheckContext, IVerdict } from 'specwarden';
-import { InMemoryFileSource } from 'specwarden';
+import { type IVerdict, errorsOf, runCheck } from 'specwarden';
 import { secretScan } from './secret-scan.check';
 
 const ID = { id: 'secret-scan', title: 'no secrets', tier: 'fast' as const };
@@ -13,120 +12,214 @@ const AWS = 'AK' + 'IA' + 'ABCDEFGH12345678';
 const TELEGRAM = '12345678' + ':A' + 'A' + 'z'.repeat(35);
 const PRIVATE_KEY = '-----BEGIN ' + 'PRIVATE KEY-----';
 
-function run(files: Record<string, string>, opts: Partial<Parameters<typeof secretScan>[0]> = {}): IVerdict {
-  const source = new InMemoryFileSource(files);
-  const tracked = Object.keys(files);
-  const check = secretScan({ ...ID, ...opts });
-  const ctx = { changed: [], files: source, vcs: { trackedFiles: () => tracked } } as unknown as ICheckContext;
-  return check.run(ctx) as IVerdict;
-}
+/** An ordinary file, so a case about SKIPPING one file is not also a case about an empty corpus. */
+const ORDINARY = { 'src/index.ts': 'export const answer = 42;\n' };
 
-describe('secretScan', () => {
+const run = (
+  tree: Record<string, string>,
+  opts: Partial<Parameters<typeof secretScan>[0]> = {},
+  extra: { tracked?: readonly string[]; ratchet?: number } = {},
+): Promise<IVerdict> => runCheck(secretScan({ ...ID, ...opts }), { tree, ...extra });
+
+describe('secretScan — what it catches', () => {
   it('is a product-zone check', () => {
     expect(secretScan({ ...ID }).zone).toBe('product');
   });
 
-  it('catches an AWS key id, a Telegram token and a private-key block', () => {
-    expect(run({ 'a.ts': `const k = "${AWS}"` }).ok).toBe(false);
-    expect(run({ 'b.env': `TOKEN=${TELEGRAM}` }).ok).toBe(false);
-    expect(run({ 'c.pem': `${PRIVATE_KEY}\n` }).ok).toBe(false);
+  it('catches an AWS key id, a Telegram token and a private-key block', async () => {
+    expect((await run({ 'a.ts': `const k = "${AWS}"` })).ok).toBe(false);
+    expect((await run({ 'b.env': `TOKEN=${TELEGRAM}` })).ok).toBe(false);
+    expect((await run({ 'c.pem': `${PRIVATE_KEY}\n` })).ok).toBe(false);
   });
 
-  it('catches a bare secret env key (no prefix), not only a prefixed one', () => {
+  it('names the file, the line and the pattern, and says to ROTATE before deleting', async () => {
+    const v = await run({ 'config/app.ts': `// keys\nconst k = "${AWS}"` });
+
+    expect(v.findings[0]).toMatchObject({ file: 'config/app.ts', line: 2 });
+    expect(errorsOf(v)[0]).toMatch(/^config\/app\.ts:2 — .*\[aws-access-key-id\]\. If real, ROTATE it/);
+  });
+
+  it('catches a bare secret env key (no prefix), not only a prefixed one', async () => {
     // 32 hex chars, concatenated so this file carries no literal secret shape.
     const HEX = '0123456789abcdef'.repeat(2);
     // The env-assignment pattern is the only one that can match these — the value is
     // plain hex, not a Telegram/AWS/key shape.
-    expect(run({ 'a.env': `PASSWORD=${HEX}` }).ok).toBe(false);
-    expect(run({ 'b.env': `SECRET=${HEX}` }).ok).toBe(false);
-    expect(run({ 'c.env': `DB_PASSWORD=${HEX}` }).ok).toBe(false);
+    expect((await run({ 'a.env': `PASSWORD=${HEX}` })).ok).toBe(false);
+    expect((await run({ 'b.env': `SECRET=${HEX}` })).ok).toBe(false);
+    expect((await run({ 'c.env': `DB_PASSWORD=${HEX}` })).ok).toBe(false);
     // A readable value under a secret key stays allowed — the shape, not the key, gates.
-    expect(run({ 'd.env': 'PASSWORD=hunter2' }).ok).toBe(true);
+    expect((await run({ 'd.env': 'PASSWORD=hunter2' })).ok).toBe(true);
   });
 
-  it('lets an ordinary file through', () => {
-    expect(run({ 'a.ts': 'export const GAP_STORAGE_KEY = "gap-invite-context";\n' }).ok).toBe(true);
+  it('reads a dotfile — git tracks a `.env` like anything else', async () => {
+    expect((await run({ '.env': `TOKEN=${TELEGRAM}` })).ok).toBe(false);
   });
 
-  it('suppresses a placeholder-marked match', () => {
-    expect(run({ 'a.env': `KEY=${AWS} # EXAMPLE only` }).ok).toBe(true);
-    expect(run({ 'b.env': `KEY=\${SOME_VAR}${AWS}` }).ok).toBe(true);
+  it('lets an ordinary file through', async () => {
+    expect((await run({ 'a.ts': 'export const CART_STORAGE_KEY = "cart-context";\n' })).ok).toBe(true);
   });
 
-  it('honours an exact-file allowlist entry', () => {
-    const files = { 'fixtures/known.txt': `k=${AWS}` };
-    expect(run(files, { allowlist: [{ file: 'fixtures/known.txt', patternId: '*' }] }).ok).toBe(true);
+  it('holds known findings under a ratchet, preferring the stored one', async () => {
+    const tree = { 'a.ts': `const k = "${AWS}"` };
+
+    expect((await run(tree, { ratchet: 1 })).ok).toBe(true);
+    expect((await run(tree, { ratchet: 1 }, { ratchet: 0 })).ok).toBe(false);
+  });
+});
+
+describe('secretScan — what it lets through, and why', () => {
+  it('suppresses a placeholder-marked match', async () => {
+    expect((await run({ 'a.env': `KEY=${AWS} # EXAMPLE only` })).ok).toBe(true);
+    expect((await run({ 'b.env': `KEY=\${SOME_VAR}${AWS}` })).ok).toBe(true);
+  });
+
+  it('honours an exact-file allowlist entry', async () => {
+    const allowlist = [{ file: 'fixtures/known.txt', patternId: '*' }];
+
+    expect((await run({ 'fixtures/known.txt': `k=${AWS}` }, { allowlist })).ok).toBe(true);
     // …but only for the named file, never a lookalike elsewhere.
-    expect(run({ 'other.txt': `k=${AWS}` }, { allowlist: [{ file: 'fixtures/known.txt', patternId: '*' }] }).ok).toBe(
-      false,
-    );
+    expect((await run({ 'other.txt': `k=${AWS}` }, { allowlist })).ok).toBe(false);
   });
 
-  it('skips lockfiles, skipped extensions and binary content', () => {
-    expect(run({ 'pnpm-lock.yaml': `k=${AWS}` }).ok).toBe(true);
-    expect(run({ 'logo.png': `k=${AWS}` }).ok).toBe(true);
-    expect(run({ 'blob.txt': `\0binary ${AWS}` }).ok).toBe(true);
-  });
-
-  it('skips a file larger than maxBytes', () => {
-    const big = `padding `.repeat(50) + `k=${AWS}`;
-    expect(run({ 'a.txt': big }).ok).toBe(false); // caught under the 1 MiB default
-    expect(run({ 'a.txt': big }, { maxBytes: 32 }).ok).toBe(true); // over the cap → not scanned
-  });
-
-  it('an allowlist entry for one pattern id does not excuse a different pattern', () => {
+  it('an allowlist entry for one pattern id does not excuse a different pattern', async () => {
     // The file is allowlisted for aws-access-key-id only; a Telegram token in it must
     // still be flagged.
-    const files = { 'k.env': `AWS=${AWS}\nTG=${TELEGRAM}` };
     const allowlist = [{ file: 'k.env', patternId: 'aws-access-key-id' }];
-    expect(run(files, { allowlist }).ok).toBe(false); // the telegram token is not excused
+
+    expect((await run({ 'k.env': `AWS=${AWS}\nTG=${TELEGRAM}` }, { allowlist })).ok).toBe(false);
     // …and with the telegram token gone, the aws allowlist entry passes.
-    expect(run({ 'k.env': `AWS=${AWS}` }, { allowlist }).ok).toBe(true);
+    expect((await run({ 'k.env': `AWS=${AWS}` }, { allowlist })).ok).toBe(true);
+  });
+
+  it('skips lockfiles, a skipped folder anywhere in the tree, skipped extensions and binary content', async () => {
+    expect((await run({ 'pnpm-lock.yaml': `k=${AWS}`, ...ORDINARY })).ok).toBe(true);
+    expect((await run({ 'packages/a/dist/bundle.js': `k=${AWS}`, ...ORDINARY })).ok).toBe(true);
+    expect((await run({ 'logo.png': `k=${AWS}`, ...ORDINARY })).ok).toBe(true);
+    expect((await run({ 'blob.txt': `\0binary ${AWS}`, ...ORDINARY })).ok).toBe(true);
+  });
+
+  it('reads a file with no extension — the extension skip must not swallow it', async () => {
+    expect((await run({ Dockerfile: `ENV TOKEN=${TELEGRAM}` })).ok).toBe(false);
+  });
+
+  it('takes the skip lists a house chooses, replacing the defaults', async () => {
+    const tree = { 'pnpm-lock.yaml': `k=${AWS}`, 'secrets.bin': `k=${AWS}`, ...ORDINARY };
+
+    expect((await run(tree, { skipPaths: [], skipExtensions: [] })).ok).toBe(false);
+  });
+
+  it('skips a file larger than maxBytes', async () => {
+    const big = `padding `.repeat(50) + `k=${AWS}`;
+
+    // Caught under the 1 MiB default…
+    expect((await run({ 'a.txt': big, ...ORDINARY })).ok).toBe(false);
+    // …and over the cap, not scanned.
+    expect((await run({ 'a.txt': big, ...ORDINARY }, { maxBytes: 32 })).ok).toBe(true);
+  });
+
+  it('skips a tracked file the file source cannot read', async () => {
+    expect((await run(ORDINARY, {}, { tracked: ['src/index.ts', 'deleted.env'] })).ok).toBe(true);
+  });
+});
+
+describe('secretScan — what it examined', () => {
+  it('scans every tracked file when no pathspec is given — the empty pathspec is EVERYTHING', async () => {
+    // Forwarded to a glob, an empty pathspec matches nothing: a credential scan once passed
+    // over a tree with a credential in it for exactly that reason.
+    expect((await run({ 'deep/down/x.env': `TOKEN=${TELEGRAM}` })).ok).toBe(false);
+  });
+
+  it('scans only what a narrowed pathspec selects', async () => {
+    const tree = { 'config/a.env': 'A=1', 'scratch/b.env': `TOKEN=${TELEGRAM}` };
+
+    expect((await run(tree, { scan: 'config' })).ok).toBe(true);
+  });
+
+  it('fails, naming the pathspec, when it matched no file — "no credentials" about nothing is the worst false green', async () => {
+    const v = await run(ORDINARY, { scan: 'deploy/**' });
+
+    expect(v.ok).toBe(false);
+    expect(errorsOf(v)).toEqual([
+      'no file matched `deploy/**` after the skipped paths — this scan examined nothing, and a scan that examined nothing cannot fail.',
+    ]);
+  });
+
+  it('fails when the skipped paths swallowed every file', async () => {
+    const v = await run({ 'pnpm-lock.yaml': 'lockfileVersion: 9', 'logo.png': '' });
+
+    expect(v.ok).toBe(false);
+    expect(errorsOf(v)[0]).toContain('`(every tracked file)`');
   });
 });
 
 describe('the credential library is a preset, not a mandate', () => {
-  const withFile = (body: string) =>
-    ({
-      files: new InMemoryFileSource({ 'app.ts': body }),
-      vcs: { trackedFiles: () => ['app.ts'] },
-    }) as unknown as ICheckContext;
+  const withFile = (body: string, opts: Partial<Parameters<typeof secretScan>[0]> = {}) =>
+    run({ 'app.ts': body }, opts);
 
-  const AWS = 'const k = "AKIAIOSFODNN7EXAMPLX";';
+  const LINE = `const k = "${AWS}";`;
 
-  it('scans for the built-ins when the caller says nothing', () => {
-    const v = secretScan({ ...ID }).run(withFile(AWS)) as IVerdict;
+  it('scans for the built-ins when the caller says nothing', async () => {
+    const v = await withFile(LINE);
+
     expect(v.ok).toBe(false);
     expect(v.findings.some((f) => f.message.includes('aws-access-key-id'))).toBe(true);
   });
 
-  it('lets a repository switch off a vendor it does not use — with a reason, said out loud', () => {
-    const v = secretScan({
-      ...ID,
+  it('lets a repository switch off a vendor it does not use — with a reason, said out loud', async () => {
+    const v = await withFile(LINE, {
       patterns: { disable: [{ id: 'aws-access-key-id', why: 'no AWS account anywhere in this org' }] },
-    }).run(withFile(AWS)) as IVerdict;
+    });
+
     expect(v.ok).toBe(true);
     expect(v.findings.some((f) => f.severity === 'info' && f.message.includes('no AWS account'))).toBe(true);
   });
 
-  it('scans for a format this package has never heard of', () => {
-    const v = secretScan({
-      ...ID,
+  it('scans for a format this package has never heard of', async () => {
+    const v = await withFile('const k = "ACME-0123456789abcdef0123";', {
       patterns: { extra: [{ id: 'acme-key', label: 'ACME internal key', re: /\bACME-[0-9a-f]{20}\b/ }] },
-    }).run(withFile('const k = "ACME-0123456789abcdef0123";')) as IVerdict;
+    });
+
     expect(v.findings.some((f) => f.message.includes('ACME internal key'))).toBe(true);
   });
 
-  it('replacing the library with nothing scans for nothing, and does not pretend otherwise', () => {
-    const v = secretScan({ ...ID, patterns: { replace: [] } }).run(withFile(AWS)) as IVerdict;
+  it('replacing the library with nothing scans for nothing, and does not pretend otherwise', async () => {
+    const v = await withFile(LINE, { patterns: { replace: [] } });
+
     expect(v.ok).toBe(true);
     expect(v.findings.some((f) => f.message.includes('REPLACED by 0'))).toBe(true);
   });
 
-  it('takes a placeholder vocabulary that is not English', () => {
-    const line = 'const AWS_KEY = "AKIAIOSFODNN7EXAMPLX"; // ZAMENI_MENYA';
-    expect((secretScan({ ...ID }).run(withFile(line)) as IVerdict).ok).toBe(false);
-    const v = secretScan({ ...ID, placeholderMarkers: /ZAMENI_MENYA/ }).run(withFile(line)) as IVerdict;
-    expect(v.ok).toBe(true);
+  it('still says the library was replaced when it also examined nothing', async () => {
+    // The deviation leads either way: a scanner that stopped looking for something must
+    // not read like one that looked and found nothing.
+    const v = await run({ 'logo.png': '' }, { patterns: { replace: [] } });
+
+    expect(v.ok).toBe(false);
+    expect(v.findings[0].message).toContain('REPLACED by 0');
+  });
+
+  it('finds EVERY match of a `/g` pattern a house adds, not every second one', async () => {
+    // `.test` on a global regex resumes from `lastIndex`, carried from one line into the
+    // next: three keys in a file were reported as two, and the missed one was real.
+    const re = /\bACME-[0-9a-f]{20}\b/g;
+    const key = 'ACME-0123456789abcdef0123';
+    const v = await withFile(`a = "${key}"\nb = "${key}"\nc = "${key}"`, {
+      patterns: { extra: [{ id: 'acme-key', label: 'ACME internal key', re }] },
+    });
+
+    expect(v.findings.filter((f) => f.message.includes('[acme-key]')).map((f) => f.line)).toEqual([1, 2, 3]);
+  });
+
+  it('applies a `/g` placeholder vocabulary to every line, not every second one', async () => {
+    const lines = [1, 2, 3].map((n) => `KEY_${n} = "${AWS}" // ZAMENI_MENYA`).join('\n');
+
+    expect((await withFile(lines, { placeholderMarkers: /ZAMENI_MENYA/g })).ok).toBe(true);
+  });
+
+  it('takes a placeholder vocabulary that is not English', async () => {
+    const line = `const AWS_KEY = "${AWS}"; // ZAMENI_MENYA`;
+
+    expect((await withFile(line)).ok).toBe(false);
+    expect((await withFile(line, { placeholderMarkers: /ZAMENI_MENYA/ })).ok).toBe(true);
   });
 });

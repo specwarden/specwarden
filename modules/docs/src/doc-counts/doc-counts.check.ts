@@ -93,6 +93,19 @@ export const DEFAULT_NUMBER = String.raw`\d{1,3}(?:[  ,]\d{3})*|\d{1,4}`;
 /** A measurement that says WHEN it was taken is the honest form, and is left alone. */
 export const DEFAULT_DATED = /\b20\d\d-\d\d-\d\d\b|\bmeasured\b|\bre-measured\b|\bas of\b|\bbaseline\b/i;
 
+/**
+ * A consumer's regex, made safe for the way it is used here.
+ *
+ * `asGlobal` for a pattern that is SCANNED: `matchAll` throws on a non-global regex, and
+ * an `exec` loop over one never advances — a menu `reference` written without `/g` hung
+ * the whole run on the first line that matched. `asStateless` for a pattern that is TESTED: a
+ * `/g` regex keeps `lastIndex` between calls, so the second dated line of a document read
+ * as undated and every other skipped path was scanned.
+ */
+const asGlobal = (re: RegExp): RegExp => (re.global ? re : new RegExp(re.source, `${re.flags}g`));
+const asStateless = (re: RegExp): RegExp =>
+  re.global || re.sticky ? new RegExp(re.source, re.flags.replace(/[gy]/g, '')) : re;
+
 export interface ICountHit {
   readonly file: string;
   readonly line: number;
@@ -133,10 +146,12 @@ export function scanCounts(input: {
   readonly dated?: RegExp;
 }): ICountHit[] {
   const hits: ICountHit[] = [];
-  const dated = input.dated ?? DEFAULT_DATED;
+  const dated = asStateless(input.dated ?? DEFAULT_DATED);
+  const skipped = input.skipped.map(asStateless);
+  const claim = asGlobal(input.claim);
 
   for (const file of input.files) {
-    if (input.skipped.some((re) => re.test(file))) continue;
+    if (skipped.some((re) => re.test(file))) continue;
     const source = input.read(file);
     if (source === undefined) continue;
 
@@ -155,9 +170,9 @@ export function scanCounts(input: {
       const line = rawLine.replace(/`[^`]*`/g, '').replace(/^\s*>\s?/, '');
       if (dated.test(line) || headingDated) continue;
 
-      input.claim.lastIndex = 0;
+      claim.lastIndex = 0;
       let match: RegExpExecArray | null;
-      while ((match = input.claim.exec(line))) {
+      while ((match = claim.exec(line))) {
         const groups = match.groups as { lead?: string; hedge?: string; num: string; noun: string };
         if (groups.lead || groups.hedge) continue;
         if (groups.num === '0') continue;
@@ -173,7 +188,7 @@ export function scanCounts(input: {
 
 export function menuLabels(source: string, item: RegExp): Map<string, string> {
   const labels = new Map<string, string>();
-  for (const match of source.matchAll(item)) {
+  for (const match of source.matchAll(asGlobal(item))) {
     // The parenthetical is a gloss, not the name — "Test restore (throwaway container)" is
     // cited as "Test restore", so matching the full string reports every correct citation.
     labels.set(match[1] as string, (match[2] as string).replace(/\s*\(.*$/, '').trim());
@@ -199,7 +214,7 @@ export function duplicateMenuNumbers(source: string, dispatch: RegExp): string[]
   const problems: string[] = [];
   const seen = new Map<string, number>();
 
-  for (const match of source.matchAll(dispatch)) {
+  for (const match of source.matchAll(asGlobal(dispatch))) {
     const number = match[1] as string;
     seen.set(number, (seen.get(number) ?? 0) + 1);
   }
@@ -235,17 +250,19 @@ export function scanOrdinals(input: {
   readonly reference: RegExp;
 }): IOrdinalHit[] {
   const hits: IOrdinalHit[] = [];
+  const skipped = input.skipped.map(asStateless);
+  const reference = asGlobal(input.reference);
 
   for (const file of input.files) {
-    if (input.skipped.some((re) => re.test(file))) continue;
+    if (skipped.some((re) => re.test(file))) continue;
     const source = input.read(file);
     if (source === undefined) continue;
 
     const lines = source.split('\n');
     for (const [index, line] of lines.entries()) {
-      input.reference.lastIndex = 0;
+      reference.lastIndex = 0;
       let match: RegExpExecArray | null;
-      while ((match = input.reference.exec(line))) {
+      while ((match = reference.exec(line))) {
         const number = match[1] as string;
         const label = input.labels.get(number);
         if (label === undefined) {
@@ -281,7 +298,7 @@ export function docCounts(options: IDocCountsOptions): ICheck {
     when: options.when,
     run: (ctx): IVerdict => {
       const read = (file: string): string | undefined => ctx.files.tryRead(file);
-      const files = ctx.vcs.trackedFiles('*.md');
+      const files = ctx.vcs.trackedFiles('**/*.md');
       const failures: string[] = [];
 
       const allowed = options.allowlist(read).map((entry) => ({

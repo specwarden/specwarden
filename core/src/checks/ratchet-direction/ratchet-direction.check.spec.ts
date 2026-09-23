@@ -80,7 +80,7 @@ describe('ratchetDirection', () => {
 
   it('a floor fails when the stored value falls BELOW it', async () => {
     // A score that only rises. Judged by the debt rule this would pass at any value,
-    // which is why both of the first consumer's floors lived outside the mechanism.
+    // which is why a floor could not live inside the mechanism before `direction`.
     const v = await run(
       { '.specwarden/ratchets/s.json': '{"id":"s","value":61}' },
       { roster: [declaring('s', 68, 'up')] },

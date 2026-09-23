@@ -52,9 +52,8 @@ function ceilingsFrom(
  *
  * WHICH WAY IS WRONG depends on the ratchet. A debt count may not rise above its
  * ceiling; a score floor may not fall below it. The direction is the one the check
- * declares, so a floor stops having to be kept outside the mechanism — which is where
- * both of the first consumer's floors ended up, each validating its own JSON by hand
- * and neither covered by this audit at all.
+ * declares, so a floor stops having to be kept outside the mechanism — validating its
+ * own JSON by hand, and covered by this audit not at all.
  *
  * A PRODUCT check: reading and validating a store of ratchets is universal; WHERE
  * the store lives is an option the consumer supplies, and the thresholds come from

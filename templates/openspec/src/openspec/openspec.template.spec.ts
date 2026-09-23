@@ -1,8 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
+import type { IPart } from '@specwarden/scaffold-parts';
 import type { ITemplateContext } from 'specwarden';
 
 import { openspecTemplate } from './openspec.template';
@@ -85,6 +86,9 @@ describe('what it adds beside the seam', () => {
       openspecTemplate.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
     );
     for (const id of live) expect(named.has(id), `${id} enforces no rule`).toBe(true);
+    // And the reverse: a rule naming a check nobody wrote fails `enforcement-resolves` on
+    // the tree the scaffold just produced.
+    for (const id of named) expect(live, `a rule names ${id}, which is not written`).toContain(id);
   });
 
   it('every generated check imports and constructs', async () => {
@@ -98,6 +102,38 @@ describe('what it adds beside the seam', () => {
           .pop()
           ?.replace(/\.check\.mjs$/, ''),
       );
+    }
+  });
+});
+
+describe('the config fragment it hands init', () => {
+  it('imports only from a file this tree writes — a fragment importing a missing file breaks the config on load', () => {
+    const extras = openspecTemplate.configExtras?.(ctx());
+    const imported = [...(extras?.imports ?? '').matchAll(/from '\.\/([^']+)'/g)].map((m) => m[1]);
+
+    expect(imported.length).toBeGreaterThan(0);
+    for (const file of imported) expect(openspecTemplate.files(ctx()).map((f) => f.path)).toContain(file);
+  });
+
+  it('still hands init a fragment — never undefined — when its parts contribute no config source', async () => {
+    // init splices `fields` into the config file it writes; `undefined` there is a config
+    // that prints the word "undefined" into itself. The parts this template composes all
+    // contribute today, so the fallback is reached through the seam, not by accident.
+    vi.resetModules();
+    vi.doMock('@specwarden/scaffold-parts', async (original) => {
+      const parts: typeof import('@specwarden/scaffold-parts') = await original();
+      return {
+        ...parts,
+        compose: (...args: IPart[]) => ({ ...parts.compose(...args), configExtras: undefined }),
+      };
+    });
+    try {
+      const { openspecTemplate: isolated } = await import('./openspec.template');
+
+      expect(isolated.configExtras?.(ctx())).toEqual({ fields: '' });
+    } finally {
+      vi.doUnmock('@specwarden/scaffold-parts');
+      vi.resetModules();
     }
   });
 });

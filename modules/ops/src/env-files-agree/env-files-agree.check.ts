@@ -173,7 +173,10 @@ export function envFilesAgree(options: IEnvFilesAgreeOptions): ICheck {
       }
 
       for (const mode of options.modes) {
-        const forMode = (template: string): string => template.replace('${MODE}', mode);
+        // EVERY occurrence: `replace` with a string pattern substitutes only the first, so
+        // `${MODE}/.env.${MODE}` resolved to `prod/.env.${MODE}` — a file that never exists,
+        // and a mode reported SKIPPED over files that were right there.
+        const forMode = (template: string): string => template.replaceAll('${MODE}', mode);
 
         const loaded = new Map<string, Map<string, string>>();
         for (const [, { envFiles }] of compose) {

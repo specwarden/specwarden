@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { InMemoryFileSource } from 'specwarden';
-import { stripHeredocs } from 'specwarden';
+import { type IVerdict, errorsOf, runCheck, stripHeredocs } from 'specwarden';
 import { functionSpans, localOutsideFunction, shellLocalScope } from './shell-local-scope.check';
 
 /**
- * Carried verbatim from the consumer-side check this replaced. Every case is a shape the
- * scan got wrong at some point — the main block that is not a function, the nested block
- * that is, the heredoc body that must not fire the rule and must not shift the line number.
+ * Every case is a shape a line-based scan gets wrong — the main block that is not a
+ * function, the nested block that is, the heredoc body that must not fire the rule and
+ * must not shift the line number.
  */
 describe('localOutsideFunction', () => {
   it('finds a local inside a BASH_SOURCE main block, which is not a function', () => {
@@ -109,40 +108,72 @@ describe('functionSpans / stripHeredocs', () => {
   });
 });
 
+describe('functionSpans — the closing brace', () => {
+  it('ignores a brace at another indent — only the one level with the opener closes it', () => {
+    // An `if` body's closing `}` inside a function is not the function ending; closing on
+    // it would read the rest of the function as top level and report every `local` in it.
+    const lines = ['f() {', '  { grouped; ', '  }', '  local x', '}'];
+
+    expect(functionSpans(lines)).toEqual([[0, 4]]);
+  });
+
+  it('ignores a stray closing brace before any function opens', () => {
+    expect(functionSpans(['}', 'f() {', '}'])).toEqual([[1, 2]]);
+  });
+});
+
 describe('shellLocalScope', () => {
   const check = shellLocalScope({
     id: 'shell-local-scope',
     title: 'no local outside a function',
-    pathspecs: ['scripts/*.sh'],
+    pathspecs: ['scripts/*.sh', 'scripts/**/*.sh'],
     when: () => true,
   });
 
-  const runOver = (files: Record<string, string>) => {
-    const source = new InMemoryFileSource(files, '');
-    const vcs = { trackedFiles: () => Object.keys(files) };
-    return check.run({ files: source, vcs } as never);
-  };
+  const runOver = (tree: Record<string, string>, tracked?: readonly string[]): Promise<IVerdict> =>
+    runCheck(check, { tree, tracked });
 
-  it('passes over clean scripts and says how many it read', () => {
-    const verdict = runOver({ 'scripts/a.sh': 'f() {\n  local x\n}\n' });
-
-    expect(verdict.ok).toBe(true);
-    expect(verdict.findings[0]?.message).toContain('1 shell file');
+  it('is a product-zone, read-only check', () => {
+    expect(check).toMatchObject({ zone: 'product', capabilities: ['read'], tier: 'fast' });
   });
 
-  it('reports the file and line of a misplaced local', () => {
-    const verdict = runOver({ 'scripts/a.sh': 'local x\n' });
+  it('passes over clean scripts and says how many it read — each file once, whatever overlaps', async () => {
+    // `scripts/*.sh` and `scripts/**/*.sh` both select a.sh; counted twice, the pass line
+    // would claim a corpus larger than the one examined.
+    const verdict = await runOver({ 'scripts/a.sh': 'f() {\n  local x\n}\n', 'scripts/ci/b.sh': 'echo\n' });
+
+    expect(verdict).toEqual({
+      ok: true,
+      findings: [{ severity: 'info', message: '✓ 2 shell file(s), 0 misplaced `local`' }],
+    });
+  });
+
+  it('reports the file and line of a misplaced local', async () => {
+    const verdict = await runOver({ 'scripts/a.sh': 'echo\nlocal x\n' });
 
     expect(verdict.ok).toBe(false);
     expect(verdict.findings[0]?.file).toBe('scripts/a.sh');
-    expect(verdict.findings[0]?.message).toContain('scripts/a.sh:1');
+    expect(errorsOf(verdict)).toEqual(['scripts/a.sh:2  local x']);
+  });
+
+  it('reads only what the pathspecs select — a vendored script is not the host’s to style', async () => {
+    const verdict = await runOver({ 'scripts/a.sh': 'echo\n', 'vendor/tool.sh': 'local x\n' });
+
+    expect(verdict.ok).toBe(true);
+  });
+
+  it('skips a tracked script the file source cannot read', async () => {
+    const verdict = await runOver({ 'scripts/a.sh': 'echo\n' }, ['scripts/a.sh', 'scripts/deleted.sh']);
+
+    expect(verdict.ok).toBe(true);
   });
 
   /** A scan that matched nothing is a broken check, not a clean tree. */
-  it('fails when it matched no files at all', () => {
-    const verdict = runOver({});
+  it('fails when it matched no files at all, naming the pathspecs', async () => {
+    const verdict = await runOver({ 'README.md': '# x' });
 
-    expect(verdict.ok).toBe(false);
-    expect(verdict.findings[0]?.message).toContain('examined nothing');
+    expect(errorsOf(verdict)).toEqual([
+      'no shell files matched scripts/*.sh, scripts/**/*.sh — this check examined nothing',
+    ]);
   });
 });

@@ -40,8 +40,8 @@
     "build": "pnpm -r run build",
     "//verify:build": "Installs the built tarballs into a temporary project and imports from them. `dist/index.js exists` proves a file exists; this proves a consumer can use it.",
     "verify:build": "pnpm run build && node scripts/verify-build.mjs",
-    "//check": "Everything, in the order a failure is cheapest to read. Drift first: a stale generated file makes every later check describe something that is not what ships.",
-    "check": "pnpm run check:drift && pnpm run check:lockfile && pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run check:router && pnpm run check:skills && pnpm run test:scripts && pnpm run test && pnpm run verify:build && pnpm run check:publishable",
+    "//check": "The whole list, both tiers, through the engine. It used to be a hand-kept chain of eleven scripts beside `pnpm gate`, and the chain had already fallen behind: `package-playgrounds` and `playgrounds` were gates and not in it, so `pnpm release` — which ran the chain — could ship over both. One list; this is it.",
+    "check": "node core/bin/warden.mjs check --all",
     "changeset": "changeset",
     "version:packages": "changeset version",
     "//release": "Publishes every package to npm. The order is the point: everything is checked, then the whole chain is built and verified, then the packages go — so a manual release cannot skip what CI runs for it. Add --otp=<code> when the account has 2FA.",
@@ -50,7 +50,8 @@
     "gate": "node core/bin/warden.mjs check",
     "gate:fast": "node core/bin/warden.mjs check --tier fast",
     "gate:heavy": "node core/bin/warden.mjs check --tier heavy",
-    "doctor": "node core/bin/warden.mjs doctor"
+    "doctor": "node core/bin/warden.mjs doctor",
+    "check:changesets": "node scripts/check-changesets.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.1",
@@ -72,6 +73,7 @@
     "@specwarden/template-ops": "workspace:*",
     "@specwarden/template-speckit": "workspace:*",
     "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "^4.0.0",
     "eslint": "^9.39.0",
     "prettier": "^3.8.0",
     "specwarden": "workspace:*",

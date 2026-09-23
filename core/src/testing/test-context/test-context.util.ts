@@ -11,13 +11,14 @@ import type {
   IVerdict,
 } from '../../domain';
 import { InMemoryFileSource } from '../../infrastructure';
+import { matchPathspec } from '../../infrastructure/git-vcs/git-pathspec/git-pathspec.util';
 
 /**
  * A check context for a test, with every port answered or honestly refused.
  *
  * WHY THIS SHIPS WITH THE ENGINE. The whole argument for ports is that a check can
- * be run against a constructed tree instead of a checkout. Measured in the first
- * consumer, that argument was not reaching anyone: of 23 tests written for check
+ * be run against a constructed tree instead of a checkout. Measured over a corpus
+ * of real check tests, that argument was not reaching anyone: of 23 tests written for check
  * bodies, ZERO imported anything from the engine. They built duck-typed literals
  * instead — `check.run({ files: { tryRead: () => undefined } })` — which work only
  * while the body happens to touch exactly the method the literal defines, and fail
@@ -78,7 +79,7 @@ export interface ITestContext extends ICheckContext {
   readonly commands: readonly { command: string; args: readonly string[] }[];
 }
 
-function fakeVcs(options: ITestContextOptions, matching: (pathspec: string) => readonly string[]): IVcs {
+function fakeVcs(options: ITestContextOptions, everyFile: readonly string[]): IVcs {
   const tracked = options.tracked;
   return {
     refExists: (ref) => (options.branches ?? []).includes(ref),
@@ -89,20 +90,19 @@ function fakeVcs(options: ITestContextOptions, matching: (pathspec: string) => r
     changedLineCount: () => undefined,
     trackedFiles: (pathspec) => {
       if (typeof tracked === 'function') return tracked(pathspec);
-      if (tracked !== undefined) return tracked;
-      // The default is the tree itself, matched through the FILE SOURCE's own glob
-      // engine rather than a second one written here — a test whose pathspec means
-      // something different from what the real check will see is worse than no test.
-      // A test that says nothing about version control usually means "the tree is the
-      // repository", and making that the default keeps the common case to one option.
+      // A tracked LIST is filtered by the pathspec, the way git filters the index. It was
+      // returned whole, whatever was asked — so a check handed `docs/*.md` got the
+      // package manifests too, and no test written with an explicit list ever exercised
+      // the check's own choice of files.
       //
-      // An EMPTY pathspec is "every tracked file" to git, and a check scanning the whole
-      // tree passes exactly that — `trackedFiles(options.scan ?? '')` is the shipped
-      // shape. Forwarded to a glob it matches nothing, so the check examines an empty
-      // corpus and reports green: this product's own central failure, inside the fixture
-      // meant to prove that a check can fail. Caught when a credential scan passed over
-      // a tree with a credential in it.
-      return matching(pathspec ? pathspec : '**/*');
+      // The default is the tree itself: a test that says nothing about version control
+      // usually means "the tree is the repository".
+      //
+      // Both go through `pathspecMatcher`, the one reading the real adapter is held to.
+      // An EMPTY pathspec is "every tracked file" there — the trap this kit once fell
+      // into, forwarding it to a glob that matched nothing, so a credential scan passed
+      // over a tree with a credential in it.
+      return matchPathspec(pathspec, tracked ?? everyFile);
     },
   };
 }
@@ -148,7 +148,13 @@ export function testContext(options: ITestContextOptions = {}): ITestContext {
     ratchet: options.ratchet,
     roster: () => options.roster ?? [],
     files,
-    vcs: fakeVcs(options, (pathspec) => files.glob(pathspec)),
+    // EVERY file in the tree, dotfiles included: git tracks a `.env` like anything else,
+    // and the file source's glob — which skips dotfiles, as `fs.globSync` does — is the
+    // wrong engine to ask what the index holds.
+    vcs: fakeVcs(
+      options,
+      Object.keys(options.tree ?? {}).map((p) => p.replace(/\\/g, '/').replace(/^\.?\//, '')),
+    ),
     proc,
     clock,
     writer,

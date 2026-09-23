@@ -39,7 +39,10 @@ const slug = (text: string): string =>
 export function openspec(options: IOpenspecOptions = {}): ISpecSource {
   const root = options.root ?? 'openspec';
   const specFile = options.specFile ?? 'spec.md';
-  const heading = options.requirementHeading ?? REQUIREMENT_HEADING;
+  // Without `g` or `y`: `exec` on such a regex resumes from `lastIndex`, which survives from
+  // one line to the next, so a consumer's `/g` heading read every second requirement.
+  const given = options.requirementHeading ?? REQUIREMENT_HEADING;
+  const heading = given.global || given.sticky ? new RegExp(given.source, given.flags.replace(/[gy]/g, '')) : given;
   return {
     name: 'openspec',
     /**
@@ -93,7 +96,11 @@ export function openspec(options: IOpenspecOptions = {}): ISpecSource {
           items.push({ id: `${change}#${n}`, title: m[2], done: m[1].toLowerCase() === 'x' });
         }
       }
-      return { found: true, items };
+      // The same contract `requirements()` was fixed to keep: found, and empty, says so —
+      // a bare empty list reads as "every task is done", which is a check that cannot fail.
+      return items.length > 0
+        ? { found: true, items }
+        : { found: true, items, note: `${changesDir} holds no task checkbox — no change has a \`tasks.md\` yet.` };
     },
   };
 }

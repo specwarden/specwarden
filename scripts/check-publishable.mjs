@@ -12,33 +12,36 @@
  * can be unpublished exactly once in that version's life; for all the rest of the time
  * the consumer sees what shipped.
  *
- * Run: node scripts/check-publishable.mjs
+ * Run: node scripts/check-publishable.mjs [--releasing]
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { ORIGIN, PACKAGES, pkgDir, pkgName } from './registry.mjs';
 
-const ROOT = process.cwd();
-
-/**
- * Whether a release is being cut right now.
- *
- * `pnpm release` passes it; an ordinary `pnpm check` does not, so the rules that matter
- * only at the moment of publishing do not paint a pre-release repository red. A check
- * that is red for a reason nobody can act on yet is a check everybody learns to skip,
- * and the findings beside it go with it.
- */
-const RELEASING = process.argv.includes('--releasing');
-
 /** Fields npm shows on the package page. Absent, each one is a page that looks abandoned. */
 const REQUIRED_STRINGS = ['name', 'version', 'description', 'license', 'homepage'];
 
-const problems = [];
+/**
+ * Whether a dependency is one of this repository's own packages.
+ *
+ * Read from the REGISTRY, not from a prefix. It was a prefix — `startsWith('specwarden')`
+ * — written when every package was called `specwarden-*`, and it survived the move to the
+ * `@specwarden/` scope unchanged: from then on only the engine counted as a sibling, and a
+ * template pinning `@specwarden/scaffold-parts` at a fixed version passed in silence.
+ */
+const SIBLINGS = new Set(PACKAGES.map(pkgName));
+export const isSibling = (name) => SIBLINGS.has(name);
 
-for (const pkg of PACKAGES) {
+/**
+ * The problems with one package's manifest, as human strings. Empty means fit to publish.
+ *
+ * Pure over what it is handed — the manifest, and a predicate for which files exist — so
+ * its spec drives it with a manifest literal rather than a scratch tree.
+ */
+export function publishProblems(pkg, manifest, { releasing = false, has = () => true } = {}) {
   const dir = pkgDir(pkg);
-  const manifest = JSON.parse(readFileSync(join(ROOT, dir, 'package.json'), 'utf8'));
+  const problems = [];
   const at = (message) => problems.push(`${pkgName(pkg)}: ${message}`);
 
   if (manifest.private === true) {
@@ -59,7 +62,7 @@ for (const pkg of PACKAGES) {
    * everybody to run `check` with something skipped, which is the habit that makes the
    * rest of these findings invisible too.
    */
-  if (RELEASING && manifest.version === '0.0.0') {
+  if (releasing && manifest.version === '0.0.0') {
     at('is still at 0.0.0 — run `pnpm changeset` and `pnpm version:packages` before releasing.');
   }
   if (manifest.license !== ORIGIN.license) at(`declares licence \`${manifest.license}\`, not ${ORIGIN.license}.`);
@@ -89,8 +92,8 @@ for (const pkg of PACKAGES) {
       );
   }
 
-  if (!existsSync(join(ROOT, dir, 'LICENSE'))) at('has no LICENSE file — run `pnpm scaffold`.');
-  if (!existsSync(join(ROOT, dir, 'README.md'))) at('has no README.md — run `pnpm scaffold`.');
+  if (!has(`${dir}/LICENSE`)) at('has no LICENSE file — run `pnpm scaffold`.');
+  if (!has(`${dir}/README.md`)) at('has no README.md — run `pnpm scaffold`.');
 
   /**
    * A `workspace:` range is what pnpm substitutes with a real version at pack time, so
@@ -100,21 +103,38 @@ for (const pkg of PACKAGES) {
    * release and installs whatever was on npm the day somebody typed it.
    */
   for (const [name, range] of Object.entries(manifest.dependencies ?? {})) {
-    if (!name.startsWith('specwarden')) continue;
+    if (!isSibling(name)) continue;
     if (!String(range).startsWith('workspace:')) {
       at(
         `pins the sibling \`${name}\` at \`${range}\` instead of \`workspace:^\` — it would stop following this repository's own releases.`,
       );
     }
   }
+
+  return problems;
 }
 
-if (problems.length > 0) {
-  process.stderr.write(
-    `${problems.length} package(s) are not fit to publish:\n\n${problems.map((p) => `  - ${p}`).join('\n')}\n\n` +
-      'The undo window on npm is 72 hours and exists once per version.\n',
+function main() {
+  const root = process.cwd();
+  const releasing = process.argv.includes('--releasing');
+  const has = (rel) => existsSync(join(root, rel));
+
+  const problems = PACKAGES.flatMap((pkg) =>
+    publishProblems(pkg, JSON.parse(readFileSync(join(root, pkgDir(pkg), 'package.json'), 'utf8')), {
+      releasing,
+      has,
+    }),
   );
-  process.exit(1);
+
+  if (problems.length > 0) {
+    process.stderr.write(
+      `${problems.length} package(s) are not fit to publish:\n\n${problems.map((p) => `  - ${p}`).join('\n')}\n\n` +
+        'The undo window on npm is 72 hours and exists once per version.\n',
+    );
+    process.exit(1);
+  }
+
+  process.stdout.write(`✓ ${PACKAGES.length} package(s) fit to publish\n`);
 }
 
-process.stdout.write(`✓ ${PACKAGES.length} package(s) fit to publish\n`);
+if (process.argv[1]?.endsWith('check-publishable.mjs')) main();

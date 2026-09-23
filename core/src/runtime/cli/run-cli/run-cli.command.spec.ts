@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ICliIo } from '../../../index';
-import { findConfig, main, parseArgs } from '../../../index';
+import { findConfig, main } from '../../../index';
 
 function captureIo(): { io: ICliIo; out: () => string; err: () => string } {
   let out = '';
@@ -15,39 +15,6 @@ function captureIo(): { io: ICliIo; out: () => string; err: () => string } {
     err: () => err,
   };
 }
-
-describe('parseArgs', () => {
-  it('reads the command, flags with values, and boolean flags', () => {
-    expect(parseArgs(['check', '--tier', 'fast'])).toMatchObject({ command: 'check', tier: 'fast' });
-    expect(parseArgs(['check', '--id', 'x', '--base', 'origin/dev', '--shard', '1/3'])).toMatchObject({
-      command: 'check',
-      ids: ['x'],
-      base: 'origin/dev',
-      shard: '1/3',
-    });
-    expect(parseArgs(['check', '--all', '--list', '--json'])).toMatchObject({ all: true, list: true, json: true });
-  });
-
-  it('collects a repeated --id into ids, in order', () => {
-    expect(parseArgs(['check', '--id', 'a', '--id', 'b']).ids).toEqual(['a', 'b']);
-    expect(parseArgs(['check', '--tier', 'fast']).ids).toEqual([]);
-  });
-
-  it('takes the first positional as the command regardless of flag order', () => {
-    expect(parseArgs(['--tier', 'fast', 'check']).command).toBe('check');
-  });
-
-  it('a value flag does not swallow a following flag as its value', () => {
-    // `--base` with no value before `--json`: base stays unset and --json is still parsed.
-    const a = parseArgs(['check', '--base', '--json']);
-    expect(a.base).toBeUndefined();
-    expect(a.json).toBe(true);
-    // Same for --id and --tier at the end of argv.
-    expect(parseArgs(['check', '--id', '--all']).ids).toEqual([]);
-    expect(parseArgs(['check', '--id', '--all']).all).toBe(true);
-    expect(parseArgs(['check', '--tier']).tier).toBeUndefined();
-  });
-});
 
 describe('main over a temp consumer config', () => {
   let dir: string;

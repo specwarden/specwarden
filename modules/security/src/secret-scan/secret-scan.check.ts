@@ -133,8 +133,13 @@ export function secretScan(options: ISecretScanOptions): ICheck {
   const maxBytes = options.maxBytes ?? 1024 * 1024;
 
   const catalog = resolveCatalog(BUILT_IN_SECRET_PATTERNS, options.patterns, 'credential pattern');
-  const patterns = catalog.entries;
-  const placeholders = options.placeholderMarkers ?? DEFAULT_PLACEHOLDER_MARKERS;
+  // Every pattern is `.test`ed line after line, so a consumer's `/g` or `/y` is stripped: the
+  // flag makes `.test` resume from `lastIndex`, and the scan MISSED every second credential
+  // in a file — the one silent failure a credential scanner cannot have.
+  const stateless = (re: RegExp): RegExp =>
+    re.global || re.sticky ? new RegExp(re.source, re.flags.replace(/[gy]/g, '')) : re;
+  const patterns = catalog.entries.map((pattern) => ({ ...pattern, re: stateless(pattern.re) }));
+  const placeholders = stateless(options.placeholderMarkers ?? DEFAULT_PLACEHOLDER_MARKERS);
 
   const allowed = (file: string, patternId: string): boolean =>
     allowlist.some((e) => e.file === file && (e.patternId === '*' || e.patternId === patternId));
@@ -150,10 +155,12 @@ export function secretScan(options: ISecretScanOptions): ICheck {
     // The deviations lead, before any match: a scanner that stopped looking for
     // something must not read like one that looked and found nothing.
     const findings: IFinding[] = [...catalogNotes(catalog.notes)];
+    let scanned = 0;
     for (const file of ctx.vcs.trackedFiles(options.scan ?? '')) {
       if (skip(file)) continue;
       const content = ctx.files.tryRead(file);
       if (content === undefined || content.length > maxBytes || content.includes('\0')) continue;
+      scanned++;
       content.split('\n').forEach((line, index) => {
         for (const pattern of patterns) {
           if (!pattern.re.test(line) || placeholders.test(line) || allowed(file, pattern.id)) continue;
@@ -166,6 +173,22 @@ export function secretScan(options: ISecretScanOptions): ICheck {
           });
         }
       });
+    }
+    // Zero files scanned is a failure, not a clean tree: a `scan` pathspec that matched
+    // nothing, or a skip list that swallowed everything, reports "no credentials" about a
+    // corpus of none — the one verdict a credential scan must never give falsely.
+    if (scanned === 0) {
+      return {
+        ok: false,
+        findings: [
+          ...findings,
+          {
+            severity: 'error',
+            ruleId: options.id,
+            message: `no file matched \`${options.scan ?? '(every tracked file)'}\` after the skipped paths — this scan examined nothing, and a scan that examined nothing cannot fail.`,
+          },
+        ],
+      };
     }
     return verdictFrom(findings, ctx.ratchet ?? options.ratchet);
   });

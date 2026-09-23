@@ -12,6 +12,17 @@ import {
   renderRules,
 } from './scaffold/scaffold.util';
 
+/** The script names a manifest declares — none when there is no manifest or it does not
+ * parse. Every other reader of the manifest degrades to "unknown"; this one threw, so a
+ * half-edited `package.json` made init's first words a stack trace. */
+function declaredScripts(manifest: string | undefined): string[] {
+  try {
+    return Object.keys((JSON.parse(manifest || '{}') as { scripts?: object }).scripts ?? {});
+  } catch {
+    return [];
+  }
+}
+
 /**
  * `specwarden init` — from nothing to a run that passes, in one command.
  *
@@ -65,7 +76,7 @@ export async function init(
     testRunner: shape.testRunner,
     // What the manifest actually declares, so a template wrapping `run lint` can tell
     // whether there is a `lint` to run.
-    scripts: Object.keys((JSON.parse(files.tryRead('package.json') || '{}') as { scripts?: object }).scripts ?? {}),
+    scripts: declaredScripts(files.tryRead('package.json')),
     ci: shape.ci,
     specFramework: shape.specFramework,
     composeFiles: shape.composeFiles,

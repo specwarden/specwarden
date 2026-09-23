@@ -9,7 +9,7 @@ const ID = { id: 'map', title: 'the map matches its generator', tier: 'fast' as 
 const check = (over: Record<string, unknown> = {}) =>
   regenerable({ ...ID, artifact: 'docs/map.md', by: 'generate-map', ...over });
 
-const producing = (stdout: string, status = 0) => ({
+const producing = (stdout: string, status: number | null = 0) => ({
   tree: { 'docs/map.md': 'committed' },
   exec: () => ({ status, stdout, stderr: '' }),
 });
@@ -104,6 +104,25 @@ describe('regenerable', () => {
     const ctx = testContext(producing('', 1));
 
     expect(() => (fixable as { fix: (c: typeof ctx) => unknown }).fix(ctx)).toThrow(/was not written/);
+    expect(ctx.writes.size).toBe(0);
+  });
+
+  /**
+   * A generator killed by a signal has no exit code. Printing "exit null" reads as a
+   * bug in the check; the word says what happened — it was stopped, most likely by its
+   * own deadline — in the verdict and in the refused repair alike.
+   */
+  it('says a generator stopped by a signal was stopped, rather than printing a null exit', async () => {
+    const verdict = await check().run(testContext(producing('', null)));
+
+    expect(errorsOf(verdict)).toEqual(['the generator `generate-map` failed (exit signal).']);
+
+    const fixable = check({ fixable: true });
+    const ctx = testContext(producing('', null));
+    if (!isFixable(fixable)) throw new Error('a fixable regenerable offers no repair');
+    expect(() => fixable.fix(ctx)).toThrow(
+      'the generator `generate-map` failed (exit signal); docs/map.md was not written.',
+    );
     expect(ctx.writes.size).toBe(0);
   });
 

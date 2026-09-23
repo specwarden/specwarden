@@ -14,7 +14,7 @@ import { type TWhen, buildCheck, frameTolerated, resolveWhen } from '../_shared'
 /**
  * The way to write a check that is not one of the declarative primitives.
  *
- * WHAT IT REPLACES, measured rather than guessed. In the first consumer, sixteen
+ * WHAT IT REPLACES, measured rather than guessed. In a corpus of real checks, sixteen
  * check files gave up on the two adapters the engine shipped and wrote a bare object
  * literal instead — not for anything exotic, but because those adapters could not
  * express a ratchet, an isolation flag, a line number or a second severity. Each of

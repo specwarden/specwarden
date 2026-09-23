@@ -24,6 +24,7 @@ Every document below is flat markdown at a stable path. The paths are predictabl
 ## Using it
 
 - [core/skills/specwarden/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/core/skills/specwarden/SKILL.md): writing, running and reasoning about a check
+- [core/GUIDE.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/core/GUIDE.md): the engine end to end
 
 ## Packages
 
@@ -64,9 +65,10 @@ Every document below is flat markdown at a stable path. The paths are predictabl
 - [skills/commits/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/commits/SKILL.md): What the log has to carry that the diff cannot.
 - [skills/documentation/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/documentation/SKILL.md): Comments, READMEs, guides and package docs — what each carries, and what it must not.
 - [skills/gates/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/gates/SKILL.md): How this repository checks itself, where a gate lives, and what makes one worth running.
-- [skills/playgrounds/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/playgrounds/SKILL.md): The committed scaffolded repositories under _playgrounds, what they prove, and how to change one.
+- [skills/plans/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/plans/SKILL.md): Where a working document for unfinished work lives, the shape the plans gate holds it to, and when it dies.
+- [skills/playgrounds/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/playgrounds/SKILL.md): The three kinds of playground — inside each package, inside each template, and the one at the root — what each proves, and how to change one.
 - [skills/publishing/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/publishing/SKILL.md): Versions, changesets, what ships in a tarball, and how a release is cut.
 - [skills/skills/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/skills/SKILL.md): The three things called a skill in this repository, which one ships, and what is generated around it.
 - [skills/structure/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/structure/SKILL.md): Which package a thing belongs in, which folder, which file — and the one dependency direction that must never reverse.
-- [skills/testing/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/testing/SKILL.md): What each kind of test answers, and what a test must assert to be worth running.
+- [skills/testing/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/testing/SKILL.md): What each kind of test answers, where it lives, what it must assert to be worth running, and how coverage is ratcheted.
 - [skills/typescript/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/typescript/SKILL.md): The language settings in force across every package, and what each one forbids.

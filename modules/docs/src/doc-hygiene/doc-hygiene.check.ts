@@ -1,5 +1,6 @@
 import type { ICheck, ICheckContext, ICheckIdentity, IFinding, IVerdict } from 'specwarden';
 import { buildCheck, frameTolerated } from 'specwarden';
+import { nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
 
 export interface IDocHygieneOptions extends ICheckIdentity {
   /** git pathspec for the markdown corpus. */
@@ -56,6 +57,9 @@ export function docHygiene(options: IDocHygieneOptions): ICheck {
 
   return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx: ICheckContext): IVerdict => {
     const files = ctx.vcs.trackedFiles(options.docs).filter((f) => !rendered.has(f));
+    // Zero documents is a failure, not a clean run: otherwise a `docs` pathspec that
+    // stopped matching reports every link resolving over a corpus of nothing.
+    if (files.length === 0) return nothingExamined(options.id, options.docs);
     const text = new Map<string, string>();
     const headings = new Map<string, string[]>();
     for (const f of files) {
@@ -129,7 +133,7 @@ export function docHygiene(options: IDocHygieneOptions): ICheck {
         .join(', ');
       findings.push({
         severity: 'error',
-        message: `${fatCells} table rows over ${limit} chars; the ratchet is ${ratchet}. Fix the longest tables (${worst}). Rule: skills/agent-docs/SKILL.md §3.`,
+        message: `${fatCells} table rows over ${limit} chars; the ratchet is ${ratchet}. Fix the longest tables (${worst}).`,
         ruleId: options.id,
       });
     }

@@ -70,11 +70,9 @@ export class ConstraintCardMissingLineError extends Error {
  * WHAT THIS ENDS. The same prohibitions live in three places: the rule register, the
  * enforcement that implements them (a perimeter rule, a check), and the card that is
  * re-injected into every session. Three registers of one fact, and only the first two
- * had anything reconciling them. Measured in the first consumer on 2026-09-22, they had
- * drifted in BOTH directions: the register marked seven rules irreversible while the
- * card carried thirteen, two register rules never reached the card at all — one of them
- * the prohibition on destroying a volume by subcommand, added because it could name the
- * database volume directly — and four card lines had no rule behind them anywhere.
+ * had anything reconciling them. Unreconciled, they drift in BOTH directions: a rule the
+ * register marks irreversible never reaches the card, and a card line survives with no
+ * rule behind it anywhere — a prohibition an agent is told about and nothing enforces.
  *
  * The card is the one of the three that is read while acting. It is also the only one
  * nothing was generating.

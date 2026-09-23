@@ -102,6 +102,16 @@ describe('@specwarden/plans', () => {
 
     const verdict = await runCheck(check, { tree: BROKEN });
     expect(verdict.ok).toBe(false);
-    expect(errorsOf(verdict).join(' ')).toContain('free-text amount field');
+    expect(errorsOf(verdict).join(' ')).toContain('one global bucket');
+  });
+
+  it('decisionLogShape: a pathspec that matches nothing is a failure, not a clean run', async () => {
+    // The plans folder was renamed and the config was not: every rejection "has a
+    // reason", because none was read.
+    const check = decisionLogShape({ ...ID, id: 'decision-log-shape', docs: 'planning/*.md' });
+
+    const verdict = await runCheck(check, { tree: CLEAN });
+    expect(verdict.ok).toBe(false);
+    expect(errorsOf(verdict)[0]).toContain('examined nothing');
   });
 });

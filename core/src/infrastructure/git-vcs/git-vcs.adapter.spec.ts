@@ -124,6 +124,71 @@ describe('GitVcs', () => {
     expect(new GitVcs(runner, '/repo').changedLineCount('origin/dev')).toBe(8);
   });
 
+  /**
+   * A git that failed has told us nothing, and each answer must SAY so in the shape its
+   * caller reads as "cannot tell" — an empty remote list, no branch names, no changed
+   * set. Parsing a failed command's stdout instead yields a guess, and a guess about
+   * which branches exist is how a plan check fails a first push.
+   */
+  it('remoteBranches answers [] when git fails, never a parse of its error output', () => {
+    const { runner } = fakeRunner({
+      'git branch -r --format=%(refname:short)': { status: 128, stdout: 'origin/looks-real\n', stderr: 'fatal' },
+    });
+    expect(new GitVcs(runner, '/repo').remoteBranches()).toEqual([]);
+  });
+
+  it('branchNames is undefined — cannot tell — when git fails', () => {
+    const { runner } = fakeRunner({
+      'git for-each-ref --format=%(refname:short) refs/heads refs/remotes': {
+        status: 128,
+        stdout: 'dev\n',
+        stderr: '',
+      },
+    });
+    expect(new GitVcs(runner, '/repo').branchNames()).toBeUndefined();
+  });
+
+  it('currentBranch is undefined when git fails or prints nothing, even with a name on stdout', () => {
+    const failed = new GitVcs(
+      fakeRunner({ 'git rev-parse --abbrev-ref HEAD': { status: 128, stdout: 'feature\n', stderr: '' } }).runner,
+      '/repo',
+    );
+    expect(failed.currentBranch()).toBeUndefined();
+    const empty = new GitVcs(fakeRunner({ 'git rev-parse --abbrev-ref HEAD': ok('  \n') }).runner, '/repo');
+    expect(empty.currentBranch()).toBeUndefined();
+  });
+
+  it('changedFiles(base) is undefined when the diff itself fails — not an empty change set', () => {
+    // An empty list would read as "nothing changed" and skip every relevance-filtered check.
+    expect(new GitVcs(fakeRunner({}).runner, '/repo').changedFiles('origin/dev')).toBeUndefined();
+  });
+
+  it('trackedFiles lists the index, and asks git in GLOB mode for a pathspec', () => {
+    const { runner, calls } = fakeRunner({
+      'git ls-files': ok('a.md\ndocs/b.md\n'),
+      'git ls-files -- :(glob)docs/*.md': ok('docs/b.md\n'),
+    });
+    const vcs = new GitVcs(runner, '/repo');
+    expect(vcs.trackedFiles()).toEqual(['a.md', 'docs/b.md']);
+    expect(vcs.trackedFiles('docs/*.md')).toEqual(['docs/b.md']);
+    expect(calls).toContain('git ls-files -- :(glob)docs/*.md');
+  });
+
+  it('trackedFiles answers [] when git fails, and every call runs in the configured cwd', () => {
+    const cwds: (string | undefined)[] = [];
+    const runner: IProcessRunner = {
+      run: (_c, _a, options) => {
+        cwds.push(options?.cwd);
+        return fail();
+      },
+    };
+    const vcs = new GitVcs(runner, '/the/repo');
+    expect(vcs.trackedFiles()).toEqual([]);
+    vcs.refExists('x');
+    vcs.currentBranch();
+    expect(cwds).toEqual(['/the/repo', '/the/repo', '/the/repo']);
+  });
+
   it('changedLineCount is 0 with nothing unpushed and undefined when git fails', () => {
     const empty = new GitVcs(fakeRunner({ 'git rev-list HEAD --not --remotes': ok('') }).runner, '/repo');
     expect(empty.changedLineCount()).toBe(0);

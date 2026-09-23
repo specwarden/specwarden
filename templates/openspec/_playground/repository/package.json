@@ -1,0 +1,14 @@
+{
+  "name": "tally",
+  "version": "1.8.0",
+  "private": true,
+  "description": "Checkout and refunds for a small shop, specified in OpenSpec.",
+  "type": "module",
+  "devDependencies": {
+    "@specwarden/docs": "^0.1.0",
+    "@specwarden/openspec": "^0.1.0",
+    "@specwarden/security": "^0.1.0",
+    "@specwarden/template-openspec": "^0.1.0",
+    "specwarden": "^0.1.0"
+  }
+}

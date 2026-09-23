@@ -23,7 +23,7 @@ export interface ITtyReporterOptions {
 
 /**
  * The human-facing reporter. It renders a check's findings verbatim, one per line,
- * so a migrated check can reproduce a legacy guard's exact text by emitting it as a
+ * so a check wrapping an existing script can reproduce that script's exact text by emitting it as a
  * finding — the frame (`▶`/`✅`/`❌`) is the runner's, the lines between are the
  * check's. It decides nothing about pass/fail; it only renders the verdict.
  *

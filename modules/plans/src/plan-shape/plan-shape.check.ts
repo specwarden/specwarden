@@ -42,10 +42,13 @@ function phaseSections(lines: readonly string[], phaseRe: RegExp): IPhaseSection
   const re = phaseRe.global ? new RegExp(phaseRe.source, phaseRe.flags.replace('g', '')) : phaseRe;
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
-    const heading = re.exec(line);
-    if (heading) {
+    if (re.test(line)) {
       if (current) sections.push(current);
-      current = { title: line.trim(), depth: heading[1].length, line: index + 1, body: [] };
+      // The depth is read from the LINE, never from a capture group of the consumer's
+      // regex. It was `heading[1].length`, and the regex the agentic template writes —
+      // `/^##+\s+(?:Phase|Stage)\b/im` — captures nothing, so every repository scaffolded
+      // with it crashed this check on its first plan with a phase in it.
+      current = { title: line.trim(), depth: /^\s*(#*)/.exec(line)![1].length, line: index + 1, body: [] };
       continue;
     }
     if (!current) continue;
@@ -79,7 +82,9 @@ export function planShape(options: IPlanShapeOptions): ICheck {
   const unacceptedRatchet = options.unacceptedRatchet ?? 0;
 
   return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx: ICheckContext): IVerdict => {
-    if (!ctx.files.exists(options.plansDir)) {
+    // `isDirectory` as well as `exists`: a FILE at that path passed the existence test and
+    // then threw on the listing, crashing the run instead of reporting anything.
+    if (!ctx.files.exists(options.plansDir) || !ctx.files.isDirectory(options.plansDir)) {
       return { ok: true, findings: [{ severity: 'info', message: `no ${options.plansDir}, nothing to verify` }] };
     }
     const hard: IFinding[] = [];
@@ -160,7 +165,17 @@ export function planShape(options: IPlanShapeOptions): ICheck {
     // hard findings never pass, so a passing verdict's error lines are all tolerated
     // by the sizing / unaccepted ratchets — frame them so the ✅ is not printed above
     // a wall of `error` lines.
-    return frameTolerated(ok, findings, 'the sizing / unaccepted-phase ratchets');
+    const verdict = frameTolerated(ok, findings, 'the sizing / unaccepted-phase ratchets');
+    // A folder holding no plan yet is a valid state, the same as no folder — but a blank
+    // pass reads as "every plan is well-shaped", so it says it looked at none.
+    if (plans.length > 0) return verdict;
+    return {
+      ...verdict,
+      findings: [
+        ...verdict.findings,
+        { severity: 'info', message: `no plan in ${options.plansDir}, nothing to verify` },
+      ],
+    };
   });
 }
 

@@ -111,10 +111,9 @@ export interface ICheckMeta {
    *
    * `direction` says which way "towards the target" runs. It defaults to `down`,
    * the debt counter — but a floor that only rises is the same mechanism, and while
-   * it could not be declared, the two floors this engine's first consumer measured
-   * (a coverage number, a mutation score) were kept OUTSIDE the ratchet system
-   * entirely: each read and validated its own JSON by hand, so neither was covered
-   * by the at-rest audit that exists to catch a hand-edited threshold.
+   * it could not be declared, a floor — a coverage number, a mutation score — had to be
+   * kept OUTSIDE the ratchet system entirely, reading and validating its own JSON by
+   * hand, where the at-rest audit that catches a hand-edited threshold never reaches it.
    *
    * `ceiling` is the value the check declares INLINE as the worst it tolerates.
    * The at-rest audit reads it from the roster, which is what lets a repository stop
@@ -133,8 +132,8 @@ export interface ICheckMeta {
    * The rule register and the check roster are two descriptions of one fact, joined
    * only by a string id. That is the shape this engine already refused once for the
    * gate list: a hand-maintained list beside a tree that the engine can read, kept in
-   * step by whoever remembers. The first consumer's register reached 99 rules, 68 of
-   * which name exactly one check, and 34 of which name a check whose id is their own.
+   * step by whoever remembers. Most rules in a register name exactly one check, and
+   * many name a check whose id is their own.
    *
    * A rule declared here joins the register with `enforcement: { checkIds: [<this
    * check>] }` and an id defaulting to the check's own. Rules that belong to no check

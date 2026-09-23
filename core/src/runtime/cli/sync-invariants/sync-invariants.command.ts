@@ -25,6 +25,16 @@ export function syncInvariants(config: IWardenConfig, files: IFileSource, io: IC
     );
     return 0;
   }
+  // FOUND, and empty. The OpenSpec adapter was fixed to report this with a note instead of
+  // passing it off as agreement — and this command never read the note: with no
+  // requirements there is nothing to deposit and nothing orphaned, so it printed "✓ in
+  // sync". A reconciliation over nothing is the check that cannot fail, one layer up.
+  if (result.items.length === 0) {
+    io.out(
+      `spec source "${source.name}" holds no requirements: ${result.note ?? 'nothing to reconcile against'}. (This is not "in sync" — there was nothing to compare.)\n`,
+    );
+    return 0;
+  }
 
   const existing: IExistingInvariant[] = [];
   if (config.invariants) {

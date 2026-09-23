@@ -25,6 +25,18 @@ reverted by the next `pnpm scaffold` rather than released. That is the mechanise
 a rule whose other half is a judgement: which changes are user-visible is what the
 changeset exists to record, and no check can decide it.
 
+Pending changesets live in `.changeset/`, committed WITH the edit — its author is the only
+person who knows whether it breaks anything. `.changeset/README.md` owns what counts as a
+major, and for this product that includes a **verdict**: a check that starts refusing a
+tree it accepted breaks a consumer's CI with nothing changed on their side. It is a major
+unless the newly refused tree has exactly the defect the check is named for; then it is a
+patch that says so in its first line.
+
+`pnpm gate --id changesets` refuses a changeset naming a package the registry does not have
+— found otherwise by `changeset version` on release day — a bump that is not
+patch/minor/major, one with no description, and a config that would let a changeset version
+a private playground.
+
 ## 3. What ships
 
 `files` decides the tarball, and the two ways it goes wrong are opposite:

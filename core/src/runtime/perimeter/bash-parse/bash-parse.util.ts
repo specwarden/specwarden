@@ -6,8 +6,8 @@
  * (no repository or stack knowledge), so it lives in the product; the rules that
  * use it are the repository's.
  *
- * The whole reason this is generated-against rather than example-tested: both false
- * positives in the runtime it was extracted from were ONE command in different
+ * The whole reason this is generated-against rather than example-tested: the false
+ * positives a table-driven matcher produces are ONE command in different
  * clothing. A parser is what turns a wardrobe of disguises back into the command.
  */
 

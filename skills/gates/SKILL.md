@@ -10,8 +10,7 @@ description: How this repository checks itself, where a gate lives, and what mak
 Every argument specwarden makes is about somebody else's repository: one list, a check
 that cannot fail is a defect, a rule without an enforcer is a wish. A repository making
 those arguments while keeping its own guards as loose scripts in a shell chain would be
-making them from a position it had not tested — and would be the second consumer its own
-README admits the engine has never had.
+making them from a position it had not tested.
 
 So the guards are **checks**, under `.specwarden/checks/`, run by the engine this
 repository publishes. `pnpm gate` is the list. There is no second place to add one.
@@ -23,7 +22,21 @@ its own test. `.specwarden/checks/` **wraps** it.
 
 That split is deliberate: a contributor debugging the scaffolder wants
 `node scripts/scaffold.mjs`, not a gate runner — and a gate whose logic is inline is a
-gate whose logic cannot be unit-tested.
+gate whose logic cannot be unit-tested. Every script a gate wraps has
+`scripts/<script>.test.mjs` beside it, run by `scripts-unit`.
+
+**Where a published module already has the opinion, the gate IS that module.**
+`.specwarden/checks/repository/dogfood.check.mjs` runs `@specwarden/agents` over the roster,
+`@specwarden/plans` over `_plans/` and `@specwarden/docs` over the documentation. A script
+of our own beside a module that ships the same check would make the module the one
+documentation check this repository does not run — and the docs gate found a path to a
+file that had never existed, and a link to a folder that had moved, on its first run.
+
+## 2a. One list
+
+`pnpm gate` is the list; `pnpm check` and `pnpm release` call the same engine. `check` was a
+hand-kept chain of scripts beside it once, and had already fallen behind: two gates existed
+that the chain did not run, so a release could ship over both.
 
 ## 3. Two tiers
 

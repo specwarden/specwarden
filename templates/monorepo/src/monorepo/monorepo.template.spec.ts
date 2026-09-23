@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import type { ITemplateContext } from 'specwarden';
+import { type ICheck, type ITemplateContext, runCheck } from 'specwarden';
 
 import { monorepo } from './monorepo.template';
 
@@ -56,6 +56,75 @@ describe('the generated tree actually loads', () => {
   });
 });
 
+describe('every example loads the day somebody renames it', () => {
+  /**
+   * An `.example` is a check nobody has run yet. The whole promise is "fill it in, rename
+   * it, and it enforces the rule" — so the day it is renamed must not be the day it is
+   * found not to parse. Two of this template's examples did not: each escaped its own
+   * template literals once too often and emitted `\`` into the generated file, a syntax
+   * error on the first line anybody would reach.
+   */
+  it('each one, renamed to `.check.mjs`, imports and exports a check with the id its file promises', async () => {
+    const examples = monorepo.files(ctx({ ci: 'github' })).filter((f) => f.path.endsWith('.check.mjs.example'));
+    expect(examples.map((f) => f.path)).toEqual([
+      'checks/workspace/build-order.check.mjs.example',
+      'checks/workspace/dependency-pins.check.mjs.example',
+      'checks/harness/gate-coverage.check.mjs.example',
+    ]);
+
+    for (const file of examples) {
+      const abs = join(scratch, `example-${file.path.replace(/\//g, '-').replace(/\.example$/, '')}`);
+      writeFileSync(abs, file.body);
+      const mod = (await import(pathToFileURL(abs).href)) as { check?: { id: string } };
+      expect(mod.check?.id, `${file.path} does not load as a check`).toBe(
+        file.path
+          .split('/')
+          .pop()
+          ?.replace(/\.check\.mjs\.example$/, ''),
+      );
+    }
+  });
+
+  it('the dependency-pins example says it is inert until a policy is declared, rather than passing green', async () => {
+    // Its policy lists ship empty. Renamed as-is it checks nothing, and a check that
+    // checks nothing must say so instead of printing a clean pass.
+    const file = monorepo.files(ctx()).find((f) => f.path.includes('dependency-pins'));
+    const abs = join(scratch, 'pins-inert.check.mjs');
+    writeFileSync(abs, file?.body ?? '');
+    const { check } = (await import(pathToFileURL(abs).href)) as { check: ICheck };
+
+    const verdict = await runCheck(check, {
+      tree: { 'package.json': JSON.stringify({ dependencies: { react: '^18.0.0' } }) },
+    });
+
+    expect(verdict.findings.map((f) => f.message)).toContain('no policy declared yet — this check is inert');
+  });
+
+  it('the dependency-pins example, once its policy is filled in, fails a caret on a frozen package', async () => {
+    // What "rename it and it enforces" has to mean: the filled-in file goes RED on the
+    // exact defect it names, and green once the tree is fixed.
+    const file = monorepo.files(ctx()).find((f) => f.path.includes('dependency-pins'));
+    const body = (file?.body ?? '').replace('const FROZEN = [];', "const FROZEN = ['react'];");
+    expect(body).toContain("const FROZEN = ['react'];");
+    const abs = join(scratch, 'pins-filled.check.mjs');
+    writeFileSync(abs, body);
+    const { check } = (await import(pathToFileURL(abs).href)) as { check: ICheck };
+
+    const caret = await runCheck(check, {
+      tree: { 'package.json': JSON.stringify({ dependencies: { react: '^18.0.0' } }) },
+    });
+    expect(caret.ok).toBe(false);
+    expect(caret.findings.map((f) => f.message)).toContain(
+      'package.json: react is ^18.0.0 — frozen packages are declared exactly',
+    );
+
+    const exact = await runCheck(check, {
+      tree: { 'package.json': JSON.stringify({ dependencies: { react: '18.3.1' } }) },
+    });
+    expect(exact.ok).toBe(true);
+  });
+});
+
 describe('what a monorepo needs that a single package does not', () => {
   it('checks the lockfile, because a drifted one installs fine here and differently there', () => {
     expect(paths()).toContain('checks/workspace/lockfile.check.mjs');
@@ -64,6 +133,12 @@ describe('what a monorepo needs that a single package does not', () => {
   it('uses the package manager it detected', () => {
     const body = monorepo.files(ctx({ packageManager: 'yarn' })).find((f) => f.path.includes('lockfile'))?.body ?? '';
     expect(body).toContain('yarn install --frozen-lockfile');
+  });
+
+  it('falls back to pnpm when the package manager could not be told — the template is for a pnpm workspace', () => {
+    const body =
+      monorepo.files(ctx({ packageManager: undefined })).find((f) => f.path.includes('lockfile'))?.body ?? '';
+    expect(body).toContain("cmd: 'pnpm install --frozen-lockfile'");
   });
 
   it('scans for credentials ONCE for the whole workspace, not per package', () => {

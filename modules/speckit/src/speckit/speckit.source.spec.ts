@@ -82,3 +82,69 @@ describe('every path is an option, because layouts move', () => {
     expect(source.tasks(files).items[0].title).toBe('measure it');
   });
 });
+
+describe('found, and empty, says so', () => {
+  it('reports a tree with no requirement line WITH a note — a format that drifted reads as "nothing to do"', () => {
+    const r = speckit().requirements(
+      new InMemoryFileSource({ 'specs/001-x/spec.md': '# x\n\nFR-001 the system MUST…' }),
+    );
+
+    expect(r.found).toBe(true);
+    expect(r.items).toEqual([]);
+    expect(r.note).toContain('holds no requirement line');
+  });
+
+  it('reports a tree with no task checkbox WITH a note', () => {
+    const r = speckit().tasks(new InMemoryFileSource({ 'specs/001-x/notes.md': 'nothing here' }));
+
+    expect(r.note).toContain('holds no task checkbox in any `tasks.md`');
+  });
+
+  it('carries no note when it found something', () => {
+    const files = new InMemoryFileSource(TREE);
+
+    expect(speckit().requirements(files).note).toBeUndefined();
+    expect(speckit().tasks(files).note).toBeUndefined();
+  });
+
+  it('skips a feature folder missing its spec or its task list, and still reads the others', () => {
+    const files = new InMemoryFileSource({
+      'specs/001-a/spec.md': '- **FR-001**: a MUST hold',
+      'specs/002-b/tasks.md': '- [ ] b',
+    });
+
+    expect(
+      speckit()
+        .requirements(files)
+        .items.map((i) => i.id),
+    ).toEqual(['001-a#FR-001']);
+    expect(
+      speckit()
+        .tasks(files)
+        .items.map((i) => i.id),
+    ).toEqual(['002-b#1']);
+  });
+
+  it('treats a FILE at the root as no Spec Kit tree', () => {
+    expect(speckit().tasks(new InMemoryFileSource({ specs: 'a file, not a folder' })).found).toBe(false);
+  });
+
+  it('names itself, so a reconciliation can say which source found nothing', () => {
+    expect(speckit().name).toBe('speckit');
+  });
+});
+
+describe('task numbering', () => {
+  it('numbers only the checkboxes — a heading or a note between tasks does not shift the ids', () => {
+    // The id is the position among TASKS. Counted over every line, adding a heading above
+    // task 2 would rename it, and whatever pinned `#2` would silently follow a different task.
+    const r = speckit().tasks(
+      new InMemoryFileSource({ 'specs/001-x/tasks.md': '# Phase 1\n- [ ] one\n\nA note.\n- [X] two\n' }),
+    );
+
+    expect(r.items).toEqual([
+      { id: '001-x#1', title: 'one', done: false },
+      { id: '001-x#2', title: 'two', done: true },
+    ]);
+  });
+});

@@ -13,12 +13,12 @@ describe('CheckRunner selection', () => {
 
   it('applies the relevance predicate against the changed set', async () => {
     const reg = registryOf([
-      check({ id: 'be', when: (c) => c.some((f) => f.startsWith('a/')) }),
+      check({ id: 'server', when: (c) => c.some((f) => f.startsWith('a/')) }),
       check({ id: 'always' }),
     ]);
     const { reporter, ran } = recordingReporter();
     await new CheckRunner(reg, adapters(['b/x']), reporter).run({ tier: 'fast' }, { ci: false });
-    expect(ran).toEqual(['always']); // 'be' filtered out — nothing under a/
+    expect(ran).toEqual(['always']); // 'server' filtered out — nothing under a/
   });
 
   it('an unknowable changed set runs everything, never nothing', async () => {
@@ -79,7 +79,7 @@ describe('CheckRunner selection', () => {
    */
   it('a diff wider than the file trigger drops relevance, and one just under it does not', async () => {
     const reg = registryOf([check({ id: 'x', when: () => false })]);
-    const wide = Array.from({ length: 5 }, (_, i) => `fe/src/x${i}.tsx`);
+    const wide = Array.from({ length: 5 }, (_, i) => `client/src/x${i}.tsx`);
 
     const hit = recordingReporter();
     const over = await new CheckRunner(reg, adapters(wide), hit.reporter).run(
@@ -102,7 +102,7 @@ describe('CheckRunner selection', () => {
     const reg = registryOf([check({ id: 'x', when: () => false })]);
 
     const hit = recordingReporter();
-    const over = await new CheckRunner(reg, adapters(['fe/src/x.tsx'], 9000), hit.reporter).run(
+    const over = await new CheckRunner(reg, adapters(['client/src/x.tsx'], 9000), hit.reporter).run(
       { tier: 'fast', fullRunTriggers: { lines: 9000 } },
       { ci: false },
     );
@@ -110,7 +110,7 @@ describe('CheckRunner selection', () => {
     expect(over.fullRunReason).toMatch(/9000 lines changed/);
 
     const miss = recordingReporter();
-    await new CheckRunner(reg, adapters(['fe/src/x.tsx'], 8999), miss.reporter).run(
+    await new CheckRunner(reg, adapters(['client/src/x.tsx'], 8999), miss.reporter).run(
       { tier: 'fast', fullRunTriggers: { lines: 9000 } },
       { ci: false },
     );
@@ -120,7 +120,7 @@ describe('CheckRunner selection', () => {
   it('an uncountable line total is not grounds for a full run — the file list was readable', async () => {
     const reg = registryOf([check({ id: 'x', when: () => false })]);
     const { reporter, ran } = recordingReporter();
-    await new CheckRunner(reg, adapters(['fe/src/x.tsx'], undefined), reporter).run(
+    await new CheckRunner(reg, adapters(['client/src/x.tsx'], undefined), reporter).run(
       { tier: 'fast', fullRunTriggers: { lines: 1 } },
       { ci: false },
     );
@@ -189,21 +189,21 @@ describe('CheckRunner selection', () => {
   // A CI job asks relevanceOf to decide whether to pay for a database. If it answered
   // differently from the run, the run would then insist on a gate whose setup was skipped.
   it('relevanceOf agrees with the run on the size trigger', () => {
-    const reg = registryOf([check({ id: 'be', when: () => false })]);
-    const wide = Array.from({ length: 5 }, (_, i) => `fe/src/x${i}.tsx`);
+    const reg = registryOf([check({ id: 'server', when: () => false })]);
+    const wide = Array.from({ length: 5 }, (_, i) => `client/src/x${i}.tsx`);
     const runner = new CheckRunner(reg, adapters(wide), recordingReporter().reporter);
-    expect(runner.relevanceOf('be', { fullRunTriggers: { files: 5 } }, { ci: false })).toBe('run');
-    expect(runner.relevanceOf('be', { fullRunTriggers: { files: 6 } }, { ci: false })).toBe('skip');
+    expect(runner.relevanceOf('server', { fullRunTriggers: { files: 5 } }, { ci: false })).toBe('run');
+    expect(runner.relevanceOf('server', { fullRunTriggers: { files: 6 } }, { ci: false })).toBe('skip');
   });
 
   it('relevanceOf answers run/skip without running, honouring shared inputs', () => {
-    const reg = registryOf([check({ id: 'be', when: (c) => c.some((f) => f.startsWith('be/')) })]);
+    const reg = registryOf([check({ id: 'server', when: (c) => c.some((f) => f.startsWith('server/')) })]);
     const runner = new CheckRunner(reg, adapters(['other/x']), recordingReporter().reporter);
-    expect(runner.relevanceOf('be', {}, { ci: false })).toBe('skip');
-    const relevant = new CheckRunner(reg, adapters(['be/y']), recordingReporter().reporter);
-    expect(relevant.relevanceOf('be', {}, { ci: false })).toBe('run');
+    expect(runner.relevanceOf('server', {}, { ci: false })).toBe('skip');
+    const relevant = new CheckRunner(reg, adapters(['server/y']), recordingReporter().reporter);
+    expect(relevant.relevanceOf('server', {}, { ci: false })).toBe('run');
     const shared = new CheckRunner(reg, adapters(['package.json']), recordingReporter().reporter);
-    expect(shared.relevanceOf('be', { sharedBuildInputs: ['package.json'] }, { ci: false })).toBe('run');
+    expect(shared.relevanceOf('server', { sharedBuildInputs: ['package.json'] }, { ci: false })).toBe('run');
     expect(() => runner.relevanceOf('nope', {}, { ci: false })).toThrow(RunnerUsageError);
   });
 });

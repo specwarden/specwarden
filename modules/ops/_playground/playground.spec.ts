@@ -41,7 +41,7 @@ describe('@specwarden/ops', () => {
       id: 'env-pairing',
       composeFile: 'docker-compose.yml',
       modes: ['prod'],
-      verifierService: 'be',
+      verifierService: 'api',
       declaredKeys: () => new Set(['EDGE_SECRET']),
     });
 
@@ -83,7 +83,7 @@ describe('@specwarden/ops', () => {
 
     const verdict = await runCheck(check, { tree: BROKEN });
     expect(verdict.ok).toBe(false);
-    expect(errorsOf(verdict).join(' ')).toContain('fe-unit');
+    expect(errorsOf(verdict).join(' ')).toContain('web-unit');
   });
 
   it('buildOrderFollowsDeps: an image builds a package after the packages it imports', async () => {
@@ -91,9 +91,9 @@ describe('@specwarden/ops', () => {
       ...ID,
       id: 'workspace-build-order',
       packagesDir: 'packages',
-      scopePrefix: '@app/',
+      scopePrefix: '@org/',
       containerFiles: '*Dockerfile*',
-      buildInvocation: String.raw`--filter\s+(@app\/[a-z0-9-]+)\s+run\s+build`,
+      buildInvocation: String.raw`--filter\s+(@org\/[a-z0-9-]+)\s+run\s+build`,
     });
 
     expect((await runCheck(check, { tree: CLEAN, tracked: ['Dockerfile'] })).ok).toBe(true);

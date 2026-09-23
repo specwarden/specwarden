@@ -49,6 +49,10 @@ export const TOOLCHAIN = Object.freeze({
   packageManager: 'pnpm@10.18.3',
   devDependencies: Object.freeze({
     '@types/node': '^24.0.0',
+    // The coverage provider `test:coverage` names. It was absent from every manifest while
+    // every manifest carried the script, so the ratchet this repository describes could
+    // not run at all: `vitest run --coverage` died with MISSING DEPENDENCY in each package.
+    '@vitest/coverage-v8': '^4.0.0',
     tsup: '^8.5.0',
     typescript: '^5.9.0',
     vitest: '^4.0.0',
@@ -133,6 +137,7 @@ export const PACKAGES = Object.freeze([
     summary:
       'Ports, primitives, the runner and the CLI, plus the only checks that verify the harness itself: zones, ratchets and the rule register.',
     deps: [],
+    coverage: { statements: 98, branches: 96, functions: 97, lines: 98, measured: '2026-09-23' },
     /** The CLI. A build-free ESM shim that runs the compiled engine and refuses a stale one. */
     bin: { specwarden: './bin/warden.mjs', spw: './bin/warden.mjs' },
     /** Shipped beside `dist` because the shim and its fingerprint are not compiled. */
@@ -161,6 +166,7 @@ export const PACKAGES = Object.freeze([
     summary:
       'Every path a document names resolves, every symbol it cites exists, and no count is restated where the repository already owns it.',
     deps: [],
+    coverage: { statements: 98, branches: 96, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'plans',
@@ -173,6 +179,7 @@ export const PACKAGES = Object.freeze([
     summary:
       'A plan names its acceptance commands, a rejected alternative carries its reason, and a finished plan leaves the live corpus.',
     deps: [],
+    coverage: { statements: 99, branches: 98, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'ops',
@@ -185,6 +192,7 @@ export const PACKAGES = Object.freeze([
     summary:
       'The operational seams: every heavy gate has a CI job, every env file agrees with its siblings, and a Dockerfile builds its dependencies first.',
     deps: [],
+    coverage: { statements: 98, branches: 96, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'security',
@@ -197,6 +205,7 @@ export const PACKAGES = Object.freeze([
     summary:
       'No credential-shaped string reaches the repository — and the allowlist is for the file that necessarily contains the patterns the scan looks for.',
     deps: [],
+    coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'agents',
@@ -209,6 +218,7 @@ export const PACKAGES = Object.freeze([
     summary:
       'Every agent declares its name, description, tools and model; its name matches its file; and only an orchestrator may spawn another.',
     deps: [],
+    coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'openspec',
@@ -218,6 +228,7 @@ export const PACKAGES = Object.freeze([
     summary:
       'The spec seam, one side of it: requirements and tasks come from OpenSpec, and the engine reconciles them against the invariants already deposited.',
     deps: [],
+    coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'speckit',
@@ -227,6 +238,7 @@ export const PACKAGES = Object.freeze([
     summary:
       'The same seam as the OpenSpec module, against the other tool. A repository specified in either gets the reconciliation on day one.',
     deps: [],
+    coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
 
   {
@@ -237,6 +249,7 @@ export const PACKAGES = Object.freeze([
     summary:
       'Module decomposition and the database barrier: a module reaches persistence through a repository, never through a direct ORM import.',
     deps: [],
+    coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
 
   {
@@ -265,6 +278,7 @@ export const PACKAGES = Object.freeze([
     summary:
       'A part is one check: the file that configures it, the rule that file enforces, and where one is needed the config field that makes the two resolve.',
     deps: [],
+    coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'node-ts',
@@ -273,6 +287,7 @@ export const PACKAGES = Object.freeze([
     summary:
       'The smallest tree worth having on day one: documentation paths, a credential scan, and the harness auditing itself.',
     deps: ['@specwarden/scaffold-parts', '@specwarden/docs', '@specwarden/security'],
+    coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'docs-only',
@@ -280,6 +295,7 @@ export const PACKAGES = Object.freeze([
     description: 'A repository whose product IS documentation.',
     summary: 'Every documentation check the docs module has, and nothing that assumes code.',
     deps: ['@specwarden/scaffold-parts', '@specwarden/docs'],
+    coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'monorepo',
@@ -288,6 +304,7 @@ export const PACKAGES = Object.freeze([
     summary:
       'What a workspace can get wrong that a single package cannot: a stale lockfile, a Dockerfile that builds out of order, a heavy gate with no CI job.',
     deps: ['@specwarden/scaffold-parts', '@specwarden/ops', '@specwarden/security', '@specwarden/docs'],
+    coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'nestjs',
@@ -295,6 +312,7 @@ export const PACKAGES = Object.freeze([
     description: 'A NestJS backend — the plugin wired, plus what a backend needs.',
     summary: 'The module-decomposition plugin, the credential scan and the operational checks a service carries.',
     deps: ['@specwarden/scaffold-parts', '@specwarden/plugin-nestjs', '@specwarden/security', '@specwarden/ops'],
+    coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'agentic',
@@ -303,6 +321,7 @@ export const PACKAGES = Object.freeze([
     summary:
       'The agent-facing half: role definitions that resolve, plans that die when finished, and a perimeter computed before the action rather than after it.',
     deps: ['@specwarden/scaffold-parts', '@specwarden/agents', '@specwarden/plans', '@specwarden/docs'],
+    coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'ops',
@@ -310,6 +329,7 @@ export const PACKAGES = Object.freeze([
     description: 'Infrastructure — env files, proxy upstreams, shell scoping, runbooks.',
     summary: 'For a repository whose product is the operation of something else.',
     deps: ['@specwarden/scaffold-parts', '@specwarden/security', '@specwarden/docs', '@specwarden/ops'],
+    coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'openspec',
@@ -317,6 +337,7 @@ export const PACKAGES = Object.freeze([
     description: 'A repository specified with OpenSpec — the spec seam wired.',
     summary: 'The requirement source declared, so `sync-invariants` has both halves on day one.',
     deps: ['@specwarden/scaffold-parts', '@specwarden/openspec', '@specwarden/security', '@specwarden/docs'],
+    coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'speckit',
@@ -324,6 +345,7 @@ export const PACKAGES = Object.freeze([
     description: 'A repository specified with Spec Kit — the spec seam wired.',
     summary: 'The same as the OpenSpec template, against the other tool.',
     deps: ['@specwarden/scaffold-parts', '@specwarden/speckit', '@specwarden/security', '@specwarden/docs'],
+    coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
 ]);
 

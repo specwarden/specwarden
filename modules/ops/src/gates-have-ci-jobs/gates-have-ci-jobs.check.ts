@@ -5,9 +5,9 @@ import { CHECK_CONTRACT_VERSION, type ICheck, type IFinding, type IVerdict, type
  * arbiter, and some job runs the cheap tier.
  *
  * THE DEFECT THIS EXISTS FOR. A gate list opens with a contract — "one job per heavy gate"
- * — and nothing executes it. Measured in the repository this was extracted from: eight
- * heavy gates were in the list and in no matrix at all, among them the only gate that
- * answered "does this image build on its own" and the whole test suite of one workspace. A
+ * — and nothing executes it. The failure it catches, as it is found in practice: several
+ * heavy gates in the list and in no matrix at all, among them the only gate answering
+ * "does this image build on its own" and the whole test suite of one workspace. A
  * gate nobody runs is worse than no gate: the list reads as coverage, the cheap tier does
  * not include it, and the entry keeps its predicate and its hint as though something
  * consumed them.

@@ -1,6 +1,5 @@
 import {
   CHECK_CONTRACT_VERSION,
-  DEFAULT_SHELL,
   shellArgv,
   shellStartFailure,
   type ICheckRule,
@@ -14,6 +13,7 @@ import {
   type TTier,
   type TZone,
 } from '../../../domain';
+import { platformShell } from '../../../infrastructure';
 import { type TWhen, resolveWhen } from '../../../primitives/_shared';
 
 /**
@@ -33,10 +33,12 @@ export interface ICommandCheckSpec {
   readonly title: string;
   readonly tier: TTier;
   /**
-   * How to invoke a shell. Defaults to `bash -c`, which is not universal: a checkout
-   * on a platform without it has no bash, some containers ship only `sh`, and a house
-   * may run everything through another shell entirely. None of those should require
-   * forking the engine, so the shell is a setting with a common default.
+   * How to invoke a shell. Defaults to what `resolveShell` finds for this machine —
+   * `bash -c` everywhere but Windows, and Git's own bash there, because a bare `bash` on
+   * Windows is often WSL's launcher and the command then runs inside Linux. Some
+   * containers ship only `sh`, and a house may run everything through another shell
+   * entirely; neither should require forking the engine, so the shell is a setting, per
+   * check here or for every check through `SPECWARDEN_SHELL`.
    */
   readonly shell?: IShell;
   /** The shell command line. */
@@ -57,9 +59,9 @@ export interface ICommandCheckSpec {
   /** True for a suite that accepts `--shard=i/N`; the run's shard is appended. */
   readonly shardable?: boolean;
   /**
-   * Kill the command after this many seconds. EXECUTED, not merely recorded: this
-   * field sat in a consumer's registry on seven gates for a month while the engine
-   * ignored it, and a declaration nothing reads is a promise nobody keeps.
+   * Kill the command after this many seconds. EXECUTED, not merely recorded: a
+   * timeout the engine carries and never applies is a declaration nothing reads, and
+   * a declaration nothing reads is a promise nobody keeps.
    */
   readonly timeoutSec?: number;
   /**
@@ -185,7 +187,7 @@ export class CommandCheck implements ICheck {
     }
 
     const cmd = this.spec.shardable && ctx.shard ? `${this.spec.cmd} --shard=${ctx.shard}` : this.spec.cmd;
-    const shell = this.spec.shell ?? DEFAULT_SHELL;
+    const shell = this.spec.shell ?? platformShell();
     // Non-blocking when the adapter offers it, so a concurrent run actually overlaps;
     // a synchronous spawn holds the event loop and would make concurrency a no-op.
     const options = { env: this.spec.env, timeoutSec: this.spec.timeoutSec };

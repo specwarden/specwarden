@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ICheckContext, IProcessResult } from '../../../domain';
+import { platformShell } from '../../../infrastructure';
 import { runCheck } from '../../../testing';
 import { CommandCheck, type ICommandCheckSpec } from './command-check.check';
 
@@ -70,10 +71,10 @@ describe('CommandCheck', () => {
       title: 'be',
       tier: 'fast',
       cmd: 'x',
-      when: (changed) => changed.some((f) => f.startsWith('be/')),
+      when: (changed) => changed.some((f) => f.startsWith('server/')),
     });
-    expect(check.when(['be/x.ts'])).toBe(true);
-    expect(check.when(['fe/x.ts'])).toBe(false);
+    expect(check.when(['server/x.ts'])).toBe(true);
+    expect(check.when(['client/x.ts'])).toBe(false);
   });
 });
 
@@ -81,11 +82,14 @@ describe('the shell is a setting, because not every machine has bash', () => {
   const ctxWith = (proc: { run: (c: string, a: readonly string[]) => unknown }) =>
     ({ proc }) as unknown as ICheckContext;
 
-  it('runs through bash by default', () => {
+  it('runs through the shell resolved for this machine by default — bash, or Git’s bash on Windows', () => {
+    // The machine's own answer, not a literal `bash`: on a Windows box with WSL a bare
+    // `bash` runs the command inside Linux, and that is the defect `platformShell` closes.
     let spawned = '';
     const ctx = ctxWith({ run: (c, a) => ((spawned = `${c} ${a.join(' ')}`), { status: 0, stdout: '', stderr: '' }) });
     new CommandCheck({ id: 'x', title: 'x', tier: 'fast', cmd: 'echo hi' }).run(ctx);
-    expect(spawned).toBe('bash -c echo hi');
+    const shell = platformShell();
+    expect(spawned).toBe(`${shell.command} ${shell.args.join(' ')} echo hi`);
   });
 
   it('uses the shell the check was given', () => {
@@ -107,8 +111,8 @@ describe('the shell is a setting, because not every machine has bash', () => {
     const v = new CommandCheck({ id: 'x', title: 'x', tier: 'fast', cmd: 'echo hi' }).run(ctx) as IVerdict;
     expect(v.ok).toBe(false);
     const message = v.findings.map((f) => f.message).join('\n');
-    expect(message).toContain("could not start the shell 'bash'");
-    expect(message).toContain('shell');
+    expect(message).toContain(`could not start the shell '${platformShell().command}'`);
+    expect(message).toContain('SPECWARDEN_SHELL');
   });
 
   it('still reports a real non-zero exit as the command failing', () => {

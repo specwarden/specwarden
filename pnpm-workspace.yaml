@@ -3,3 +3,7 @@ packages:
   - 'modules/*'
   - 'plugins/*'
   - 'templates/*'
+  # The one root playground: every package above, composed. Private, never published —
+  # and a member so it depends on them BY NAME, through their own exports, the way a
+  # consumer does, instead of resolving them by accident through the root's hoisting.
+  - '_playgrounds'

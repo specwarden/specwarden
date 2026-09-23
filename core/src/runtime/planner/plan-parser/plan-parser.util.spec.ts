@@ -43,19 +43,19 @@ describe('parsePlan on a real-format plan', () => {
   const SAMPLE = [
     '# Some feature',
     '',
-    '**Статус:** active',
+    '**Status:** active',
     '**Branch:** feature-x',
     '',
-    '## Фаза 1 — граница зон',
+    '## Phase 1 — the zone boundary',
     'Some prose about the phase.',
     '',
-    '**Приёмка.** `pnpm --dir packages/specwarden/core exec vitest run`',
+    '**Acceptance.** `pnpm --dir core exec vitest run`',
     '',
-    '## Фаза 2 — домен и порты',
+    '## Phase 2 — domain and ports',
     '',
     '**Acceptance.** pnpm run tsc',
     '',
-    '## Зависимости',
+    '## Dependencies',
     'not a phase — a section',
   ].join('\n');
 
@@ -63,7 +63,7 @@ describe('parsePlan on a real-format plan', () => {
     const { plan, findings } = parsePlan(SAMPLE);
     expect(plan.status).toBe('active');
     expect(plan.branch).toBe('feature-x');
-    expect(plan.phases.map((p) => p.title)).toEqual(['граница зон', 'домен и порты']); // the ## section is not a phase
+    expect(plan.phases.map((p) => p.title)).toEqual(['the zone boundary', 'domain and ports']); // the ## section is not a phase
     expect(plan.phases[0].acceptance).toContain('vitest run');
     expect(plan.phases[1].acceptance).toBe('pnpm run tsc');
     expect(findings).toEqual([]);
@@ -72,12 +72,12 @@ describe('parsePlan on a real-format plan', () => {
 
 describe('the parser complains rather than skipping silently', () => {
   it('flags a plan with no status', () => {
-    const { findings } = parsePlan('# x\n\n## Фаза 1 — a\n**Приёмка.** cmd\n');
+    const { findings } = parsePlan('# x\n\n## Phase 1 — a\n**Acceptance.** cmd\n');
     expect(findings.some((f) => f.message.includes('no `**Status:**`'))).toBe(true);
   });
 
   it('flags a phase with no acceptance command', () => {
-    const { findings } = parsePlan('**Status:** draft\n\n## Фаза 1 — a\nprose only\n');
+    const { findings } = parsePlan('**Status:** draft\n\n## Phase 1 — a\nprose only\n');
     expect(findings.some((f) => f.severity === 'error' && f.message.includes('no acceptance command'))).toBe(true);
   });
 });

@@ -6,10 +6,9 @@ import { stripHeredocs } from 'specwarden';
  *
  * THE DEFECT. A script gains a `local` inside a `BASH_SOURCE` main block, which is not a
  * function. bash answers `local: can only be used in a function`, that is a FAILING
- * command, and a script running under `set -Eeuo pipefail` aborts on that line. In the
- * repository this was extracted from it reached a restore drill: the drill would have died
- * mid-run, and the next scheduled one would have reported a failure whose cause was four
- * words in a log nobody reads until something needs restoring.
+ * command, and a script running under `set -Eeuo pipefail` aborts on that line. Put that in
+ * a restore drill and the drill dies mid-run, and the next scheduled one reports a failure
+ * whose cause is four words in a log nobody reads until something needs restoring.
  *
  * WHY A SYNTAX CHECK DOES NOT CATCH IT. `bash -n` passes. `local` is a builtin, not a
  * keyword, so whether it is legal where it stands is only knowable at execution — the check

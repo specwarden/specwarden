@@ -1,9 +1,12 @@
 import type { ICheck, ICheckContext, ICheckIdentity, IFinding } from '../../domain';
-import { buildCheck, lineOf, verdictFrom } from '../_shared';
+import { type ICorpusFloor, belowCorpusFloor, buildCheck, lineOf, verdictFrom, withExaminedNote } from '../_shared';
 
 export interface IReferencesResolveOptions extends ICheckIdentity {
   /** Glob of files whose references are checked. */
   readonly in: string;
+  /** How many files `in` must match for a verdict to count. Defaults to one: no file
+   * means no reference, which resolved trivially and passed in silence. */
+  readonly corpus?: ICorpusFloor;
   /** A global RegExp whose first capture group is the reference to resolve. */
   readonly extract: RegExp;
   /** Whether a reference resolves. Default: it names a file that exists. */
@@ -22,8 +25,17 @@ export function referencesResolve(options: IReferencesResolveOptions): ICheck {
   );
   const resolves = options.resolve ?? ((ref, ctx) => ctx.files.exists(ref));
   return buildCheck(options, ['read'], (ctx) => {
+    const files = ctx.files.glob(options.in);
+    const short = belowCorpusFloor(
+      options.id,
+      files.length,
+      options.corpus,
+      `\`${options.in}\` matched nothing to read`,
+    );
+    if (short) return short;
+
     const findings: IFinding[] = [];
-    for (const file of ctx.files.glob(options.in)) {
+    for (const file of files) {
       const content = ctx.files.read(file);
       for (const m of content.matchAll(re)) {
         const ref = m[1];
@@ -38,6 +50,6 @@ export function referencesResolve(options: IReferencesResolveOptions): ICheck {
         }
       }
     }
-    return verdictFrom(findings, ctx.ratchet ?? options.ratchet);
+    return verdictFrom(withExaminedNote(findings, options.id, files.length), ctx.ratchet ?? options.ratchet);
   });
 }

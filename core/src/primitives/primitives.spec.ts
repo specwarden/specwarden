@@ -31,30 +31,30 @@ function run(check: ICheck, files: InMemoryFileSource, proc?: (cmd: string) => I
 }
 
 describe('siblingRequired', () => {
-  const check = siblingRequired({ ...ID, subjects: 'be/src/**/*.service.ts', require: '{name}.spec.ts' });
+  const check = siblingRequired({ ...ID, subjects: 'server/src/**/*.service.ts', require: '{name}.spec.ts' });
   it('fails when a service has no spec beside it', () => {
-    const v = run(check, new InMemoryFileSource({ 'be/src/a.service.ts': '' }));
+    const v = run(check, new InMemoryFileSource({ 'server/src/a.service.ts': '' }));
     expect(v.ok).toBe(false);
-    expect(v.findings[0].message).toContain('be/src/a.service.spec.ts');
+    expect(v.findings[0].message).toContain('server/src/a.service.spec.ts');
   });
   it('passes when the sibling exists', () => {
-    expect(run(check, new InMemoryFileSource({ 'be/src/a.service.ts': '', 'be/src/a.service.spec.ts': '' })).ok).toBe(
-      true,
-    );
+    expect(
+      run(check, new InMemoryFileSource({ 'server/src/a.service.ts': '', 'server/src/a.service.spec.ts': '' })).ok,
+    ).toBe(true);
   });
 });
 
 describe('forbidImport', () => {
   const check = forbidImport({
     ...ID,
-    from: 'be/src/modules/**',
+    from: 'server/src/modules/**',
     to: 'drizzle-orm',
-    except: ['be/src/modules/**/repositories/**'],
+    except: ['server/src/modules/**/repositories/**'],
   });
   it('fails when forbidden code imports the banned module', () => {
     const v = run(
       check,
-      new InMemoryFileSource({ 'be/src/modules/x/x.service.ts': "import { sql } from 'drizzle-orm';\n" }),
+      new InMemoryFileSource({ 'server/src/modules/x/x.service.ts': "import { sql } from 'drizzle-orm';\n" }),
     );
     expect(v.ok).toBe(false);
     expect(v.findings[0].message).toContain('drizzle-orm');
@@ -63,15 +63,19 @@ describe('forbidImport', () => {
     expect(
       run(
         check,
-        new InMemoryFileSource({ 'be/src/modules/x/repositories/x.repo.ts': "import { sql } from 'drizzle-orm';\n" }),
+        new InMemoryFileSource({
+          'server/src/modules/x/repositories/x.repo.ts': "import { sql } from 'drizzle-orm';\n",
+          // A module file OUTSIDE the exception, so the ban has a corpus to hold.
+          'server/src/modules/x/x.service.ts': "import { XRepository } from './repositories/x.repo';\n",
+        }),
       ).ok,
     ).toBe(true);
   });
   it('a violation within the ratchet passes, keeps the error finding, and frames it as tolerated', () => {
-    const ratcheted = forbidImport({ ...ID, from: 'be/src/modules/**', to: 'drizzle-orm', ratchet: 1 });
+    const ratcheted = forbidImport({ ...ID, from: 'server/src/modules/**', to: 'drizzle-orm', ratchet: 1 });
     const v = run(
       ratcheted,
-      new InMemoryFileSource({ 'be/src/modules/x/x.service.ts': "import { sql } from 'drizzle-orm';\n" }),
+      new InMemoryFileSource({ 'server/src/modules/x/x.service.ts': "import { sql } from 'drizzle-orm';\n" }),
     );
     expect(v.ok).toBe(true);
     // The frame comes first so the ✅ is not printed above a bare `error` line, and
@@ -113,13 +117,13 @@ describe('mustDeclare', () => {
 });
 
 describe('pathContract', () => {
-  const check = pathContract({ ...ID, kind: '**/*_MODULE.md', allowedIn: ['be/src/**'] });
+  const check = pathContract({ ...ID, kind: '**/*_MODULE.md', allowedIn: ['server/src/**'] });
   it('fails for a file of the kind outside its contract', () => {
     const v = run(check, new InMemoryFileSource({ 'docs/FOO_MODULE.md': '' }));
     expect(v.ok).toBe(false);
   });
   it('passes inside the contract', () => {
-    expect(run(check, new InMemoryFileSource({ 'be/src/x/FOO_MODULE.md': '' })).ok).toBe(true);
+    expect(run(check, new InMemoryFileSource({ 'server/src/x/FOO_MODULE.md': '' })).ok).toBe(true);
   });
 });
 

@@ -39,8 +39,8 @@ export interface ILoadedTree {
  * A rule and the check enforcing it are one fact in two places, joined by a string.
  * The gate list already stopped being maintained that way — a check is a file, and
  * the engine reads the folder — while the rule register stayed a hand-kept list
- * beside it, and the first consumer's grew to 99 entries of which 68 named exactly
- * one check and 34 named a check whose id was their own.
+ * beside it — mostly entries naming exactly one check, many naming a check whose id was
+ * their own.
  *
  * SEVERAL CHECKS MAY ENFORCE ONE RULE, so entries sharing an id are merged into one
  * rule naming all of them. That is the many-to-one the register always allowed, now

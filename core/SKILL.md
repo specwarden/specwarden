@@ -55,10 +55,9 @@ source names no host literal and never imports the consumer zone.
 
 9. **A plugin declares; it never supplies a port adapter.** The loader refuses one.
 
-10. **The testing kit is part of the product.** Measured in the first consumer: of 23
-    tests written for check bodies, zero imported anything from the engine — all 23 built
-    duck-typed literals that break the moment a check reads a second port. An unconfigured
-    port therefore throws BY NAME rather than answering emptily.
+10. **The testing kit is part of the product.** Without it, a test for a check body builds
+    a duck-typed context literal that breaks the moment the check reads a second port. An
+    unconfigured port therefore throws BY NAME rather than answering emptily.
 
 ## Changing the engine
 
@@ -81,6 +80,6 @@ source names no host literal and never imports the consumer zone.
 - [`_playground/`](./_playground/) — the engine assembled and run, the way a host
   assembles it. The unit suites all pass against an engine whose pieces no longer fit
   together; this is where the assembly is exercised.
-- [`../_playground/`](../_playground/) — every package in one config.
+- [`../_playgrounds/`](../_playgrounds/) — every package in one config, in-process and through the CLI.
 - [`../skills/`](../skills/) — the repository's canon: checks, gates, testing, publishing,
   structure, commits, documentation, skills, typescript, playgrounds.

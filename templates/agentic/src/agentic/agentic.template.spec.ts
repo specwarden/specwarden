@@ -1,8 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
+import type { IPart } from '@specwarden/scaffold-parts';
 import type { ITemplateContext } from 'specwarden';
 
 import { agentic } from './agentic.template';
@@ -131,5 +132,64 @@ describe('every live check and perimeter rule is named by a rule', () => {
     // ...and the perimeter's own rule ids are enforcers too, which is why the engine
     // takes `otherEnforcerIds`: they resolve against the perimeter file, not the roster.
     expect(named.has('no-force-push')).toBe(true);
+  });
+});
+
+describe('the config fragment it hands init', () => {
+  it('imports only from a file this tree writes — a fragment importing a missing file breaks the config on load', () => {
+    const extras = agentic.configExtras?.(ctx());
+    const imported = [...(extras?.imports ?? '').matchAll(/from '\.\/([^']+)'/g)].map((m) => m[1]);
+
+    expect(imported.length).toBeGreaterThan(0);
+    for (const file of imported) expect(agentic.files(ctx()).map((f) => f.path)).toContain(file);
+  });
+
+  it('still hands init a fragment — never undefined — when its parts contribute no config source', async () => {
+    // init splices `fields` into the config file it writes; `undefined` there is a config
+    // that prints the word "undefined" into itself. The parts this template composes all
+    // contribute today, so the fallback is reached through the seam, not by accident.
+    vi.resetModules();
+    vi.doMock('@specwarden/scaffold-parts', async (original) => {
+      const parts: typeof import('@specwarden/scaffold-parts') = await original();
+      return {
+        ...parts,
+        compose: (...args: IPart[]) => ({ ...parts.compose(...args), configExtras: undefined }),
+      };
+    });
+    try {
+      const { agentic: isolated } = await import('./agentic.template');
+
+      expect(isolated.configExtras?.(ctx())).toEqual({ fields: '' });
+    } finally {
+      vi.doUnmock('@specwarden/scaffold-parts');
+      vi.resetModules();
+    }
+  });
+});
+
+describe('every rule resolves to something this tree registers', () => {
+  it('a check it writes, or a perimeter rule it writes — never a name that resolves to nothing', async () => {
+    // The reverse of "no orphan": a rule naming an enforcer nobody registered fails
+    // `enforcement-resolves` on the tree the scaffold just wrote.
+    const checkIds = new Set(
+      live().map((f) =>
+        f.path
+          .split('/')
+          .pop()
+          ?.replace(/\.check\.mjs$/, ''),
+      ),
+    );
+    const perimeter = agentic.files(ctx()).find((f) => f.path === 'perimeter.mjs');
+    const abs = write('perimeter-ids.mjs', perimeter?.body ?? '');
+    const { rules } = (await import(pathToFileURL(abs).href)) as { rules: readonly { id: string }[] };
+    const perimeterIds = new Set(rules.map((r) => r.id));
+
+    for (const rule of agentic.rules(ctx())) {
+      for (const id of (rule.enforcement as { checkIds: readonly string[] }).checkIds) {
+        expect(checkIds.has(id) || perimeterIds.has(id), `rule ${rule.id} names ${id}, which nothing registers`).toBe(
+          true,
+        );
+      }
+    }
   });
 });

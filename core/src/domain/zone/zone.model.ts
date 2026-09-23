@@ -32,8 +32,8 @@ export class SpecwardenZoneError extends Error {
     readonly location?: string,
   ) {
     super(
-      `zone mismatch${location ? ` at ${location}` : ''}: the file declares ` +
-        `declares zone '' but its location implies ''. ` +
+      `zone mismatch${location ? ` at ${location}` : ''}: the file ` +
+        `declares zone '${declared}' but its location implies '${implied}'. ` +
         `A check written inside the engine is 'product'; one written in a host ` +
         `repository's .specwarden/ is 'consumer'. The two never cross.`,
     );

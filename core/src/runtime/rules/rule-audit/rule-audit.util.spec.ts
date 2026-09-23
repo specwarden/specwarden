@@ -44,9 +44,62 @@ describe('ruleOwnerFindings', () => {
   it('accepts an owner path with a section suffix', () => {
     const files = new InMemoryFileSource({ 'AGENTS.md': '# router' });
     const findings = ruleOwnerFindings(
-      [{ id: 'r', statement: 's', owner: 'AGENTS.md § Migration Rule', enforcement: { checkIds: ['x'] } }],
+      [{ id: 'r', statement: 's', owner: 'AGENTS.md § Releases', enforcement: { checkIds: ['x'] } }],
       files,
     );
     expect(findings).toEqual([]);
+  });
+});
+
+describe('orphanChecks — what counts as enforcing', () => {
+  it('counts only a rule that names checks; a not-mechanizable rule enforces nothing', () => {
+    const rules = [rule('judged', { notMechanizable: 'a human reads it' })];
+
+    expect(orphanChecks(['a'], rules)).toEqual(['a']);
+  });
+
+  it('is empty for an empty roster, and every check is an orphan with no rules', () => {
+    expect(orphanChecks([], [rule('r', { checkIds: ['x'] })])).toEqual([]);
+    expect(orphanChecks(['a', 'b'], [])).toEqual(['a', 'b']);
+  });
+});
+
+describe('ruleOwnerFindings — what counts as a document', () => {
+  /**
+   * An owner may be a PERSON or a team. Checking `@platform` for existence on disk
+   * would fail every rule a person owns — a false positive a repository fixes by
+   * deleting the owner, which is the one field that makes a rule arguable.
+   */
+  it('does not look for a file when the owner is not path-shaped', () => {
+    const files = new InMemoryFileSource({});
+    const findings = ruleOwnerFindings(
+      [{ id: 'p', statement: 's', owner: '@platform', enforcement: { checkIds: ['x'] } }],
+      files,
+    );
+
+    expect(findings).toEqual([]);
+  });
+
+  it('checks an owner that is path-shaped by a slash alone, and names it', () => {
+    const findings = ruleOwnerFindings(
+      [{ id: 'r', statement: 's', owner: 'skills/gates/SKILL', enforcement: { checkIds: ['x'] } }],
+      new InMemoryFileSource({}),
+    );
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({ severity: 'error', ruleId: 'rule-owner-resolves' });
+    expect(findings[0].message).toBe(
+      "rule 'r' names owner 'skills/gates/SKILL', whose document skills/gates/SKILL does not exist",
+    );
+  });
+
+  it('attributes findings to the rule id it is given', () => {
+    const findings = ruleOwnerFindings(
+      [{ id: 'r', statement: 's', owner: 'gone.md', enforcement: { checkIds: ['x'] } }],
+      new InMemoryFileSource({}),
+      'owners',
+    );
+
+    expect(findings[0].ruleId).toBe('owners');
   });
 });

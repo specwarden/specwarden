@@ -43,9 +43,8 @@ const hashFile = join(distDir, '.srchash');
 /**
  * How to rebuild, phrased for wherever this copy is.
  *
- * DERIVED rather than written down: it said `pnpm --dir packages/specwarden/core run
- * build` — the path inside the monorepo this engine was extracted from — and stayed
- * correct exactly as long as there was one checkout. A person meeting this message in an
+ * DERIVED rather than written down: a fixed `pnpm --dir <path> run build` stays correct
+ * exactly as long as there is one checkout. A person meeting this message in an
  * installed copy, or in the standalone repository, would be told to cd into a directory
  * that does not exist, while the thing they actually needed was one word.
  */

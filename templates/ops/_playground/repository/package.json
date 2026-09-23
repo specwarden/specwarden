@@ -1,0 +1,13 @@
+{
+  "name": "harbor-infra",
+  "version": "0.0.0",
+  "private": true,
+  "description": "How the harbor services are deployed, proxied, backed up and rolled back.",
+  "devDependencies": {
+    "@specwarden/docs": "^0.1.0",
+    "@specwarden/ops": "^0.1.0",
+    "@specwarden/security": "^0.1.0",
+    "@specwarden/template-ops": "^0.1.0",
+    "specwarden": "^0.1.0"
+  }
+}

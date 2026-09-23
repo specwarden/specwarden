@@ -1,5 +1,6 @@
 import type { ICheck, ICheckIdentity, IFinding } from 'specwarden';
 import { buildCheck, verdictFrom } from 'specwarden';
+import { nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
 
 export interface IDocSymbolsOptions extends ICheckIdentity {
   /** git pathspec(s) for the code corpus that DEFINES symbols. */
@@ -70,6 +71,13 @@ export function docSymbols(options: IDocSymbolsOptions): ICheck {
     const codeFiles = codeSpecs
       .flatMap((s) => ctx.vcs.trackedFiles(s))
       .filter((f) => !excludeCode.some((e) => f.includes(e)));
+    // Either corpus empty is a failure. No code means nothing is declared and the answer
+    // is compared against nothing; no documents means nothing is read and every symbol
+    // "exists" by default.
+    if (codeFiles.length === 0) return nothingExamined(options.id, codeSpecs.join(', '), 'code file');
+    const docFiles = ctx.vcs.trackedFiles(options.docs).filter((file) => !skipDirs.some((d) => file.startsWith(d)));
+    if (docFiles.length === 0) return nothingExamined(options.id, options.docs);
+
     for (const file of codeFiles) {
       // `d\.ts` before `tsx?` so `foo.d.ts` → `foo`, not `foo.d` (the `tsx?` branch
       // would otherwise match the trailing `.ts` first and leave `.d`).
@@ -81,8 +89,7 @@ export function docSymbols(options: IDocSymbolsOptions): ICheck {
     }
 
     const offenders = new Map<string, string>(); // symbol → first file naming it
-    for (const file of ctx.vcs.trackedFiles(options.docs)) {
-      if (skipDirs.some((d) => file.startsWith(d))) continue;
+    for (const file of docFiles) {
       const src = ctx.files.tryRead(file);
       if (src === undefined) continue;
       for (const m of src.matchAll(symbolRefRe)) {
@@ -95,7 +102,7 @@ export function docSymbols(options: IDocSymbolsOptions): ICheck {
     const findings: IFinding[] = [...offenders.entries()].map(([id, file]) => ({
       severity: 'error',
       file,
-      message: `${file} names \`${id}\`, which no .ts defines. A renamed class leaves the old name in prose; fix the doc, or add the symbol to the framework allowlist.`,
+      message: `${file} names \`${id}\`, which nothing in the code corpus declares. A renamed class leaves the old name in prose; fix the doc, or add the symbol to the framework allowlist.`,
       ruleId: options.id,
     }));
     return verdictFrom(findings, ctx.ratchet ?? options.ratchet);

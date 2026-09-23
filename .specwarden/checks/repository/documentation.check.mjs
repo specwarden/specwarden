@@ -53,7 +53,7 @@ export const checks = [
 
   fromResult({
     id: 'playgrounds',
-    title: 'every template still writes the committed tree, and that tree is green',
+    title: 'every template playground carries exactly the tree init writes into it today',
     tier: 'heavy',
     capabilities: ['read', 'exec'],
     // It scaffolds into temporary directories and runs the engine inside each; two of
@@ -61,10 +61,12 @@ export const checks = [
     // reason.
     exclusive: true,
     timeoutSec: 900,
-    hint: 'Change the template, then `node scripts/playgrounds.mjs --write`, then review the diff.',
+    hint: 'Change the template, then `node scripts/playgrounds.mjs --write <name>`, then review the `.specwarden/` diff. Whether that tree is green, and whether each of its checks can fail, is the template’s own playground spec — run by `unit`.',
     run: () => {
       const problems = verifyPlaygrounds();
-      return problems.length ? { failures: problems } : { notes: ['every playground is current and green'] };
+      return problems.length
+        ? { failures: problems }
+        : { notes: ['every playground config is what its template writes today'] };
     },
   }),
 ];

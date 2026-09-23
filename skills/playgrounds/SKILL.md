@@ -1,122 +1,118 @@
 ---
 name: playgrounds
-description: The three kinds of playground — per package, workspace-wide, and the committed scaffolded repositories — what each proves, and how to change one.
+description: The three kinds of playground — inside each package, inside each template, and the one at the root — what each proves, and how to change one.
 ---
 
 # playgrounds
 
-## 1. Three kinds, and they answer three different questions
+## 1. One at the root; every other one inside its package
 
-| Where                      | Question it answers                                            | Gate                          |
-| -------------------------- | -------------------------------------------------------------- | ----------------------------- |
-| `<pkg>/_playground/`       | does THIS package work, wired the way a consumer wires it      | `package-playgrounds`, `unit` |
-| `_playground/` (root)      | do the packages work TOGETHER, in one config                   | `package-playgrounds`, `unit` |
-| `_playgrounds/<template>/` | does `init --template <name>` still write a tree that is green | `playgrounds`                 |
+| Where                           | Question it answers                                                                                                               | Gates                         |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `<pkg>/_playground/`            | does THIS package work, imported by name, the way a consumer wires it                                                             | `package-playgrounds`, `unit` |
+| `templates/<name>/_playground/` | does `init --template <name>` write a tree that is green over a real repository of its kind — and can every check it wrote go red | `playgrounds`, `unit`         |
+| `_playgrounds/`                 | do ALL the packages work together, under one config, through the CLI                                                              | `package-playgrounds`, `unit` |
 
-They are not tiers of the same thing. A package playground passing says nothing about two
-packages minting the same check id; a workspace playground passing says nothing about what
-a template writes into a stranger's repository; and a scaffolded tree being green says
-nothing about a factory that was renamed. Each failure is invisible to the other two.
+The root holds exactly one playground. A second folder there is how the per-package
+suites started drifting to the root in the first place, and `package-playgrounds` refuses
+one.
+
+They are not tiers of one thing. A package playground passing says nothing about two
+packages minting one check id; the root playground says nothing about what a template
+writes into a stranger's repository; a green template says nothing about a factory that
+was renamed. Each failure is invisible to the other two.
 
 ## 2. `<pkg>/_playground/` — the package, as a consumer wires it
 
-A `playground.spec.ts` beside an optional `repository.ts` holding the fixture.
+A `playground.spec.ts`, and usually a `repository.ts` holding the fixture.
 
 **It imports the package BY NAME**, through its own `exports` map — `@specwarden/docs`,
-never a relative path into `src`. That is the whole difference from the unit suite next to
-it: a unit suite imports by path, so it keeps passing over a package whose factory was
-renamed and never re-exported from the barrel, and that is the first thing a consumer
+never a relative path into `src`. A unit suite imports by path, so it keeps passing over a
+factory that was renamed and never re-exported from the barrel — the first thing a consumer
 meets. The gate checks the import style, not just that the file exists.
 
-**Every check runs twice** — over a clean tree and a broken one. A check returning the
-same verdict for both cannot fail, and a check that cannot fail reports success. The
-fixtures are named `CLEAN` and `BROKEN`, and `BROKEN` carries **one defect per rule**, each
-commented with the shape its check looks for, so a failure names which rule rather than
-"something is wrong".
+**Every check runs twice** — over `CLEAN` and `BROKEN`. `BROKEN` carries one defect per
+rule, each commented with the shape its check looks for. **One repository, not one per
+check**: the checks read the same tree from several angles, and a fixture per check lets
+those angles drift until the playground describes a repository nobody could have.
 
-**One repository, not one per check.** The checks in a package read the same tree from
-several angles; a fixture per check lets those angles drift until the playground describes
-a repository nobody could have.
+**The covered list is asserted against the barrel** through `uncoveredFactories`, which
+tells a factory from a helper by what it RETURNS (a value carrying `id` and `run`). A list
+kept by hand goes stale the first time a factory is added.
 
-**The covered list is asserted against the barrel**, through `uncoveredFactories` from
-the engine's testing kit. A list kept by hand goes stale the first time somebody adds a
-factory — and the new factory then ships untested, silently, because nothing mentions it
-anywhere. A factory is told from a helper by what it RETURNS (a value carrying `id` and
-`run`), never by its name.
+## 3. `templates/<name>/_playground/` — a stranger's repository, and the proof over it
 
-Templates and the scaffold parts are exempt: they publish strings rather than an API, and
-§4 covers them.
-
-## 3. `_playground/` — the workspace, in one config
-
-Every package this repository publishes, named in ONE `defineConfig`, run over ONE
-repository that carries a subject for each of them. A consumer installs four of these
-packages on day one and writes exactly one config, and the failures of that shape are
-invisible to every per-package suite:
-
-- two packages minting the same check id (the second registration throws — the
-  alternative is a check silently unreachable by `--id`);
-- a plugin whose checks never reach the registry;
-- a module built against an older engine — caught by the contract version, rather than at
-  a consumer's first run with an error about a field nobody has heard of;
-- a check left in no tier, or declaring no capability;
-- a module whose corpus is narrowed by another's options and quietly goes silent.
-
-`BROKEN` here carries **one defect per package**, not per rule: the per-package
-playgrounds already hold each check to its own failure. What this tree proves is that
-under a shared config every package still reaches its own subject.
-
-## 4. `_playgrounds/<template>/` — the committed scaffolded repositories
-
-One real repository per template, generated by `specwarden init --template <name>` and
-committed.
-
-**Why committed and not produced in a temp directory.** A template emits _strings_. No
-compiler reads a string, so a module option renamed anywhere leaves every template
-compiling happily and producing a tree that throws on its first run — and the first run is
-what decides whether the tool is kept.
-
-A test in a temp directory catches that, and catches it _invisibly_: nobody reviews a tree
-that existed for four hundred milliseconds inside a test process. Committed, the tree is
-in the diff, and "this template now writes a check nobody asked for" is a review comment
-rather than an archaeology exercise.
-
-**What is checked** — two different questions:
-
-1. the committed tree is **exactly** what `init --template <name>` writes today, so a
-   playground cannot quietly stop describing its template;
-2. the tree is **green** under `check --all` with nothing edited in between, which is the
-   only promise a consumer feels on day one.
-
-**Changing one.** You do not edit a playground. Change the template, then:
-
-```bash
-node scripts/playgrounds.mjs --write
+```
+templates/<name>/_playground/
+  playground.spec.ts   calls provePlayground('<name>', defects, …)
+  repository/          a repository of the kind the template is FOR
+    .specwarden/       exactly what init --template <name> writes there — GENERATED
 ```
 
-and review the diff. A hand edit fails the gate on the next run, which is the point.
+**The repository must be real.** `init` DETECTS what it writes for — no compose file, no
+env-file check; no workflow, no CI-coverage check; no tracked shell, no shell check; no
+`test` script, no test wrapper. The trees these replaced were `init` over a README and a
+package.json: green because there was nothing to check, and with half of every template
+switched off. Over real repositories, on the day they were written, the proofs found:
 
-**The seed is generated too.** The repository a template is scaffolded into is derived
-from the registry: it declares exactly that template's own dependencies, because `init`
-refuses to write a tree whose repository has not declared the packages its checks import —
-such a tree fails on its first run, and refusing is more useful than producing it.
+- the nestjs template red on every TypeORM service (an entity must import the ORM);
+- `plan-shape` crashing on the agentic template's first plan;
+- no documentation check reading a root `README.md` (the pathspec reading, `skills/testing`
+  §3);
+- the monorepo lockfile check verifying the lockfile of the repository ABOVE it.
 
-It carries a README because `init` **detects** what it is writing for: a template writes a
-part only where its subject exists, and an empty directory would produce a playground
-describing a repository nobody has.
+**What the proof asserts** — `scripts/playground-proof.mjs`, written once:
 
-**They borrow this repository's installed dependencies.** A link, not an install. What is
-being tested is the template's **output**, not the package manager: installing eighteen
-packages per playground would add minutes to a check that answers a question about
-strings. Whether a published tarball is usable is a different question, and `verify-build`
-is where it belongs.
+1. green under `check --all` with nothing edited after `init`, no check skipped;
+2. a defect listed for every check the template wrote, and for no check it did not — a new
+   part cannot land without a scene showing it fail;
+3. each defect, planted ALONE, turns exactly its own check red and nothing else, with a
+   finding naming what was planted.
 
-## 5. One trap, in every kind: the empty pathspec
+A template whose distinctive part is not a check adds scenes of its own through
+`inScratchRepository`: the agentic perimeter fed PreToolUse payloads, `sync-invariants` over
+the OpenSpec and Spec Kit trees.
 
-An empty pathspec means _every tracked file_ to git, and a check scanning the whole tree
-passes exactly that — `trackedFiles(options.scan ?? '')` is the shipped shape. Forwarded
-to a glob it matches nothing, the check examines an empty corpus and reports green.
+**Every run is the real CLI over a scratch git repository.** A check reads TRACKED files, so
+a run in place would answer differently before and after somebody's `git add`. The scratch
+copy links exactly what installing the template brings — the template and its own
+dependencies — so a generated check importing a module the template never declared fails
+here as it would for a consumer. A pnpm workspace is installed by pnpm instead: it declares
+the engine with `link:` paths relative to where it is committed, and the harness rebases
+them onto the scratch copy and installs offline.
 
-This has now bitten inside a fixture whose entire job is to prove a check can fail: a
-credential scan passed over a tree with a credential in it. `testContext` handles it; a
-hand-written tracked-file function in a playground must too.
+**Why committed, not produced in a temp directory.** A template emits STRINGS, and no
+compiler reads a string. Committed, the tree is in the diff, and "this template now writes a
+check nobody asked for" is a review comment rather than an archaeology exercise. The
+`playgrounds` gate holds the committed `.specwarden/` to what `init` writes today.
+
+**Changing one.** Change the template, `pnpm --filter @specwarden/template-<name> build`,
+then `node scripts/playgrounds.mjs --write <name>`, and review the `.specwarden/` diff. The
+repository around it is a hand-written fixture; edit it directly, then regenerate, because
+what it contains decides what `init` writes.
+
+## 4. `_playgrounds/` — every package, composed
+
+A private workspace package, `@specwarden-playgrounds/workspace`, that DECLARES every
+published package in its manifest — so it resolves them through their own `exports`, not
+through the root's hoisting.
+
+- `playground.spec.ts` builds one `defineConfig` naming every package and runs the registry
+  and the runner in-process: no two packages mint one id, a plugin's checks reach the
+  registry, every check speaks the current contract version.
+- `cli.spec.ts` writes the same config as FILES — `consumer/` becomes the scratch
+  repository's `.specwarden/` — and runs the CLI: discovery, loading from installed
+  packages, the plugin registered from the config.
+
+Both assert the same two lists in `repository.ts` — every check id, and exactly what the
+broken tree turns red — so the two ways of composing cannot describe different configs.
+
+## 5. The traps, in every kind
+
+- **The empty pathspec** means every tracked file to git; forwarded to a glob it matches
+  nothing, and a credential scan passed over a tree with a credential in it.
+- **A defect that plants nothing** — use `planted()`.
+- **A default shell that is not the one you think.** On Windows a bare `bash` may be
+  WSL's, where the Windows `node` does not exist. The engine resolves Git's own bash for a
+  command check (`resolveShell`; `SPECWARDEN_SHELL` overrides it), and the harness arranges
+  nothing about the PATH — a playground run from PowerShell is what proves that.
