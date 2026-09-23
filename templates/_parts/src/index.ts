@@ -23,9 +23,11 @@
 export type { IPart, IPartOptions } from './_shared/part.model';
 export { compose } from './_shared/compose.util';
 export type { IComposed } from './_shared/compose.util';
+export { exampleRule, header, literal, switchOn, tierOption } from './_shared/render.util';
 
 export { secretScanPart } from './secret-scan/secret-scan.part';
 export { docPathsPart } from './doc-paths/doc-paths.part';
+export type { IDocPathsOptions } from './doc-paths/doc-paths.part';
 export { docHygienePart } from './doc-hygiene/doc-hygiene.part';
 export { docCountsExamplePart } from './doc-counts/doc-counts.part';
 export { docSymbolsExamplePart } from './doc-symbols/doc-symbols.part';

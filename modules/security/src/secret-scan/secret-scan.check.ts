@@ -1,5 +1,13 @@
-import type { ICheck, ICheckIdentity, IFinding } from 'specwarden';
-import { type ICatalogOptions, buildCheck, catalogNotes, resolveCatalog, verdictFrom } from 'specwarden';
+import type { ICheck, ICheckIdentity, IFinding, TTier } from 'specwarden';
+import {
+  CheckOptionsError,
+  type ICatalogOptions,
+  buildCheck,
+  catalogNotes,
+  checkOptions,
+  resolveCatalog,
+  verdictFrom,
+} from 'specwarden';
 
 export interface ISecretAllowEntry {
   /** The exact file a known match is allowed in (never a prefix — an allowlisted
@@ -7,9 +15,16 @@ export interface ISecretAllowEntry {
   readonly file: string;
   /** The pattern id it is allowed for, or `*` for any. */
   readonly patternId: string;
+  /** Why this file necessarily carries the pattern — kept beside the entry, so the
+   * allowlist stays auditable. */
+  readonly why?: string;
 }
 
-export interface ISecretScanOptions extends ICheckIdentity {
+export interface ISecretScanOptions extends Omit<ICheckIdentity, 'tier' | 'title'> {
+  /** Absent: the rule's statement — every check here names the rule it enforces. */
+  readonly title?: string;
+  /** Default: `fast` — the scan only reads files. */
+  readonly tier?: TTier;
   /** git pathspec of the corpus to scan. Tracked files only — a pasted credential
    * in an untracked file is caught once it is added, and node_modules never is. */
   readonly scan?: string;
@@ -99,7 +114,49 @@ export const DEFAULT_PLACEHOLDER_MARKERS =
  * A PRODUCT check: the credential library and placeholder suppression are universal;
  * the allowlist, the skipped paths and the corpus are options.
  */
+/**
+ * The nested options a scan's author writes by hand, checked by name like the top level.
+ *
+ * `patterns.add` was the GUIDE's spelling of `patterns.extra`. Nothing read `add`, so the
+ * pattern the author added was never scanned for, and a planted key of exactly that shape
+ * stayed green — the one silent failure a credential scanner cannot have.
+ */
+function checkNested(options: ISecretScanOptions): void {
+  const who = `secretScan${options.id ? ` '${options.id}'` : ''}`;
+  const problems: string[] = [];
+  const patterns = (options.patterns ?? {}) as Record<string, unknown>;
+  for (const key of Object.keys(patterns)) {
+    if (!['extra', 'disable', 'replace'].includes(key)) {
+      problems.push(`\`patterns.${key}\` is not an option — \`patterns\` takes extra, disable and replace`);
+    } else if (patterns[key] !== undefined && !Array.isArray(patterns[key])) {
+      problems.push(`\`patterns.${key}\` must be an array`);
+    }
+  }
+  (options.allowlist ?? []).forEach((entry, index) => {
+    const given = entry as unknown as Record<string, unknown>;
+    for (const key of Object.keys(given)) {
+      if (!['file', 'patternId', 'why'].includes(key)) {
+        problems.push(`\`allowlist[${index}].${key}\` is not an option — an entry takes file, patternId and why`);
+      }
+    }
+    for (const key of ['file', 'patternId']) {
+      if (typeof given[key] !== 'string') problems.push(`\`allowlist[${index}].${key}\` must be a string`);
+    }
+  });
+  if (problems.length > 0) throw new CheckOptionsError(`${who}: ${problems.join('; ')}.`);
+}
+
 export function secretScan(options: ISecretScanOptions): ICheck {
+  checkOptions('secretScan', options, {
+    scan: { kind: 'string' },
+    skipPaths: { kind: 'array' },
+    skipExtensions: { kind: 'array' },
+    allowlist: { kind: 'array' },
+    maxBytes: { kind: 'number' },
+    patterns: { kind: 'object' },
+    placeholderMarkers: { kind: 'regexp' },
+  });
+  checkNested(options);
   const skipPaths = options.skipPaths ?? [
     'pnpm-lock.yaml',
     'package-lock.json',
@@ -151,45 +208,58 @@ export function secretScan(options: ISecretScanOptions): ICheck {
   const skip = (f: string): boolean =>
     skipPaths.some((p) => f.startsWith(p) || f.includes(`/${p}`)) || skipExt.has(extOf(f));
 
-  return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx) => {
-    // The deviations lead, before any match: a scanner that stopped looking for
-    // something must not read like one that looked and found nothing.
-    const findings: IFinding[] = [...catalogNotes(catalog.notes)];
-    let scanned = 0;
-    for (const file of ctx.vcs.trackedFiles(options.scan ?? '')) {
-      if (skip(file)) continue;
-      const content = ctx.files.tryRead(file);
-      if (content === undefined || content.length > maxBytes || content.includes('\0')) continue;
-      scanned++;
-      content.split('\n').forEach((line, index) => {
-        for (const pattern of patterns) {
-          if (!pattern.re.test(line) || placeholders.test(line) || allowed(file, pattern.id)) continue;
-          findings.push({
-            severity: 'error',
-            file,
-            line: index + 1,
-            message: `${file}:${index + 1} — ${pattern.label} [${pattern.id}]. If real, ROTATE it before deleting the line; if a placeholder, add it to the allowlist with a reason.`,
-            ruleId: options.id,
-          });
-        }
-      });
-    }
-    // Zero files scanned is a failure, not a clean tree: a `scan` pathspec that matched
-    // nothing, or a skip list that swallowed everything, reports "no credentials" about a
-    // corpus of none — the one verdict a credential scan must never give falsely.
-    if (scanned === 0) {
-      return {
-        ok: false,
-        findings: [
-          ...findings,
-          {
-            severity: 'error',
-            ruleId: options.id,
-            message: `no file matched \`${options.scan ?? '(every tracked file)'}\` after the skipped paths — this scan examined nothing, and a scan that examined nothing cannot fail.`,
-          },
-        ],
-      };
-    }
-    return verdictFrom(findings, ctx.ratchet ?? options.ratchet);
-  });
+  return buildCheck(
+    {
+      ...options,
+      rule: options.rule ?? {
+        statement: 'no credential is committed to the repository',
+        owner: '@specwarden/security',
+        implied: true,
+      },
+      tier: options.tier ?? 'fast',
+      zone: 'product',
+    },
+    ['read'],
+    (ctx) => {
+      // The deviations lead, before any match: a scanner that stopped looking for
+      // something must not read like one that looked and found nothing.
+      const findings: IFinding[] = [...catalogNotes(catalog.notes)];
+      let scanned = 0;
+      for (const file of ctx.vcs.trackedFiles(options.scan ?? '')) {
+        if (skip(file)) continue;
+        const content = ctx.files.tryRead(file);
+        if (content === undefined || content.length > maxBytes || content.includes('\0')) continue;
+        scanned++;
+        content.split('\n').forEach((line, index) => {
+          for (const pattern of patterns) {
+            if (!pattern.re.test(line) || placeholders.test(line) || allowed(file, pattern.id)) continue;
+            findings.push({
+              severity: 'error',
+              file,
+              line: index + 1,
+              message: `${file}:${index + 1} — ${pattern.label} [${pattern.id}]. If real, ROTATE it before deleting the line; if a placeholder, add it to the allowlist with a reason.`,
+              ruleId: options.id,
+            });
+          }
+        });
+      }
+      // Zero files scanned is a failure, not a clean tree: a `scan` pathspec that matched
+      // nothing, or a skip list that swallowed everything, reports "no credentials" about a
+      // corpus of none — the one verdict a credential scan must never give falsely.
+      if (scanned === 0) {
+        return {
+          ok: false,
+          findings: [
+            ...findings,
+            {
+              severity: 'error',
+              ruleId: options.id,
+              message: `no file matched \`${options.scan ?? '(every tracked file)'}\` after the skipped paths — this scan examined nothing, and a scan that examined nothing cannot fail.`,
+            },
+          ],
+        };
+      }
+      return verdictFrom(findings, ctx.ratchet ?? options.ratchet);
+    },
+  );
 }

@@ -1,6 +1,13 @@
 import type { IVerdict } from 'specwarden';
 
 /**
+ * The corpus a documentation check reads when it is not told otherwise: every tracked
+ * markdown file. A pathspec over TRACKED files, so `node_modules/` and build output are
+ * never part of it, and a root `README.md` always is.
+ */
+export const DEFAULT_DOCS = '**/*.md';
+
+/**
  * The verdict of a check whose corpus came back empty: a FAILURE, never a clean run.
  *
  * A pathspec that matches nothing — a folder that moved, a glob with a typo, a filter

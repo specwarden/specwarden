@@ -1,4 +1,6 @@
-import { CHECK_CONTRACT_VERSION, type ICheck, type IVerdict, type TTier } from 'specwarden';
+import { type ICheck, type IVerdict, buildCheck, checkOptions } from 'specwarden';
+import { type IDocCheckIdentity, optionsError } from '../_shared/identity/identity.model';
+import { DEFAULT_DOCS, nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
 
 /**
  * Documentation does not restate what the repository already owns — a count, or a bare
@@ -29,22 +31,22 @@ import { CHECK_CONTRACT_VERSION, type ICheck, type IVerdict, type TTier } from '
  * items. None of those is a fact about the rule.
  */
 
-export interface IDocCountsOptions {
-  readonly id: string;
-  readonly title: string;
-  readonly tier?: TTier;
-  readonly hint?: string;
-  /** Nouns whose "how many" lives in the repository rather than in a document. */
+export interface IDocCountsOptions extends IDocCheckIdentity {
+  /** Nouns whose "how many" lives in the repository rather than in a document. Required,
+   * and never empty: an empty list matches every number, not none. */
   readonly countableNouns: readonly string[];
-  /** Paths where a frozen number is correct by construction — generated trees, studies, plans. */
-  readonly skipped: readonly RegExp[];
-  /** Declared normative thresholds: a claim, and the paths where it is legitimate. */
-  readonly allowlist: (read: (path: string) => string | undefined) => readonly IAllowedClaim[];
+  /** git pathspec for the documents read. Default: `**\/*.md`. */
+  readonly docs?: string;
+  /** Paths where a frozen number is correct by construction — generated trees, studies,
+   * plans. Default: none. */
+  readonly skipped?: readonly RegExp[];
+  /** Declared normative thresholds: a claim, and the paths where it is legitimate.
+   * Default: none. */
+  readonly allowlist?: (read: (path: string) => string | undefined) => readonly IAllowedClaim[];
   /** How many count claims are tolerated. Only ever lowered. */
   readonly countRatchet?: number;
   /** The menu half. Omit it entirely in a repository that has no such menu. */
   readonly menu?: IMenuOptions;
-  readonly when: (changed: readonly string[]) => boolean;
   /** Words that turn a count into an estimate. Replaces `DEFAULT_HEDGE` — a regex
    * SOURCE fragment, not a RegExp, because it is spliced into a larger pattern. */
   readonly hedge?: string;
@@ -285,23 +287,55 @@ export function scanOrdinals(input: {
 }
 
 export function docCounts(options: IDocCountsOptions): ICheck {
+  checkOptions('docCounts', options, {
+    countableNouns: { kind: 'array', required: true },
+    docs: { kind: 'string' },
+    skipped: { kind: 'array' },
+    allowlist: { kind: 'function' },
+    countRatchet: { kind: 'number' },
+    menu: { kind: 'object' },
+    hedge: { kind: 'string' },
+    ordinalLead: { kind: 'string' },
+    numberPattern: { kind: 'string' },
+    dated: { kind: 'regexp' },
+  });
+  // EMPTY IS NOT INERT. The nouns are an alternation, and an alternation of nothing matches
+  // the empty string — so `[]` reported every number followed by a space, the opposite of
+  // "nothing to look for", which is what the scaffolds' comment promised.
+  if (options.countableNouns.length === 0 || options.countableNouns.includes('')) {
+    throw optionsError(
+      'docCounts',
+      options.id,
+      '`countableNouns` is empty — an empty list matches every number, not none. ' +
+        "Name the nouns whose count the repository owns, e.g. ['services', 'modules'].",
+    );
+  }
   const countRatchet = options.countRatchet ?? 0;
+  const docs = options.docs ?? DEFAULT_DOCS;
+  const skipped = (options.skipped ?? []).map(asStateless);
+  const allowlist = options.allowlist ?? ((): readonly IAllowedClaim[] => []);
 
-  return {
-    id: options.id,
-    title: options.title,
-    tier: options.tier ?? 'fast',
-    zone: 'product',
-    capabilities: ['read'],
-    contractVersion: CHECK_CONTRACT_VERSION,
-    hint: options.hint,
-    when: options.when,
-    run: (ctx): IVerdict => {
+  return buildCheck(
+    {
+      ...options,
+      rule: options.rule ?? {
+        statement: 'a count the documentation states is the count the code has',
+        owner: '@specwarden/docs',
+        implied: true,
+      },
+      tier: options.tier ?? 'fast',
+      zone: 'product',
+    },
+    ['read'],
+    (ctx): IVerdict => {
       const read = (file: string): string | undefined => ctx.files.tryRead(file);
-      const files = ctx.vcs.trackedFiles('**/*.md');
+      // What is READ, after the skipped trees. None is a failure like every other check in
+      // this package: a count check over no documents finds no restated count, forever.
+      const files = ctx.vcs.trackedFiles(docs).filter((file) => !skipped.some((re) => re.test(file)));
+      if (files.length === 0) return nothingExamined(options.id, docs);
       const failures: string[] = [];
 
-      const allowed = options.allowlist(read).map((entry) => ({
+      const allowed = allowlist(read).map((entry) => ({
         paths: entry.paths,
         match: new RegExp(`\\b${entry.claim.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'),
       }));
@@ -310,7 +344,7 @@ export function docCounts(options: IDocCountsOptions): ICheck {
         files,
         read,
         allowed,
-        skipped: options.skipped,
+        skipped: [],
         claim: claimPattern(options.countableNouns, {
           hedge: options.hedge,
           ordinalLead: options.ordinalLead,
@@ -335,7 +369,7 @@ export function docCounts(options: IDocCountsOptions): ICheck {
             files,
             read,
             labels,
-            skipped: options.skipped,
+            skipped: [],
             reference: options.menu.reference,
           });
 
@@ -360,5 +394,5 @@ export function docCounts(options: IDocCountsOptions): ICheck {
             findings: [{ severity: 'info', message: `✓ ${files.length} document(s), no restated counts` }],
           };
     },
-  };
+  );
 }

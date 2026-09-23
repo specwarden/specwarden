@@ -66,9 +66,25 @@ export interface IArchiveReadiness {
 }
 
 /**
+ * The header an archive entry carries, each field one line of the form `**Label:** …`.
+ *
+ * Each answers a question a reader of an archived plan has to ask before trusting it —
+ * when, on which branch, what moved out, what never got done — and the plans module's
+ * staleness check refuses an archive entry without them. `plan archive` used to report
+ * "ready" over a plan lacking every one, so following its advice literally turned the
+ * next `check --all` red over a header it had never mentioned.
+ */
+export const ARCHIVE_HEADER_FIELDS = ['Started', 'Finished', 'Branch', 'Harvested', 'Left open'] as const;
+
+/** The header fields `text` does not declare, in the order an entry lists them. */
+export function missingArchiveHeader(text: string): readonly string[] {
+  return ARCHIVE_HEADER_FIELDS.filter((label) => !new RegExp(`^\\*\\*${label}:\\*\\*\\s*\\S`, 'm').test(text));
+}
+
+/**
  * Decide whether a plan may be archived. Ready only when a harvest section exists,
- * carries at least one "what → where" entry, names no bare claim, and every named
- * destination resolves.
+ * carries at least one "what → where" entry, names no bare claim, every named
+ * destination resolves, and the archive header is complete.
  */
 export function archiveReadiness(text: string, files: IFileSource): IArchiveReadiness {
   const harvest = parseHarvest(text);
@@ -85,5 +101,11 @@ export function archiveReadiness(text: string, files: IFileSource): IArchiveRead
     if ((dest.includes('/') || dest.endsWith('.md')) && !files.exists(dest))
       reasons.push(`line ${e.line}: harvest destination "${dest}" does not exist.`);
   }
+  const missing = missingArchiveHeader(text);
+  if (missing.length > 0)
+    reasons.push(
+      `the archive header is missing ${missing.map((f) => `**${f}:**`).join(', ')} — an archive entry opens with ` +
+        `${ARCHIVE_HEADER_FIELDS.map((f) => `**${f}:** …`).join(' / ')}, one per line.`,
+    );
   return { ready: reasons.length === 0, reasons };
 }

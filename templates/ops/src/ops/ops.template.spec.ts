@@ -38,13 +38,10 @@ describe('the generated tree actually loads', () => {
       const abs = join(scratch, file.path.replace(/\//g, '-').replace(/\.example$/, ''));
       mkdirSync(dirname(abs), { recursive: true });
       writeFileSync(abs, file.body);
-      const mod = (await import(pathToFileURL(abs).href)) as { check?: { id: string } };
-      expect(mod.check, `${file.path} exports no check`).toBeDefined();
-      const expected = file.path
-        .split('/')
-        .pop()
-        ?.replace(/\.check\.mjs(\.example)?$/, '');
-      expect(mod.check?.id).toBe(expected);
+      const mod = (await import(pathToFileURL(abs).href)) as { check?: { run: unknown } };
+      expect(typeof mod.check?.run, `${file.path} exports no check`).toBe('function');
+      if (file.path.endsWith('.check.mjs'))
+        expect(file.body, `${file.path} restates its file name as an id`).not.toMatch(/^\s+id: '/m);
     }
   });
 });
@@ -81,9 +78,26 @@ describe('what it refuses to guess', () => {
     expect(paths()).toContain('checks/ops/upstreams-resolve.check.mjs.example');
   });
 
-  it('no example declares a rule: its file is not loaded until somebody renames it', () => {
-    const named = new Set(ops.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds));
-    for (const id of ['env-files-agree', 'upstreams-resolve']) expect(named.has(id)).toBe(false);
+  it("each example's rule is declared, for init to write commented out beside the others", () => {
+    // Declared nowhere, the rule an example enforces lived nowhere the repository could read.
+    expect(ops.rules(ctx({ ci: 'github' })).map((r) => r.id)).toEqual([
+      'env-files-agree',
+      'upstreams-resolve',
+      'gate-coverage',
+    ]);
+  });
+
+  it('points each example at what init found — the proxy config, the workflow, the env sample', () => {
+    const found = ctx({
+      ci: 'github',
+      workflows: ['.github/workflows/deploy.yml'],
+      proxyConfigs: ['deploy/nginx/upstreams.conf'],
+      envSamples: ['.env.example'],
+    } as Partial<ITemplateContext>);
+    const body = (fragment: string) => ops.files(found).find((f) => f.path.includes(fragment))?.body ?? '';
+    expect(body('upstreams-resolve')).toContain("fileFor: () => 'deploy/nginx/upstreams.conf'");
+    expect(body('gate-coverage')).toContain("workflow: '.github/workflows/deploy.yml'");
+    expect(body('env-files-agree')).toContain("read('.env.example')");
   });
 });
 
@@ -98,30 +112,27 @@ describe('CI coverage follows the repository', () => {
 });
 
 describe('rules and requirements', () => {
-  it('every live check is named by a rule, so a fresh tree has no orphan', () => {
-    const live = paths()
-      .filter((p) => p.endsWith('.check.mjs'))
-      .map(
-        (p) =>
-          p
-            .split('/')
-            .pop()
-            ?.replace(/\.check\.mjs$/, '') as string,
-      );
-    const named = new Set(ops.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds));
-    for (const id of live) expect(named.has(id), `${id} enforces no rule`).toBe(true);
+  it('every live check states its own rule, so a fresh tree has no orphan', () => {
+    for (const f of ops.files(ctx()).filter((x) => x.path.endsWith('.check.mjs')))
+      expect(f.body, `${f.path} states no rule`).toMatch(/^\s+rule: '/m);
+  });
+
+  it('reads every tracked document — the README is where an operator starts', () => {
+    expect(ops.files(ctx({ docs: 'docs/**/*.md' })).find((f) => f.path.includes('doc-paths'))?.body).toContain(
+      "docs: '**/*.md'",
+    );
   });
 
   it('every rule names a check the template actually writes', () => {
     const written = new Set(
       paths()
-        .filter((p) => p.endsWith('.check.mjs'))
+        .filter((p) => /\.check\.mjs(\.example)?$/.test(p))
         .map(
           (p) =>
             p
               .split('/')
               .pop()
-              ?.replace(/\.check\.mjs$/, '') as string,
+              ?.replace(/\.check\.mjs(\.example)?$/, '') as string,
         ),
     );
     for (const rule of ops.rules(ctx())) {

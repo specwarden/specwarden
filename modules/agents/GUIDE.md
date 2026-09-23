@@ -4,7 +4,7 @@ One check over the role definitions a coding agent loads: their frontmatter, and
 allowed to spawn another agent.
 
 Wholly optional, and shaped by whichever assistant a house runs. A repository with no
-agent directory is a valid state, not a violation — the check says so and passes.
+roster does not install this module; one that does is checked where its roster is.
 
 ## Install and wire
 
@@ -13,17 +13,16 @@ pnpm add -D @specwarden/agents
 ```
 
 ```js
+// .specwarden/checks/agents/agent-definitions.check.mjs
 import { agentDefinitions } from '@specwarden/agents';
 
-export const checks = [
-  agentDefinitions({
-    id: 'agent-definitions',
-    title: 'every agent declares its tools',
-    tier: 'fast',
-    agentsDir: '.claude/agents',
-  }),
-];
+export const check = agentDefinitions({ id: 'agent-definitions', title: 'every agent declares its tools' });
 ```
+
+It reads `.claude/agents` unless told otherwise. **A folder that does not exist is a
+failure naming it** — it used to pass as "nothing to verify", and so did an `agentsDir`
+left pointing at a roster that moved. A folder that exists and holds no definition yet
+passes and says it read none.
 
 ## The two rules that are not cosmetic
 
@@ -33,8 +32,9 @@ the definition says so. The field is required for exactly this reason.
 
 **A leaf role that can spawn turns a bounded pipeline into an unbounded one**, where the
 bill and the blast radius grow together. Only the roles named in `orchestrators` may
-declare a spawn tool, and adding one is a decision about the pipeline's shape — which is
-why the check asks for the list rather than inferring it.
+declare a spawn tool, and adding one is a decision about the pipeline's shape. The default
+is `['lead']` — one conventional orchestrator; name yours, or pass `[]` to forbid
+delegation entirely.
 
 ## The rest of the shape
 
@@ -48,16 +48,28 @@ why the check asks for the list rather than inferring it.
 ## Options
 
 ```js
-agentDefinitions({
+import { agentDefinitions } from '@specwarden/agents';
+
+export const check = agentDefinitions({
   id: 'agent-definitions',
-  title: '…',
-  tier: 'fast',
+  title: 'every agent declares its tools, and only an orchestrator spawns',
   agentsDir: '.claude/agents',
   required: ['name', 'description', 'tools', 'model'],
   spawnTools: ['Task', 'Agent'],
   orchestrators: ['lead'],
 });
 ```
+
+| Option          | Kind                                | Default                                     |
+| --------------- | ----------------------------------- | ------------------------------------------- |
+| `agentsDir`     | directory                           | `.claude/agents`                            |
+| `required`      | frontmatter fields                  | `['name', 'description', 'tools', 'model']` |
+| `spawnTools`    | tool names that start another agent | `['Task', 'Agent']`                         |
+| `orchestrators` | roles that may spawn                | `['lead']`                                  |
+
+Beside these it takes the engine's identity — `id`, `title`, `tier` (default `fast`),
+`when`, `hint`, `rule` — and refuses an option it does not have, by name, when the file
+loads: `agents:` for `agentsDir` is a load error, not a crash inside the run.
 
 `spawnTools` and `orchestrators` are both the host's: which tool starts another agent is
 a fact about the assistant, and which role may use it is a fact about the pipeline.

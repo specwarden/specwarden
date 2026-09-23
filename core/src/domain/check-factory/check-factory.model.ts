@@ -71,6 +71,33 @@ export interface ICheckIdentity {
   readonly ratchet?: number;
   /** The rule this check enforces, declared beside it. It joins the register
    * enforced by this check, so the register stops being a second list of the same
-   * fact. See `rule` on ICheckMeta. */
-  readonly rule?: ICheckRule;
+   * fact. See `rule` on ICheckMeta.
+   *
+   * A string is the statement, and the common case: `rule: 'no TODO in shipped source'`.
+   * The owner then defaults to the file that declares the check, which is where a
+   * reader who meets the finding goes first. */
+  readonly rule?: string | ICheckRule;
+}
+
+/**
+ * What a check FILE writes: the identity with every field the engine can supply left
+ * out.
+ *
+ * A one-line check used to carry seven fields, three of which said something. The id
+ * is the file's name when the file exports the check alone; the title is the rule's
+ * statement, else the id; the tier is `fast` — a check with no stated schedule should
+ * run often rather than never. What is left is what only the author knows.
+ *
+ * `ICheckIdentity` stays the full form: a module declaring a factory of its own may
+ * still demand every field, and a check built outside discovery with no id is refused
+ * when it is registered, by name.
+ */
+export interface ICheckDeclaration extends Omit<ICheckIdentity, 'id' | 'title' | 'tier'> {
+  /** The runner's address for the check. Absent: the name of the file that exports it
+   * alone — and refused at registration anywhere else. */
+  readonly id?: string;
+  /** Absent: the rule's statement, else the id. */
+  readonly title?: string;
+  /** Absent: `fast`. */
+  readonly tier?: TTier;
 }

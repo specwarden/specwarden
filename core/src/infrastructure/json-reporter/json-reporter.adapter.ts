@@ -1,4 +1,4 @@
-import type { ICheckMeta, ICheckResult, IReporter } from '../../domain';
+import type { ICheckMeta, ICheckResult, IReporter, IRunSummary } from '../../domain';
 import { type TWriteSink, stdoutSink } from '../reporter-sink/reporter-sink.model';
 
 /**
@@ -21,7 +21,7 @@ export class JsonReporter implements IReporter {
     // consumer could not tell a skipped gate from one that never existed.
   }
 
-  runFinished(results: readonly ICheckResult[], totalMs: number): void {
+  runFinished(results: readonly ICheckResult[], totalMs: number, run: IRunSummary = {}): void {
     const rows = results.map((r) => ({
       id: r.meta.id,
       tier: r.meta.tier,
@@ -31,6 +31,9 @@ export class JsonReporter implements IReporter {
       durationMs: r.durationMs,
       findings: r.verdict.findings,
     }));
-    this.write(`${JSON.stringify({ totalMs, results: rows }, null, 2)}\n`);
+    // The reason a run was not filtered travels WITH it: a dashboard reading this could
+    // not tell a filtered run from a fail-safe one, which the terminal says in a line.
+    const reason = run.fullRunReason === undefined ? {} : { fullRunReason: run.fullRunReason };
+    this.write(`${JSON.stringify({ totalMs, ...reason, results: rows }, null, 2)}\n`);
   }
 }

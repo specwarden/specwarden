@@ -29,8 +29,8 @@ provePlayground(
       says: 'packages/api/src/deploy.ts',
     },
     'doc-paths': {
-      // In `docs/`, not the README: with a docs directory the template scans `docs/**`, and
-      // the corpus is the template's decision rather than this scene's.
+      // In the architecture note the README sends a reader to; the template reads every
+      // tracked document, so a dead path in the README itself is caught the same way.
       why: 'the architecture note naming a source file that was split and renamed',
       edits: {
         'docs/architecture.md': planted(

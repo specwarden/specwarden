@@ -13,7 +13,7 @@ import type { ICliIo } from '../_shared/cli-io/cli-io.model';
  * a default is cheapest to set.
  *
  * WHAT IT WRITES, and what it deliberately does not. It writes the body and its test,
- * and it writes them to a folder-per-check path so the two travel together. It does
+ * side by side in the family folder, so the two travel together. It does
  * NOT edit the config, the rule register or a ratchet file: those are the consumer's
  * declarations, and a tool that silently edits a declaration is a tool that has an
  * opinion about a fact it cannot know. The rule goes in the generated body, where the
@@ -25,7 +25,13 @@ import type { ICliIo } from '../_shared/cli-io/cli-io.model';
 /** A check id is a path segment and an address; keep it to what both can carry. */
 const VALID_ID = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
-function body(id: string): string {
+/**
+ * The body. PLAIN JAVASCRIPT — the file is `.mjs`, and a TypeScript `as const` in it was a
+ * SyntaxError that took the whole next run down with it. And RED until its condition is
+ * written: the old scaffold filtered on `false`, so it was green over anything, and a
+ * check nobody finished reported success from the day it was generated.
+ */
+function body(id: string, path: string): string {
   return `/**
  * \`${id}\` — one line saying what must be true, and the defect that made it a rule.
  *
@@ -35,17 +41,19 @@ function body(id: string): string {
  */
 import { defineCheck, readTracked } from 'specwarden';
 
+/**
+ * What makes a document wrong — THE CONDITION, and the one thing only you can write.
+ * Until it is written this check FAILS: a scaffold that passed would be a gate nobody
+ * finished, reporting green.
+ */
+const isWrong = undefined; // for example: (doc) => doc.text.includes('TODO')
+
 export const check = defineCheck({
   id: '${id}',
-  title: 'what this proves, in one line',
-  tier: 'fast',
 
-  // The rule this check enforces, declared here so the register is not a second list
-  // of the same fact. \`owner\` is the document that holds the reasoning.
-  rule: {
-    statement: 'state the assertion that must hold',
-    owner: 'README.md',
-  },
+  // The rule this check enforces, in one line. It is also the title \`--list\` prints, and
+  // this file is its owner — the place a reader who meets the finding comes to.
+  rule: 'state the assertion that must hold',
 
   // When this check matters. The declarative form covers the two common shapes; a
   // predicate over the changed paths covers everything else. Omitting it means
@@ -63,23 +71,30 @@ export const check = defineCheck({
     // Read through the ports, never through the platform's file API directly: that is
     // what lets this check run against a tree a test describes.
     const documents = readTracked(ctx.vcs, ctx.files, '**/*.md');
+    const examined = documents.length;
 
-    const findings = documents
-      .filter((doc) => false /* the condition that makes a document wrong */)
-      .map((doc) => ({
-        severity: 'error' as const,
-        file: doc.file,
-        message: \`\${doc.file}: say what is wrong and what to do about it.\`,
-      }));
+    if (isWrong === undefined) {
+      const message = 'the condition of ${id} is not written yet — write \`isWrong\` in ${path}.';
+      return { findings: [{ severity: 'error', message }], examined, unit: 'documents' };
+    }
+
+    const findings = documents.filter(isWrong).map((doc) => ({
+      severity: 'error',
+      file: doc.file,
+      message: \`\${doc.file}: say what is wrong and what to do about it.\`,
+    }));
 
     // Return findings. The verdict, the rule attribution, the ratchet framing and the
     // line a passing run prints are all assembled by the engine.
-    return { findings, examined: documents.length, unit: 'documents' };
+    return { findings, examined, unit: 'documents' };
   },
 });
 `;
 }
 
+/** The test. Its failing case asserts the FAILURE — the old one asserted \`ok === true\`
+ * over "the wrong thing", so it passed against a check that could not fail. Until the
+ * condition is written, the first two cases are red, which is the point. */
 function test(id: string): string {
   return `/**
  * What \`${id}\` must and must not report.
@@ -107,9 +122,8 @@ test('passes on a corpus with nothing wrong', async () => {
 test('fails, and names the file, when the rule is broken', async () => {
   const verdict = await runCheck(check, { tree: { 'docs/a.md': 'the wrong thing' } });
 
-  // Fill this in once the condition is written; a test that asserts nothing about the
-  // FAILING case is a test that cannot tell a working check from a disabled one.
-  assert.equal(verdict.ok, true);
+  assert.equal(verdict.ok, false);
+  assert.match(errorsOf(verdict)[0], /docs\\/a\\.md/);
 });
 
 test('refuses an empty corpus rather than reporting a clean run over nothing', async () => {
@@ -145,7 +159,9 @@ export function newCheck(
     return 2;
   }
 
-  const root = [options.consumerDir, options.checksDir ?? 'checks', options.family, id].filter(Boolean).join('/');
+  // `<family>/<id>.check.mjs`, the test beside it — the layout every README and guide
+  // shows. It wrote a folder per check, which no document described.
+  const root = [options.consumerDir, options.checksDir ?? 'checks', options.family].filter(Boolean).join('/');
   const checkPath = `${root}/${id}.check.mjs`;
   const testPath = `${root}/${id}.check.test.mjs`;
 
@@ -155,15 +171,15 @@ export function newCheck(
     return 1;
   }
 
-  writer.write(checkPath, body(id));
+  writer.write(checkPath, body(id, checkPath));
   writer.write(testPath, test(id));
 
   io.out(`wrote ${checkPath}\n`);
   io.out(`wrote ${testPath}\n\n`);
   io.out('The check is already discovered — a file under checks/ IS a check, and no\n');
-  io.out('config edit registers it. Next:\n');
-  io.out(`  1. write the condition and the failing-case assertion;\n`);
-  io.out(`  2. run it: specwarden check --id ${id};\n`);
-  io.out('  3. point `rule.owner` at the document that holds the reasoning.\n');
+  io.out('config edit registers it. It FAILS until its condition is written. Next:\n');
+  io.out('  1. write `isWrong`, the rule, and the message a finding prints;\n');
+  io.out(`  2. run it: specwarden check --id ${id} — red over a broken tree, green over a clean one;\n`);
+  io.out(`  3. run its test: node --test ${testPath}\n`);
   return 0;
 }

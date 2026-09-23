@@ -55,3 +55,32 @@ export function readTracked(vcs: IVcs, files: IFileSource, pathspec?: string): r
   }
   return out;
 }
+
+/**
+ * The corpus a primitive scans: the TRACKED files its pathspec selects, less its `except`
+ * pathspecs, in path order — and how many the pathspec matched before the exemptions, so
+ * a refusal can say which of the two emptied it.
+ *
+ * Tracked, as `readTracked` reads, and for the reason it gives: a working-tree glob found
+ * `node_modules/` and `dist/`, and a scratch file turned a CI-parity run red on one
+ * machine. The primitives were the last readers still asking the disk.
+ */
+export interface ITrackedCorpus {
+  readonly files: readonly string[];
+  /** Matched by the pathspec, before `except` removed any. */
+  readonly matched: number;
+}
+
+export function trackedCorpus(vcs: IVcs, pathspec: string, except: readonly string[] = []): ITrackedCorpus {
+  const matched = [...new Set(vcs.trackedFiles(pathspec))];
+  const exempt = new Set(except.flatMap((g) => vcs.trackedFiles(g)));
+  return { files: matched.filter((f) => !exempt.has(f)).sort(), matched: matched.length };
+}
+
+/** Why a primitive's corpus is empty, in the words the refusal prints: the pathspec
+ * matched nothing, or it matched and `except` exempted every file. */
+export function emptyCorpusReason(pathspec: string, corpus: ITrackedCorpus, purpose: string): string {
+  return corpus.matched > 0 && corpus.files.length === 0
+    ? `\`${pathspec}\` matched ${corpus.matched} file(s), and \`except\` exempted all of them`
+    : `\`${pathspec}\` matched nothing to ${purpose}`;
+}

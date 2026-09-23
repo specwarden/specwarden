@@ -6,6 +6,6 @@ export type { IFileWriter } from './file-writer/file-writer.port';
 export type { IVcs } from './vcs/vcs.port';
 export type { IProcessOptions, IProcessResult, IProcessRunner } from './process-runner/process-runner.port';
 export type { IClock } from './clock/clock.port';
-export type { IReporter } from './reporter/reporter.port';
+export type { IReporter, IRunSummary } from './reporter/reporter.port';
 export type { IRatchetStore } from './ratchet-store/ratchet-store.port';
 export type { IAgentRuntime } from './agent-runtime/agent-runtime.port';

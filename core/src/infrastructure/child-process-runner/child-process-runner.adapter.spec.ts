@@ -105,6 +105,26 @@ describe.each(TWINS)('ChildProcessRunner.$name', ({ exec }) => {
     }
   });
 
+  // A command check run from `src/` ran THERE, while its `paths` were verified against
+  // the repository root — one directory checked, another used.
+  it('runs in the directory it was built with when the caller names none, and in the named one over it', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'spw-proc-home-'));
+    const named = mkdtempSync(join(tmpdir(), 'spw-proc-named-'));
+    try {
+      const rooted = new ChildProcessRunner(home);
+      const via = (options?: IProcessOptions) =>
+        exec === TWINS[0].exec
+          ? Promise.resolve(rooted.run(NODE, script('process.stdout.write(process.cwd())'), options))
+          : rooted.runAsync(NODE, script('process.stdout.write(process.cwd())'), options);
+
+      expect(realpathSync((await via()).stdout)).toBe(realpathSync(home));
+      expect(realpathSync((await via({ cwd: named })).stdout)).toBe(realpathSync(named));
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(named, { recursive: true, force: true });
+    }
+  });
+
   describe('the environment', () => {
     beforeEach(() => {
       process.env.SPW_PARENT_ONLY = 'from-parent';

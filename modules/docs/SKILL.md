@@ -33,18 +33,31 @@ it, silently, because a pattern that matches nothing finds nothing.
 3. **`docHygiene` follows `./` and `../` only.** Widening it to absolute-looking paths
    means guessing at a URL space this package cannot see.
 
-4. **`docSymbols` needs `suffixes`.** Without a shape that declares a kind, every
-   backticked word in prose becomes a claim. The option is not a convenience; it is what
-   keeps the check usable past its first week.
+4. **`docSymbols` needs `suffixes`, and `docCounts` needs `countableNouns` — never empty.**
+   Without a shape that declares a kind, every backticked word in prose becomes a claim.
+   Each list is spliced into an alternation, and an alternation of nothing matches the
+   empty string: `[]` was the WIDEST setting while the scaffolds' comments called it
+   inert. Both factories refuse an empty list when the file loads.
+
+5. **Every factory checks its options with `checkOptions` before it builds anything.** A
+   misspelled option — the shipped skill's `skipped:` for `skipDirs` — was dropped in
+   silence, and the check ran without it. A new option goes into the factory's spec in
+   the same edit, or the first consumer to pass it gets a load error.
+
+6. **`docsChecks` refuses a missing fact; it never leaves a check out on its own.** A preset
+   returning four checks when five were expected is a roster somebody believes is
+   complete. Leaving one out is the consumer's `false`, said out loud.
 
 ## Changing a check
 
 - The fixture lives in [`_playground/repository.ts`](./_playground/repository.ts), as
   `CLEAN` and `BROKEN`. `BROKEN` carries one defect per rule, each commented with the
   shape its check looks for. Add the defect there when you add a rule.
-- A new factory must be named in `COVERED`. It does not have to be: `uncoveredFactories`
-  reads the barrel and fails if it is not, which is the point — a list kept by hand goes
-  stale the first time somebody forgets.
+- A new factory must be named in `COVERED`. The playground finds every export that builds
+  checks by what it does with an options object it cannot honour — it returns checks, or
+  refuses the options by name — and fails when the two lists differ. One probe carrying
+  every factory's options no longer works: a factory refuses an option it does not have,
+  so that union read every factory as a helper and the audit passed over none of them.
 - Run `pnpm --filter @specwarden/docs test`, then `pnpm gate --id unit`.
 
 ## What belongs somewhere else

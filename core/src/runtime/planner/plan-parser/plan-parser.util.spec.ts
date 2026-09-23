@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { IPlan } from '../../../domain';
-import { parsePlan } from './plan-parser.util';
+import { parsePlan, unquoteCommand } from './plan-parser.util';
 import { renderPlan } from '../plan-render/plan-render.util';
 
 /** A tiny deterministic PRNG so the generated corpus is reproducible. */
@@ -23,7 +23,7 @@ function generatePlan(seed: number): IPlan {
     acceptance: r() < 0.2 ? undefined : `pnpm run check-${Math.floor(r() * 100)}`,
   }));
   return {
-    status: r() < 0.5 ? 'draft' : 'active',
+    status: (['draft', 'active', 'done'] as const)[Math.floor(r() * 3)],
     branch: r() < 0.5 ? undefined : `feat-${Math.floor(r() * 1000)}`,
     phases,
   };
@@ -79,5 +79,95 @@ describe('the parser complains rather than skipping silently', () => {
   it('flags a phase with no acceptance command', () => {
     const { findings } = parsePlan('**Status:** draft\n\n## Phase 1 — a\nprose only\n');
     expect(findings.some((f) => f.severity === 'error' && f.message.includes('no acceptance command'))).toBe(true);
+  });
+});
+
+describe('one acceptance convention: the line, or a fenced block under the phase', () => {
+  const plan = (...lines: string[]) => parsePlan(['**Status:** active', '', ...lines].join('\n'));
+
+  it('reads a fenced bash or sh block as the acceptance — the form plan-shape and the templates use', () => {
+    const { plan: p, findings } = plan(
+      '## Phase 1 — a',
+      'prose',
+      '```bash',
+      'pnpm gate --id unit',
+      '```',
+      '## Phase 2 — b',
+      '```sh',
+      'true',
+      '```',
+    );
+    expect(p.phases.map((x) => x.acceptance)).toEqual(['pnpm gate --id unit', 'true']);
+    expect(findings).toEqual([]);
+  });
+
+  it('chains a block of several commands so the first failure fails it, dropping blanks and comments', () => {
+    const { plan: p } = plan(
+      '## Phase 1 — a',
+      '```bash',
+      '# setup',
+      'pnpm build',
+      '',
+      'pnpm test \\',
+      '  --run',
+      '```',
+    );
+    expect(p.phases[0].acceptance).toBe('pnpm build && pnpm test --run');
+  });
+
+  it('ignores a fence in another language, and an empty block', () => {
+    const { plan: p, findings } = plan('## Phase 1 — a', '```js', 'run()', '```', '```bash', '```');
+    expect(p.phases[0].acceptance).toBeUndefined();
+    expect(findings.map((f) => f.message)).toEqual([
+      'phase "a" names no acceptance command — a phase without one has no definition of done. Write an `**Acceptance.**` line, or a fenced `bash` block under the heading.',
+    ]);
+  });
+
+  it('takes whichever form comes first', () => {
+    const { plan: p } = plan('## Phase 1 — a', '**Acceptance:** first', '```bash', 'second', '```');
+    expect(p.phases[0].acceptance).toBe('first');
+  });
+
+  it('strips the backticks markdown writes around an inline command — the shell read them as substitution', () => {
+    expect(plan('## Phase 1 — a', '**Acceptance.** `pnpm --dir core exec vitest run`').plan.phases[0].acceptance).toBe(
+      'pnpm --dir core exec vitest run',
+    );
+    expect(plan('## Phase 1 — a', '**Acceptance:** ``echo `x` ``').plan.phases[0].acceptance).toBe('echo `x`');
+    expect(plan('## Phase 1 — a', '**Acceptance**: a `quoted` word').plan.phases[0].acceptance).toBe('a `quoted` word');
+  });
+
+  it('ends a phase at the next section, so a later section’s block is not the last phase’s acceptance', () => {
+    const { plan: p } = plan('## Phase 1 — a', 'prose', '## Harvest', '```bash', 'not-an-acceptance', '```');
+    expect(p.phases[0].acceptance).toBeUndefined();
+  });
+
+  it('keeps a `###` subsection inside its phase', () => {
+    const { plan: p } = plan('## Phase 1 — a', '### Decision: x', '```bash', 'true', '```');
+    expect(p.phases[0].acceptance).toBe('true');
+  });
+});
+
+describe('one status vocabulary: draft, active, done', () => {
+  it('reads `done` as done — it was "draft", beside a finding that it declared no status', () => {
+    const parsed = parsePlan('**Status:** done\n\n## Phase 1 — a\n**Acceptance.** true\n');
+    expect([parsed.declared, parsed.plan.status, parsed.findings]).toEqual(['done', 'done', []]);
+  });
+
+  it('reports an undeclared status as undeclared, naming the three', () => {
+    const parsed = parsePlan('# x\n\n## Phase 1 — a\n**Acceptance.** true\n');
+    expect(parsed.declared).toBeUndefined();
+    expect(parsed.findings.map((f) => f.message)).toEqual(['plan declares no `**Status:**` (draft, active, done)']);
+  });
+
+  it('reads a status in backticks, in any case', () => {
+    expect(parsePlan('**Status:** `Active`\n').declared).toBe('active');
+  });
+});
+
+describe('unquoteCommand', () => {
+  it('takes off wrapping inline-code delimiters and nothing else', () => {
+    expect(unquoteCommand(' `a b` ')).toBe('a b');
+    expect(unquoteCommand('a `b`')).toBe('a `b`');
+    expect(unquoteCommand('plain')).toBe('plain');
   });
 });

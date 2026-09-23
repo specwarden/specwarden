@@ -107,3 +107,11 @@ describe('orphanCheck — what it reports and how it is declared', () => {
     expect(check.when(['docs/a.md'])).toBe(true);
   });
 });
+
+describe('orphanCheck — the fix it points at', () => {
+  it('names the smallest fix first: a `rule` on the check itself, not the register', () => {
+    expect(orphanCheck({ checkIds: () => [], rules: () => [] }).hint).toBe(
+      "Add `rule: '<the statement it enforces>'` to the check — or, for a rule several checks share, name it in the rule register.",
+    );
+  });
+});

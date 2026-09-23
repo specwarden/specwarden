@@ -39,7 +39,7 @@ import { defineConfig } from 'specwarden';
 
 export default defineConfig({
   specSource: openspec(),
-  invariants: { docs: 'src/**/*_MODULE.md', idPattern: /INV-([A-Z0-9-]+)/ },
+  invariants: { docs: 'src/**/*_MODULE.md', idPattern: /<!--\s*invariant:\s*([^\s>]+)\s*-->/ },
 });
 ```
 
@@ -48,6 +48,30 @@ Then:
 ```bash
 specwarden sync-invariants
 ```
+
+## Depositing an invariant
+
+`sync-invariants` names each requirement by its full id — `auth#the-system-shall-refuse-an-expired-token`
+— and a deposit is recognised only when its marker carries **that id, exactly**. So the
+marker holds the adapter's id, and `idPattern` captures everything up to the closing
+`-->`:
+
+```markdown
+<!-- invariant: auth#the-system-shall-refuse-an-expired-token -->
+
+An expired token is refused. Pinned by `auth.spec.ts` -> "rejects an expired token".
+```
+
+A pattern that captures anything shorter — a local `INV-…` number, say — can never equal
+an OpenSpec id: every requirement reads as undeposited and every marker as an orphan, and
+the reconciliation never reaches "in sync". Copy the id from the `+` line the sync
+prints; a reworded requirement gets a new id, and its old marker is then reported as an
+orphan, which is the point.
+
+| `invariants` key | Kind                                            | Example                                 |
+| ---------------- | ----------------------------------------------- | --------------------------------------- |
+| `docs`           | glob over the documents that carry deposits     | `src/**/*_MODULE.md`                    |
+| `idPattern`      | RegExp whose FIRST capture group is the full id | `/<!--\s*invariant:\s*([^\s>]+)\s*-->/` |
 
 ## What it reads
 
@@ -63,16 +87,25 @@ word one the same way.
 ## Options — every path, because layouts move
 
 ```js
-openspec({
+// .specwarden/spec-source.mjs
+import { openspec } from '@specwarden/openspec';
+
+export const source = openspec({
   root: 'openspec',
   specFile: 'spec.md',
   requirementHeading: /^#{2,4}\s+Requirement:\s*(.+?)\s*$/,
 });
 ```
 
+| Option               | Kind                                       | Default                                  |
+| -------------------- | ------------------------------------------ | ---------------------------------------- |
+| `root`               | directory                                  | `openspec`                               |
+| `specFile`           | filename inside each capability            | `spec.md`                                |
+| `requirementHeading` | RegExp capturing the requirement's wording | `### Requirement: …`, levels two to four |
+
 A tool that reorganises its layout in a minor release is the normal case, not the
 exception. A memorised layout turns that into a source that finds nothing while reporting
-success.
+success. An option the factory does not have is refused by name when the config loads.
 
 ## The contract this adapter owes
 

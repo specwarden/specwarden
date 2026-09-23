@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { type IVerdict, errorsOf, runCheck } from 'specwarden';
+import { CheckOptionsError, type IVerdict, errorsOf, runCheck } from 'specwarden';
 import { agentDefinitions, parseFrontmatter } from './agent-definitions.check';
 
 const ID = { id: 'agent-definitions', title: 'agents declare tools', tier: 'fast' as const };
@@ -117,14 +117,36 @@ describe('agentDefinitions — who may spawn', () => {
 });
 
 describe('agentDefinitions — what it examined', () => {
-  it('is a vacuous pass when the agents directory is absent, and says so', async () => {
+  it('fails over an agents directory that is not there, naming it — it was a vacuous pass', async () => {
+    // A roster that moved, or a skill's `agents:` for `agentsDir`, read as "nobody runs
+    // agents here" and passed forever.
     const v = await run({ 'other/x.md': '' }, { agentsDir: 'nope' });
 
-    expect(v).toEqual({ ok: true, findings: [{ severity: 'info', message: 'no nope, nothing to verify' }] });
+    expect(v.ok).toBe(false);
+    expect(errorsOf(v)).toEqual([
+      'nope does not exist — this check examined nothing, and a check that examined nothing cannot fail. Point `agentsDir` at the folder the agent definitions live in.',
+    ]);
   });
 
-  it('treats a FILE at the agents path as no directory', async () => {
-    expect((await run({ '.claude/agents': 'not a folder' })).ok).toBe(true);
+  it('fails a FILE at the agents path, rather than crashing on the listing', async () => {
+    expect(errorsOf(await run({ '.claude/agents': 'not a folder' }))).toEqual([
+      '.claude/agents is a file, not a folder of agent definitions. Point `agentsDir` at the folder.',
+    ]);
+  });
+
+  it('reads `.claude/agents` in the fast tier when neither is said', async () => {
+    const check = agentDefinitions({ id: 'agent-definitions', title: 't' });
+    const tree = { '.claude/agents/lead.md': fm({ name: 'lead', description: 'd', model: 'opus' }) };
+
+    expect(check.tier).toBe('fast');
+    expect(errorsOf(await runCheck(check, { tree }))).toEqual(['.claude/agents/lead.md: missing or empty `tools:`.']);
+  });
+
+  it('refuses the skill’s `agents:` by name when the file loads — it crashed inside a Node path call', () => {
+    const skill = { ...ID, agents: '.claude/agents/*.md', orchestrators: ['lead'] } as never;
+
+    expect(() => agentDefinitions(skill)).toThrow(CheckOptionsError);
+    expect(() => agentDefinitions(skill)).toThrow("agentDefinitions 'agent-definitions': `agents` is not an option");
   });
 
   it('says it read nothing when the folder holds no definition — a blank pass reads as "all sound"', async () => {

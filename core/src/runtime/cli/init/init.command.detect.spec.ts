@@ -22,20 +22,42 @@ async function harness(files: Record<string, string>, vcs?: IVcs) {
  * send the reader looking for a check that was correctly never written.
  */
 describe('what init says it detected', () => {
-  it('names the package manager, runner, workspaces, docs, CI, spec framework and compose file it found', async () => {
+  it('names the package manager, runner, workspace packages, docs, CI, spec framework, compose file and proxy', async () => {
     const h = await harness({
       'pnpm-lock.yaml': '',
       'pnpm-workspace.yaml': 'packages:\n  - apps/*\n  - libs/*\n',
+      'apps/web/package.json': '{}',
+      'libs/money/package.json': '{}',
+      'libs/time/package.json': '{}',
       'package.json': '{ "devDependencies": { "vitest": "1" } }',
       'docs/a.md': '#',
+      '.github/workflows/deploy.yml': 'on: push',
       '.github/workflows/ci.yml': 'on: push',
       'openspec/project.md': '#',
       'compose.yaml': 'services: {}',
+      'deploy/Caddyfile': 'x',
     });
     expect(h.code).toBe(0);
+    // Packages the globs MATCH — two globs said "2 workspace(s)" over three packages — and
+    // the workflow a gate-coverage example is pointed at.
     expect(h.out).toContain(
-      'Detected: pnpm, vitest, 2 workspace(s), docs in docs, github actions, openspec specs, compose.yaml\n',
+      'Detected: pnpm, test runner vitest, 3 workspace packages, docs in docs, github actions (.github/workflows/ci.yml), openspec specs, compose.yaml, deploy/Caddyfile\n',
     );
+  });
+
+  it('says one package in the singular, and names no workflow it did not find', async () => {
+    const h = await harness({
+      'pnpm-workspace.yaml': 'packages:\n  - apps/*\n',
+      'apps/web/package.json': '{}',
+      '.github/workflows/README.md': 'the workflows live elsewhere',
+    });
+    expect(h.out).toContain('1 workspace package, no documentation directory found, github actions\n');
+  });
+
+  it('names a test runner it does not recognise by the script, rather than a bare "other"', async () => {
+    const h = await harness({ 'package.json': '{ "scripts": { "test": "node --test test/" } }' });
+    expect(h.out).toContain('test script `node --test test/`');
+    expect(h.out).not.toContain(', other');
   });
 
   it('says "unknown package manager" and "no documentation directory" rather than leaving a blank', async () => {

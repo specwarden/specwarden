@@ -7,10 +7,10 @@ import type { TPlanStatus } from '../plan/plan.model';
  *
  *   draft ── branch declared ──▶ active ── branch merged/gone ──▶ spent ──▶ archived
  *
- * `draft` and `active` are the two DECLARED statuses (a draft claims nothing about
- * the past and may not name a branch); `spent` and `archived` are DERIVED — spent
- * when an active plan's branch no longer resolves (the work merged), archived when
- * the plan lives under the archive tree.
+ * `draft` and `active` are DECLARED statuses (a draft claims nothing about the past
+ * and may not name a branch); `spent` and `archived` are DERIVED — spent when an active
+ * plan's branch no longer resolves (the work merged) or the plan declares itself `done`,
+ * archived when the plan lives under the archive tree.
  */
 export type TPlanLifecycle = 'draft' | 'active' | 'spent' | 'archived';
 
@@ -34,6 +34,9 @@ export interface ILifecycleInputs {
 export function computeLifecycle(inputs: ILifecycleInputs): TPlanLifecycle {
   if (inputs.inArchive) return 'archived';
   if (inputs.status === 'draft') return 'draft';
+  // A plan that declares itself done is spent by its own word — its work is over, and
+  // what is left is the harvest and the move.
+  if (inputs.status === 'done') return 'spent';
   // status === 'active'
   return inputs.branchExists === false ? 'spent' : 'active';
 }

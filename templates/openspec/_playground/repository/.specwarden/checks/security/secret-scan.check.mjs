@@ -1,15 +1,8 @@
-/**
- * `secret-scan` — a credential-shaped string anywhere in the tracked tree.
- *
- * The built-in library covers a few common vendor formats. It is a PRESET, not a
- * mandate: add your own with `patterns.extra`, switch one off with `patterns.disable`
- * (a reason is required, and it is reported), or supply the whole library with
- * `patterns.replace`. A match means ROTATE first, delete second.
- */
+// `secret-scan` — no credential-shaped string in any tracked file.
+// A committed key outlives its deletion in history: a match means rotate first, delete second.
+// Add a format with `patterns.extra`; switch one off with `patterns.disable`, which takes a reason.
 import { secretScan } from '@specwarden/security';
 
 export const check = secretScan({
-  id: 'secret-scan',
-  title: 'no credential-shaped string is committed',
-  tier: 'fast',
+  rule: 'A credential never enters the repository, not even a revoked one.',
 });

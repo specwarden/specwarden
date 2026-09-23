@@ -38,10 +38,8 @@ A primitive ships tested, so a consumer using one writes no test for it.
 ```js
 import { defineCheck, readTracked } from 'specwarden';
 
+// .specwarden/checks/docs/doc-owner.check.mjs
 export const check = defineCheck({
-  id: 'doc-owner',
-  title: 'every document names who owns it',
-  tier: 'fast',
   rule: { statement: 'a document names its owner', owner: 'docs/README.md' },
   when: { ending: ['.md'] },
   corpus: { atLeast: 1, why: 'no markdown was found — the pathspec matched nothing.' },
@@ -58,6 +56,15 @@ export const check = defineCheck({
   },
 });
 ```
+
+Write only what the engine cannot know. Exported alone, the check takes its file's name
+as its `id` (`doc-owner`); a file exporting several names each one. `tier` is `fast`, the
+`title` is the rule's statement, and `rule: 'a document names its owner'` — a string — is
+that statement, owned by the file that declares it. A written value always wins.
+
+Every factory checks its options when the file loads: a missing required option, a
+misspelled one, a wrong type are each an exit 2 naming the file and the option — never a
+crash mid-run, and never an option dropped in silence.
 
 ## Say what a green run must have looked at
 
@@ -98,12 +105,56 @@ make a red run green: that is the bar moving, which is the whole failure.
 
 ## Every check names the rule it enforces
 
-`rule: { statement, owner }` on the check. `orphan-check` fails a check that names none —
-an unattributed check is one nobody can argue with, relax deliberately, or retire.
+`orphan-check` fails a check that names no rule — an unattributed check is one nobody can
+argue with, relax deliberately, or retire. The rule a new check needs is one of:
+
+- `rule: 'the statement'` on the check — owned by its own file, the usual case;
+- `rule: { statement, owner }` — when the rationale is written in a document;
+- nothing, for a module's check — it carries the rule it enforces, owned by its package;
+  write `rule` to state yours instead;
+- nothing on the check, and a rule in `.specwarden/rules.mjs` whose
+  `enforcement.checkIds` lists the check's id — when several checks share one rule.
+
+`enforcement-resolves` walks the other way: every id a rule's `enforcement` names must be
+a registered check or a declared perimeter rule. Rename a check, or a perimeter rule, and
+the rule that named the old id goes red — rename both together.
 
 The rule register (`.specwarden/rules.mjs`) is for what cannot live on a check: a rule
 several checks share, and a rule nothing can check (declared `notMechanizable`, **with a
 reason — a reason, never an apology**). Declaring one id in both places is refused at load.
+
+## A check a template left switched off
+
+`init` writes some checks as `<id>.check.mjs.example` and lists them: each needs a fact
+only this repository has — a path, a list of names, a threshold — and a check configured
+with a guess would be green about nothing. An `.example` file is never loaded.
+
+To switch one on:
+
+1. fill in what its header comment asks for — a line marked REPLACE is a guess, not a
+   default; nothing else in the file needs changing;
+2. drop the suffix: `git mv <id>.check.mjs.example <id>.check.mjs` — a check reads tracked
+   files, so an untracked one is examined by nothing;
+3. uncomment its rule in `rules.mjs`, where the template left it under the example's id.
+   A module's check is no orphan without it — it carries a rule of its own — but a check
+   the engine builds (`fromResult`, `commandCheck`) is red on `orphan-check` until then;
+4. `specwarden check --id <id>` — green on the tree, then plant the defect it exists for
+   and watch it go red. A check never seen red is a hope.
+
+## The perimeter: what an assistant may not do
+
+A `perimeter.mjs` beside the config exports `rules` — each a `commandRule({ id, why, match })` — and
+the `perimeter` command evaluates one action against them **before** it runs. It is a
+hook, not a gate: nothing enforces it until the assistant's hook calls it. For Claude
+Code, the `hooks.PreToolUse` entry of the project's `settings.json` under `.claude/` →
+`node "$CLAUDE_PROJECT_DIR/node_modules/specwarden/bin/warden.mjs" perimeter`.
+
+- A refused action exits 2 with the rule's id, its owner and its `why`. Read the `why`:
+  it says what to do **instead**. Do that; do not look for a spelling the matcher misses.
+- It **fails open**: a missing file, a malformed payload, a rule that throws — all allow.
+  A perimeter that blocks on its own fault halts work wearing the face of a rule.
+- A new rule is enforced the moment it is in the file; no registration. Its `why` names
+  the alternative — a refusal without one is an obstacle.
 
 ## Testing a check
 
@@ -131,6 +182,11 @@ specwarden check --fix            # let a fixable gate repair itself
 specwarden doctor                 # what is declared, without running any of it
 specwarden new <id>               # scaffold a check and its test
 ```
+
+Exit `0` every gate held; `1` a gate failed, and nothing else is ever `1`; `2` the line,
+the config or a check file could not be used — the message names the file. In CI, pass
+`--base <ref>` for a pull request: without one a CI run checks everything, and says so.
+`SPECWARDEN_SKIP` is ignored under CI.
 
 ## Refuse to
 

@@ -24,10 +24,7 @@ const assembled = (ctx: ITemplateContext) =>
     specSourcePart('speckit'),
     secretScanPart(ctx),
     docPathsPart(ctx, {
-      header: `every repository-relative path named in documentation resolves.
- *
- * Including the paths inside \`specs/\`: a feature's plan citing a file that has moved is
- * read as current by whoever implements the feature next.`,
+      header: "A feature's plan citing a file that has moved is read as current by whoever implements it next.",
     }),
     scriptWrappersPart(ctx),
   );

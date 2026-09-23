@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { ISpecRequirement, ISpecSource, ISpecSourceResult } from '../../../domain';
 import { InMemoryFileSource } from '../../../infrastructure';
 import type { IWardenConfig } from '../../config/config.model';
+import { testContext } from '../../../testing';
 import { syncInvariants } from './sync-invariants.command';
 
 /**
@@ -45,8 +46,10 @@ describe('sync-invariants', () => {
   });
 
   it('says the source could not be read — and that this is not a green light', () => {
-    const { text } = run({ specSource: sourceOf({ found: false, items: [], note: 'openspec/specs not found' }) });
+    const { code, text } = run({ specSource: sourceOf({ found: false, items: [], note: 'openspec/specs not found' }) });
 
+    // Exit 2, as the CLI says "could not be used": it was 0, and a CI step passed over no spec tree.
+    expect(code).toBe(2);
     expect(text).toContain('found nothing: openspec/specs not found');
     expect(text).toContain('not a green light');
     expect(text).not.toContain('in sync');
@@ -106,5 +109,59 @@ describe('sync-invariants', () => {
 
     expect(text).toContain('✓ in sync');
     expect(text).toContain('(1)');
+  });
+});
+
+describe('sync-invariants — a note is one sentence, ending once', () => {
+  // A source's note that ended in its own mark printed "…elsewhere.. (This" and
+  // "…installed here?. (This".
+  it.each([
+    ['a note with no closing mark gains a full stop', 'openspec/specs not found', 'not found. (This'],
+    ['a note ending in a full stop keeps one', 'Set `root` if its features live elsewhere.', 'elsewhere. (This'],
+    ['a note ending in a question keeps the question', 'is OpenSpec installed here?', 'installed here? (This'],
+  ])('%s', (_name, note, printed) => {
+    const found = run({ specSource: sourceOf({ found: false, items: [], note }) }).text;
+    const empty = run({ specSource: sourceOf({ found: true, items: [], note }) }).text;
+    for (const text of [found, empty]) {
+      expect(text).toContain(printed);
+      expect(text).not.toMatch(/[.?!]\. \(This/);
+    }
+  });
+});
+
+describe('sync-invariants — a source that gives no note', () => {
+  it('still ends each line once', () => {
+    expect(run({ specSource: sourceOf({ found: false, items: [] }) }).text).toContain(
+      'found nothing: no requirements. (This',
+    );
+    expect(run({ specSource: sourceOf({ found: true, items: [] }) }).text).toContain(
+      'holds no requirements: nothing to reconcile against. (This',
+    );
+  });
+});
+
+describe('sync-invariants reads the documents version control tracks', () => {
+  it('ignores a marker in a file git does not track — an installed dependency deposited nothing here', () => {
+    const tree = {
+      'docs/checkout.md': '<!-- invariant: checkout#totals-include-tax -->\n',
+      'node_modules/some-pkg/README.md': '<!-- invariant: checkout#stolen-from-a-dependency -->\n',
+    };
+    const { io, text } = capture();
+    const vcs = testContext({ tree, tracked: ['docs/checkout.md'] }).vcs;
+
+    syncInvariants(
+      {
+        specSource: sourceOf({ found: true, items: REQUIREMENTS.slice(0, 1) }),
+        invariants: { docs: '**/*.md', idPattern: /<!--\s*invariant:\s*([a-z0-9#-]+)\s*-->/g },
+      },
+      new InMemoryFileSource(tree),
+      io,
+      vcs,
+    );
+
+    // Read from the working tree, the dependency's marker was reported as an orphan.
+    expect(text()).toContain('1 requirement(s), 1 invariant(s) found');
+    expect(text()).not.toContain('stolen-from-a-dependency');
+    expect(text()).toContain('✓ in sync');
   });
 });

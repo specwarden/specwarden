@@ -16,7 +16,7 @@ pnpm add -D @specwarden/security
 ```js
 import { secretScan } from '@specwarden/security';
 
-export const checks = [secretScan({ id: 'secret-scan', title: 'no credential in the tree', tier: 'fast' })];
+export const check = secretScan({ id: 'secret-scan', title: 'no credential in the tree' });
 ```
 
 That is the whole configuration for most repositories. Everything below is for the cases
@@ -40,13 +40,17 @@ gets disabled.
 ## The allowlist is for a file that NECESSARILY contains the pattern
 
 ```js
-secretScan({
+import { secretScan } from '@specwarden/security';
+
+export const check = secretScan({
   id: 'secret-scan',
-  title: '…',
-  tier: 'fast',
-  allowlist: [{ file: 'docs/CREDENTIAL-FORMATS.md', patternId: '*' }],
+  title: 'no credential in the tree',
+  allowlist: [{ file: 'docs/CREDENTIAL-FORMATS.md', patternId: '*', why: 'the document IS the format list' }],
 });
 ```
+
+An entry takes `file` (an exact path, never a prefix), `patternId` (or `*`) and `why`;
+anything else is refused by name.
 
 A document about credential formats, a fixture, the pattern library itself. **Not** for a
 secret nobody has rotated yet: that is not an allowlist entry, it is an incident. If a
@@ -56,16 +60,24 @@ leaves it in the history and in whatever already read it.
 ## Tuning the pattern library
 
 ```js
-secretScan({
+import { secretScan } from '@specwarden/security';
+
+export const check = secretScan({
   id: 'secret-scan',
-  title: '…',
-  tier: 'fast',
+  title: 'no credential in the tree',
   patterns: {
-    add: [{ id: 'acme-key', label: 'Acme API key', re: /\bacme_[a-z0-9]{32}\b/ }],
-    disable: [{ id: 'some-builtin', why: 'this vendor is not used here' }],
+    extra: [{ id: 'acme-key', label: 'Acme API key', re: /\bacme_[a-z0-9]{32}\b/ }],
+    disable: [{ id: 'telegram-bot-token', why: 'this vendor is not used here' }],
   },
 });
 ```
+
+`patterns` takes three verbs and nothing else: `extra` adds beside the built-ins (an id
+already built in overrides it), `disable` switches a built-in off by id with a reason, and
+`replace` supplies the whole library. **Any other key is refused when the file loads** — a
+misspelled verb was ignored before, and the pattern it carried was never scanned for. The
+built-in ids are `telegram-bot-token`, `aws-access-key-id`, `private-key-block`,
+`slack-webhook` and `secret-env-assignment`, exported as `BUILT_IN_SECRET_PATTERNS`.
 
 **Every deviation from the built-in library is reported as an info finding, and those
 lines come first, before any match.** A scanner that quietly stopped looking for
@@ -80,3 +92,20 @@ match _means_ something. A noisy guard is a disabled guard.
 `ratchet` tolerates the debt a tree already has, so the rule can be armed today and paid
 down. It refuses the next unit of debt, which is the point. A ratchet that goes up is the
 rule being retired, and it should be retired out loud.
+
+## Options
+
+Beside the engine's identity — `id`, `title`, `tier` (default `fast`), `when`, `hint`,
+`rule`, `ratchet` — and each refused by name if misspelled:
+
+| Option               | Kind                          | Default                                                   |
+| -------------------- | ----------------------------- | --------------------------------------------------------- |
+| `scan`               | git pathspec                  | every tracked file                                        |
+| `skipPaths`          | path prefixes or fragments    | lockfiles, `.git/`, `node_modules/`, `dist/`, `coverage/` |
+| `skipExtensions`     | extensions                    | images, archives, fonts, media                            |
+| `maxBytes`           | number                        | 1 MB                                                      |
+| `allowlist`          | `[{ file, patternId, why }]`  | none                                                      |
+| `patterns`           | `{ extra, disable, replace }` | the built-in library                                      |
+| `placeholderMarkers` | RegExp                        | `DEFAULT_PLACEHOLDER_MARKERS`                             |
+
+A scan that examined no file after the skipped paths fails, naming the pathspec.

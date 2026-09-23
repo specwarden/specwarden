@@ -228,3 +228,35 @@ describe('CommandCheck — a zero exit is not evidence of work', () => {
     expect(check.when(['docs/a.md'])).toBe(false);
   });
 });
+
+describe('CommandCheck — the same check, run twice, says the same thing', () => {
+  // `expect` and `refuse` were `.test`ed as given, and a `/g` pattern keeps `lastIndex`
+  // between calls: the second run of one check believed what the first refused.
+  it('a global `expect` matches on every run', () => {
+    const check = new CommandCheck({ id: 'x', cmd: 'suite', expect: /\d+ passed/g });
+    const { ctx } = ctxWith({ status: 0, stdout: '3 passed', stderr: '' });
+    expect([check.run(ctx), check.run(ctx), check.run(ctx)].map((v) => (v as { ok: boolean }).ok)).toEqual([
+      true,
+      true,
+      true,
+    ]);
+  });
+
+  it('a global `refuse` refuses on every run', () => {
+    const check = new CommandCheck({ id: 'x', cmd: 'suite', refuse: [/No test files/g, { pattern: /empty/g }] });
+    const { ctx } = ctxWith({ status: 0, stdout: 'No test files, empty', stderr: '' });
+    expect([check.run(ctx), check.run(ctx)].map((v) => (v as { ok: boolean }).ok)).toEqual([false, false]);
+  });
+});
+
+describe('CommandCheck — what a check file may leave out', () => {
+  it('defaults the tier to fast and the title to the rule, else the id; a string rule is its statement', () => {
+    const ruled = new CommandCheck({ id: 'lint', cmd: 'eslint .', rule: 'the code lints' });
+    expect([ruled.tier, ruled.title, ruled.rule]).toEqual(['fast', 'the code lints', { statement: 'the code lints' }]);
+    expect(new CommandCheck({ id: 'lint', cmd: 'eslint .' }).title).toBe('lint');
+  });
+
+  it('carries the unnamed placeholder until its file names it', () => {
+    expect(new CommandCheck({ cmd: 'true' }).id).toBe('<unnamed>');
+  });
+});

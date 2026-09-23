@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { docCounts, docHygiene, docPaths, docPlacement, docSymbols } from '@specwarden/docs';
-import { errorsOf, runCheck, uncoveredFactories } from 'specwarden';
+import { docCounts, docHygiene, docPaths, docPlacement, docSymbols, docsChecks } from '@specwarden/docs';
+import { CheckOptionsError, errorsOf, runCheck } from 'specwarden';
 
-import { BROKEN, CLEAN, COVERED, PROBE } from './repository';
+import { BROKEN, CLEAN, COVERED } from './repository';
 
 /**
  * Everything this package publishes, wired the way a consumer wires it.
@@ -25,11 +25,54 @@ import { BROKEN, CLEAN, COVERED, PROBE } from './repository';
 
 const ID = { title: 'playground', tier: 'fast' as const };
 
+const isCheck = (value: unknown): boolean =>
+  typeof (value as { id?: unknown } | null)?.id === 'string' &&
+  typeof (value as { run?: unknown } | null)?.run === 'function';
+
+/**
+ * Every export that builds checks, told from a helper by what it DOES with an options
+ * object it cannot honour: it returns checks, or it refuses the options by name.
+ *
+ * Not one probe carrying the union of every factory's options, which is how this was
+ * found before. A factory now refuses an option it does not have, so the union read every
+ * factory as a helper and the audit passed over none of them — the check that cannot
+ * fail, in the suite meant to catch it.
+ */
+function factoriesOf(mod: Readonly<Record<string, unknown>>): string[] {
+  return Object.entries(mod)
+    .filter(([name, value]) => typeof value === 'function' && /^[a-z]/.test(name))
+    .filter(([, value]) => {
+      try {
+        const made = (value as (options: unknown) => unknown)({ id: 'probe', unknownOption: true });
+        return isCheck(made) || (Array.isArray(made) && made.length > 0 && made.every(isCheck));
+      } catch (error) {
+        return error instanceof CheckOptionsError;
+      }
+    })
+    .map(([name]) => name)
+    .sort();
+}
+
 describe('@specwarden/docs', () => {
   it('exercises every check factory the package publishes', async () => {
     const mod = (await import('@specwarden/docs')) as Record<string, unknown>;
 
-    expect(uncoveredFactories(mod, { covered: COVERED, probe: PROBE })).toEqual([]);
+    expect(factoriesOf(mod)).toEqual([...COVERED].sort());
+  });
+
+  it('docsChecks: the whole module in one call, each check red on its own defect', async () => {
+    const checks = docsChecks({
+      code: ['src/**/*.ts'],
+      suffixes: ['Registry'],
+      countableNouns: ['services'],
+      placement: { docs: '**/*_MODULE.md', allowed: [/^src\/[^/]+_MODULE\.md$/] },
+    });
+
+    expect(checks.map((c) => c.id)).toEqual(['doc-paths', 'doc-symbols', 'doc-counts', 'doc-placement', 'doc-hygiene']);
+    for (const check of checks) {
+      expect(errorsOf(await runCheck(check, { tree: CLEAN })), check.id).toEqual([]);
+      expect(errorsOf(await runCheck(check, { tree: BROKEN })), check.id).toHaveLength(1);
+    }
   });
 
   it('docPaths: a backticked repository path resolves, or it does not', async () => {
@@ -59,15 +102,9 @@ describe('@specwarden/docs', () => {
   });
 
   it('docCounts: an inventory the repository owns is derived, never restated', async () => {
-    const check = docCounts({
-      ...ID,
-      id: 'doc-counts',
-      countableNouns: ['services'],
-      skipped: [],
-      allowlist: () => [],
-      countRatchet: 0,
-      when: () => true,
-    });
+    // Its nouns are the one thing it asks for: no skipped trees, no allowlist and no
+    // relevance predicate are the defaults a new repository has.
+    const check = docCounts({ ...ID, id: 'doc-counts', countableNouns: ['services'] });
 
     expect((await runCheck(check, { tree: CLEAN })).ok).toBe(true);
 
@@ -118,5 +155,25 @@ describe('@specwarden/docs', () => {
     const verdict = await runCheck(check, { tree: BROKEN });
     expect(verdict.ok).toBe(false);
     expect(errorsOf(verdict).join(' ')).toContain('nowhere.md');
+  });
+});
+
+// Wired with no `rule`, a module's check was an orphan the moment a register existed —
+// and a preset's checks had nowhere to put one. The module knows what its check enforces.
+describe('@specwarden/docs — every check names the rule it enforces', () => {
+  it('carries an implied rule owned by the package, and a rule the consumer writes wins', () => {
+    const built = docsChecks({
+      code: ['src/**/*.ts'],
+      suffixes: ['Service'],
+      countableNouns: ['services'],
+      placement: { allowed: [/^docs\//] },
+    });
+    for (const check of built) {
+      expect(check.rule, check.id).toEqual(
+        expect.objectContaining({ statement: expect.any(String), owner: '@specwarden/docs', implied: true }),
+      );
+      expect(check.title, check.id).not.toBe(check.id);
+    }
+    expect(docPaths({ id: 'doc-paths', rule: 'ours' }).rule).toEqual({ statement: 'ours' });
   });
 });

@@ -44,6 +44,30 @@ describe('GithubReporter', () => {
     expect(c.out()).toContain('::warning title=lint,file=a.md::shape');
   });
 
+  it("annotates an ADVISORY check's errors as warnings — ::error on a green job reads as a failed gate", () => {
+    const c = capture();
+    new GithubReporter(c.write).checkFinished(
+      result([{ severity: 'error', message: 'ugly', file: 'src/u.ts' }], { meta: meta({ advisory: true }) }),
+    );
+
+    expect(c.out()).toContain('::warning title=lint,file=src/u.ts::ugly');
+    expect(c.out()).not.toContain('::error');
+  });
+
+  it('counts the run as the terminal does: a failed advisory check is warned, not passed', () => {
+    const c = capture();
+    new GithubReporter(c.write).runFinished(
+      [
+        result([]),
+        result([], { meta: meta({ id: 'advice', advisory: true }) }),
+        result([{ severity: 'error', message: 'x' }], { meta: meta({ id: 'broke', advisory: true }) }),
+      ],
+      1000,
+    );
+
+    expect(c.out()).toBe('::notice title=specwarden::2 gate(s) passed (1 warned) in 1.0s\n');
+  });
+
   it('prints an info finding as a plain line, never as an annotation', () => {
     // An annotation per explanatory line would put a note on the diff for everything a
     // passing check chose to say — which trains people to collapse annotations.
@@ -108,6 +132,18 @@ describe('GithubReporter', () => {
     expect(c.out()).toBe('skipped: lint (not-relevant)\n');
   });
 
+  it('closes the group of a check that ran and could not look, with its notes and why', () => {
+    const c = capture();
+    new GithubReporter(c.write).checkFinished(
+      result([{ severity: 'info', message: 'prod: absent' }], {
+        skipped: 'cannot-tell',
+        verdict: { ok: true, findings: [{ severity: 'info', message: 'prod: absent' }], skipped: 'no env file here' },
+      }),
+    );
+
+    expect(c.out()).toBe('prod: absent\nskipped: lint (cannot-tell) — no env file here\n::endgroup::\n');
+  });
+
   it('summarises failures once, as a notice — the failures are already annotated', () => {
     const c = capture();
     new GithubReporter(c.write).runFinished(
@@ -117,6 +153,13 @@ describe('GithubReporter', () => {
 
     expect(c.out()).toContain('::notice title=specwarden::1 gate(s) failed: lint');
     expect(c.out()).not.toContain('::error');
+  });
+
+  it('says nothing ran when every check was skipped', () => {
+    const c = capture();
+    new GithubReporter(c.write).runFinished([result([], { skipped: 'not-relevant' })], 1000);
+
+    expect(c.out()).toBe('::notice title=specwarden::nothing ran — 1 skipped, 0 checked, in 1.0s\n');
   });
 
   it('summarises a clean run with its duration', () => {

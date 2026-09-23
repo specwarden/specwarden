@@ -24,10 +24,7 @@ const assembled = (ctx: ITemplateContext) =>
     specSourcePart('openspec'),
     secretScanPart(ctx),
     docPathsPart(ctx, {
-      header: `every repository-relative path named in documentation resolves.
- *
- * Including the paths inside \`openspec/\`: a change proposal that cites a file which
- * has moved is read as current by whoever picks the change up next.`,
+      header: 'A change proposal citing a file that has moved is read as current by whoever picks it up next.',
     }),
   );
 

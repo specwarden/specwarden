@@ -11,6 +11,8 @@ import type {
   IVerdict,
 } from '../../domain';
 import { InMemoryFileSource } from '../../infrastructure';
+import { CapabilityError } from '../../runtime/container/capability-error/capability-error.error';
+import { buildContext } from '../../runtime/container/gated-context/gated-context.factory';
 import { matchPathspec } from '../../infrastructure/git-vcs/git-pathspec/git-pathspec.util';
 
 /**
@@ -172,7 +174,25 @@ export function testContext(options: ITestContextOptions = {}): ITestContext {
  * against a check that was never waited for.
  */
 export async function runCheck(check: ICheck, options: ITestContextOptions = {}): Promise<IVerdict> {
-  return check.run(testContext(options));
+  const ctx = testContext(options);
+  // The capability gate the runner applies, applied here too. Without it a body that
+  // shelled out without declaring `exec` was green in its test and red in the CLI — the
+  // test and the run disagreeing about the same check, which is the one thing a test
+  // must never do. The refusal becomes the same failing verdict the runner reports.
+  const gated = buildContext(
+    check,
+    { files: ctx.files, vcs: ctx.vcs, proc: ctx.proc, clock: ctx.clock, writer: ctx.writer },
+    ctx.changed,
+    ctx.shard,
+    ctx.ratchet,
+    ctx.roster,
+  );
+  try {
+    return await check.run(gated);
+  } catch (error) {
+    if (!(error instanceof CapabilityError)) throw error;
+    return { ok: false, findings: [{ severity: 'error', message: error.message, ruleId: check.id }] };
+  }
 }
 
 /** The error findings of a verdict — the assertion most check tests actually want,

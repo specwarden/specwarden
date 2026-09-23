@@ -1,14 +1,9 @@
-/**
- * `doc-paths` — every repository-relative path named in documentation resolves.
- *
- * Worth more in a monorepo than anywhere else: paths cross package boundaries, and a
- * package that moves takes every document naming it with it.
- */
+// `doc-paths` — every repository-relative path named in documentation resolves.
+// Paths cross package boundaries here, and a package that moves takes every document naming it along.
+// `docs` is what is read; `skipDirs` leaves out a tree whose paths are history.
 import { docPaths } from '@specwarden/docs';
 
 export const check = docPaths({
-  id: 'doc-paths',
-  title: 'paths named in documentation exist',
-  tier: 'fast',
-  docs: 'docs/**/*.md',
+  docs: '**/*.md',
+  rule: 'Every repository-relative path named in documentation exists.',
 });

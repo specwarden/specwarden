@@ -9,7 +9,7 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   test: {
-    include: ['*.spec.ts'],
+    include: ['*.spec.ts', 'journeys/*.spec.ts'],
     environment: 'node',
     // The CLI scenes spawn the engine over a scratch repository: seconds, not milliseconds.
     testTimeout: 120_000,

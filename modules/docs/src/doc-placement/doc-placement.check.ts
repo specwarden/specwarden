@@ -1,10 +1,11 @@
-import type { ICheck, ICheckContext, ICheckIdentity, IFinding, IVerdict } from 'specwarden';
-import { buildCheck, frameTolerated, testStateless } from 'specwarden';
-import { nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
+import type { ICheck, ICheckContext, IFinding, IVerdict } from 'specwarden';
+import { buildCheck, checkOptions, frameTolerated, testStateless } from 'specwarden';
+import type { IDocCheckIdentity } from '../_shared/identity/identity.model';
+import { DEFAULT_DOCS, nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
 
-export interface IDocPlacementOptions extends ICheckIdentity {
-  /** git pathspec for the markdown corpus. */
-  readonly docs: string;
+export interface IDocPlacementOptions extends IDocCheckIdentity {
+  /** git pathspec for the markdown corpus. Default: `**\/*.md`. */
+  readonly docs?: string;
   /** The placement contract: a document must match ONE of these. Regexes, because
    * the contract's shapes (alternations, anchored names) exceed what a glob says. */
   readonly allowed: readonly RegExp[];
@@ -28,45 +29,64 @@ export interface IDocPlacementOptions extends ICheckIdentity {
  * about one repository and arrive as options.
  */
 export function docPlacement(options: IDocPlacementOptions): ICheck {
+  checkOptions('docPlacement', options, {
+    docs: { kind: 'string' },
+    allowed: { kind: 'array', required: true },
+    link: { kind: 'object' },
+  });
+  const docs = options.docs ?? DEFAULT_DOCS;
   const ratchet = options.ratchet ?? 0;
-  return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx: ICheckContext): IVerdict => {
-    const files = ctx.vcs.trackedFiles(options.docs);
-    // Zero documents is a failure: a pathspec that stopped matching would otherwise
-    // report every document correctly placed, over a corpus of none.
-    if (files.length === 0) return nothingExamined(options.id, options.docs);
+  return buildCheck(
+    {
+      ...options,
+      rule: options.rule ?? {
+        statement: 'a document sits where the placement contract says, and nothing outside links into the plans',
+        owner: '@specwarden/docs',
+        implied: true,
+      },
+      tier: options.tier ?? 'fast',
+      zone: 'product',
+    },
+    ['read'],
+    (ctx: ICheckContext): IVerdict => {
+      const files = ctx.vcs.trackedFiles(docs);
+      // Zero documents is a failure: a pathspec that stopped matching would otherwise
+      // report every document correctly placed, over a corpus of none.
+      if (files.length === 0) return nothingExamined(options.id, docs);
 
-    const placement: IFinding[] = files
-      .filter((f) => !options.allowed.some((re) => testStateless(re, f)))
-      .map((file) => ({
-        severity: 'error',
-        file,
-        message: `${file} sits where the placement contract does not describe — decide: move it, or add the row to the contract.`,
-        ruleId: options.id,
-      }));
+      const placement: IFinding[] = files
+        .filter((f) => !options.allowed.some((re) => testStateless(re, f)))
+        .map((file) => ({
+          severity: 'error',
+          file,
+          message: `${file} sits where the placement contract does not describe — decide: move it, or add the row to the contract.`,
+          ruleId: options.id,
+        }));
 
-    const links: IFinding[] = [];
-    if (options.link) {
-      const { pattern, dir, allow } = options.link;
-      const re = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
-      for (const file of files) {
-        if (file.startsWith(dir)) continue;
-        const body = ctx.files.tryRead(file);
-        if (body === undefined) continue;
-        for (const m of body.matchAll(re)) {
-          if (m[1] !== allow)
-            links.push({
-              severity: 'error',
-              file,
-              message: `${file} links into ${dir} (\`${m[1]}\`) from outside it — a plan is deleted when its work ends, so nothing may point at one. Cite the document that owns the durable fact instead.`,
-              ruleId: options.id,
-            });
+      const links: IFinding[] = [];
+      if (options.link) {
+        const { pattern, dir, allow } = options.link;
+        const re = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
+        for (const file of files) {
+          if (file.startsWith(dir)) continue;
+          const body = ctx.files.tryRead(file);
+          if (body === undefined) continue;
+          for (const m of body.matchAll(re)) {
+            if (m[1] !== allow)
+              links.push({
+                severity: 'error',
+                file,
+                message: `${file} links into ${dir} (\`${m[1]}\`) from outside it — a plan is deleted when its work ends, so nothing may point at one. Cite the document that owns the durable fact instead.`,
+                ruleId: options.id,
+              });
+          }
         }
       }
-    }
 
-    // Placement is ratcheted; an inbound link never is. A passing verdict's error
-    // lines are the placement violations the ratchet tolerates — frame them.
-    const ok = placement.length <= ratchet && links.length === 0;
-    return frameTolerated(ok, [...placement, ...links], `the placement ratchet ${ratchet}`);
-  });
+      // Placement is ratcheted; an inbound link never is. A passing verdict's error
+      // lines are the placement violations the ratchet tolerates — frame them.
+      const ok = placement.length <= ratchet && links.length === 0;
+      return frameTolerated(ok, [...placement, ...links], `the placement ratchet ${ratchet}`);
+    },
+  );
 }

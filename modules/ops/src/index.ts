@@ -36,3 +36,5 @@ export type { IBuildOrderOptions } from './build-order-follows-deps/build-order-
 
 export { shellLocalScope, functionSpans, localOutsideFunction } from './shell-local-scope/shell-local-scope.check';
 export type { IShellLocalScopeOptions } from './shell-local-scope/shell-local-scope.check';
+export { DEFAULT_RUNNER_PATTERN } from './gates-have-ci-jobs/gates-have-ci-jobs.check';
+export { DEFAULT_LOOPBACK_HOSTS } from './upstreams-resolve/upstreams-resolve.check';

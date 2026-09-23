@@ -1,5 +1,15 @@
 import type { IRule, ITemplate, ITemplateContext, ITemplateFile } from 'specwarden';
-import { ciCoveragePart, compose, docPathsPart, scriptWrappersPart, secretScanPart } from '@specwarden/scaffold-parts';
+import {
+  ciCoveragePart,
+  compose,
+  docPathsPart,
+  exampleRule,
+  header,
+  scriptWrappersPart,
+  secretScanPart,
+  switchOn,
+  tierOption,
+} from '@specwarden/scaffold-parts';
 
 /**
  * A starting tree for a pnpm WORKSPACE — several packages, one lockfile, one toolchain.
@@ -24,108 +34,61 @@ import { ciCoveragePart, compose, docPathsPart, scriptWrappersPart, secretScanPa
 const shared = (ctx: ITemplateContext) =>
   compose(
     secretScanPart(ctx, {
-      header: `a credential-shaped string anywhere in the tracked tree.
- *
- * One scan for the whole workspace: a credential does not care which package it landed
- * in, and a per-package scan is a per-package chance to forget one.`,
+      header:
+        'One scan for the whole workspace: a credential does not care which package it landed in.\nA match means rotate first, delete second.',
     }),
     docPathsPart(ctx, {
-      header: `every repository-relative path named in documentation resolves.
- *
- * Worth more in a monorepo than anywhere else: paths cross package boundaries, and a
- * package that moves takes every document naming it with it.`,
+      header: 'Paths cross package boundaries here, and a package that moves takes every document naming it along.',
+      docs: '**/*.md',
     }),
     scriptWrappersPart(ctx),
     ciCoveragePart(ctx),
   );
 
-export const monorepo: ITemplate = {
-  name: 'monorepo',
-  describe: 'a pnpm workspace — lockfile, build order, dependency pins, credential scan',
-  requires: ['@specwarden/ops', '@specwarden/security', '@specwarden/docs'],
+/** Where the workspace packages live: the fixed part of the first workspace glob. */
+const packagesDir = (ctx: ITemplateContext): string =>
+  (ctx.workspaces[0] ?? 'packages/*').replace(/\/?\*.*$/, '') || 'packages';
 
-  files: (ctx: ITemplateContext): readonly ITemplateFile[] => {
-    const pm = ctx.packageManager ?? 'pnpm';
-    return [
-      {
-        path: 'checks/workspace/lockfile.check.mjs',
-        body: `/**
- * \`lockfile\` — the lockfile still describes the manifests.
- *
- * A drifted lockfile installs FINE on the machine that drifted it and differently
- * everywhere else, which is the shape of bug that costs an afternoon per person.
- */
-import { commandCheck } from 'specwarden';
-
-export const check = commandCheck({
-  id: 'lockfile',
-  title: 'the lockfile is in sync with the manifests',
-  tier: '${ctx.tier}',
-  cmd: '${pm} install --frozen-lockfile',
-  when: () => true,
-  hint: "Run '${pm} install' from the repository root and commit the updated lockfile.",
-});
-`,
-      },
-      {
-        path: 'checks/workspace/build-order.check.mjs.example',
-        body: `/**
- * \`build-order\` — the declared build order follows the dependency graph.
- *
- * A package built before the one it depends on picks up the PREVIOUS build's output.
- * Nothing errors: the build succeeds, and ships something stale.
- *
- * Ships as \`.example\` because four of its inputs are facts about YOUR tooling that no
- * template can guess — where the packages are, what their name prefix is, which files
- * declare the order, and how a build is spelled in them. Fill the four in, rename to
- * \`.check.mjs\`, and it enforces the graph. Left half-configured it would find nothing
- * and report green, which is the failure this engine exists against.
- */
+const examples = (ctx: ITemplateContext): ITemplateFile[] => [
+  {
+    path: 'checks/workspace/build-order.check.mjs.example',
+    body: `${header(
+      '`build-order` — a package is built after everything it depends on.',
+      `A package built before its dependency ships the PREVIOUS build's output, and nothing errors.
+OFF until the prefix, the files that declare the order and the build invocation are yours.
+${switchOn('build-order')}`,
+    )}
 import { buildOrderFollowsDeps } from '@specwarden/ops';
 
 export const check = buildOrderFollowsDeps({
   id: 'build-order',
-  title: 'a package is built after everything it depends on',
-  tier: '${ctx.tier}',
-  // Where the workspace packages live.
-  packagesDir: 'packages',
-  // A workspace package's name prefix; anything else is an external dependency.
+${tierOption(ctx)}  packagesDir: '${packagesDir(ctx)}',
+  // REPLACE: the workspace packages' name prefix; anything else is an external dependency.
   scopePrefix: '@your-scope/',
-  // The files that DECLARE the order — a Dockerfile, a CI workflow, a build script.
+  // REPLACE: the files that DECLARE the order — a Dockerfile, a CI workflow, a build script.
   containerFiles: 'Dockerfile*',
   // Matches one build invocation and captures the package name.
   buildInvocation: String.raw\`pnpm --filter (\\S+) run build\`,
-  when: (changed) => changed.some((f) => f.includes('Dockerfile') || f.endsWith('package.json')),
-  hint: 'Reorder the build, or fix the dependency that made the order wrong.',
 });
 `,
-      },
-      {
-        path: 'checks/workspace/dependency-pins.check.mjs.example',
-        body: `/**
- * \`dependency-pins\` — versions that must stay exact stay exact, and coordinated
- * groups agree across workspaces.
- *
- * Ships as \`.example\` because the POLICY is yours: which packages are frozen, which
- * must agree with each other, and which image tags may float are decisions no engine
- * can guess. Write them down, rename this file to \`.check.mjs\`, and the rules below
- * become enforceable.
- *
- * Every failure it catches is silent: a caret on a frozen package still installs, two
- * majors of one library both compile, \`:latest\` still starts.
- */
+  },
+  {
+    path: 'checks/workspace/dependency-pins.check.mjs.example',
+    body: `${header(
+      '`dependency-pins` — frozen versions stay exact, and coordinated groups agree across workspaces.',
+      `Every failure is silent: a caret on a frozen package still installs, two majors both compile.
+OFF until the POLICY below is yours; an empty one says it is inert rather than passing.
+${switchOn('dependency-pins')}`,
+    )}
 import { fromResult } from 'specwarden';
 
-/** The policy. One declaration, never a second copy elsewhere. */
+// REPLACE: the policy, declared once.
 const FROZEN = [];        // e.g. ['react', 'typescript']
 const COORDINATED = [];   // e.g. [{ group: 'react', packages: ['react', 'react-dom'] }]
 
 export const check = fromResult({
   id: 'dependency-pins',
-  title: 'frozen versions stay exact and coordinated groups agree',
-  tier: '${ctx.tier}',
-  when: (changed) => changed.some((f) => f.endsWith('package.json')),
-  hint: 'Fix the tree, or change the declaration above and say why in the commit message.',
+${tierOption(ctx)}  hint: 'Fix the tree, or change the policy above and say why in the commit message.',
   run: (ctx) => {
     const manifests = ctx.vcs
       .trackedFiles('package.json')
@@ -151,24 +114,45 @@ export const check = fromResult({
       const versions = new Set([...seen.keys()].map((k) => k.split('@').pop()));
       if (versions.size > 1) failures.push(\`group \${group} disagrees: \${[...seen.keys()].join(', ')}\`);
     }
-    // An empty policy checks nothing — say so rather than reporting a clean pass.
     const notes = FROZEN.length + COORDINATED.length === 0 ? ['no policy declared yet — this check is inert'] : [\`\${manifests.length} manifest(s) read\`];
     return { failures, notes };
   },
 });
 `,
+  },
+];
+
+export const monorepo: ITemplate = {
+  name: 'monorepo',
+  describe: 'a pnpm workspace — lockfile, build order, dependency pins, credential scan',
+  requires: ['@specwarden/ops', '@specwarden/security', '@specwarden/docs'],
+
+  files: (ctx: ITemplateContext): readonly ITemplateFile[] => {
+    const pm = ctx.packageManager ?? 'pnpm';
+    return [
+      {
+        path: 'checks/workspace/lockfile.check.mjs',
+        body: `${header(
+          '`lockfile` — the lockfile still describes the manifests.',
+          'A drifted lockfile installs FINE on the machine that drifted it and differently everywhere else.',
+        )}
+import { commandCheck } from 'specwarden';
+
+export const check = commandCheck({
+${tierOption(ctx)}  cmd: '${pm} install --frozen-lockfile',
+  rule: 'The lockfile describes the manifests, so every workspace resolves the same tree.',
+  hint: "Run '${pm} install' from the repository root and commit the updated lockfile.",
+});
+`,
       },
+      ...examples(ctx),
       ...shared(ctx).files,
     ];
   },
 
   rules: (ctx: ITemplateContext): readonly IRule[] => [
-    {
-      id: 'one-resolved-dependency-tree',
-      statement: 'The lockfile describes the manifests, so every workspace resolves the same tree.',
-      owner: '',
-      enforcement: { checkIds: ['lockfile'] },
-    },
+    exampleRule('build-order', 'A package is built after everything it depends on.'),
+    exampleRule('dependency-pins', 'Frozen versions stay exact, and coordinated groups agree across workspaces.'),
     ...shared(ctx).rules,
   ],
 };

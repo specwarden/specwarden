@@ -49,28 +49,31 @@ holding `perimeter.mjs` beside `perimeter.test.mjs`. The engine resolves both la
 ## 3. A check
 
 ```js
+// .specwarden/checks/hygiene/no-todo-in-src.check.mjs
 import { defineCheck } from 'specwarden';
 
-export const checks = [
-  defineCheck({
-    id: 'no-todo-in-src',
-    title: 'no TODO left in shipped source',
-    tier: 'fast',
-    when: { under: ['src/'] },
-    corpus: { atLeast: 1, why: 'src/ was empty — the pathspec stopped matching' },
-    run: (ctx) => {
-      const files = ctx.vcs.trackedFiles('src/**/*.ts');
-      return {
-        findings: files
-          .filter((f) => ctx.files.read(f).includes('TODO'))
-          .map((f) => ({ severity: 'error', file: f, message: `${f} — TODO in shipped source.` })),
-        examined: files.length,
-        unit: 'file(s)',
-      };
-    },
-  }),
-];
+export const check = defineCheck({
+  rule: 'no TODO left in shipped source',
+  when: { under: ['src/'] },
+  corpus: { atLeast: 1, why: 'src/ was empty — the pathspec stopped matching' },
+  run: (ctx) => {
+    const files = ctx.vcs.trackedFiles('src/**/*.ts');
+    return {
+      findings: files
+        .filter((f) => ctx.files.read(f).includes('TODO'))
+        .map((f) => ({ severity: 'error', file: f, message: `${f} — TODO in shipped source.` })),
+      examined: files.length,
+      unit: 'file(s)',
+    };
+  },
+});
 ```
+
+A check says only what the engine cannot know. Exported alone from its file, it takes the
+file's name as its `id` — `no-todo-in-src`; a file exporting several names each one. The
+`tier` is `fast`, the `title` is the rule's statement, and a `rule` written as a string
+is that statement, owned by the file that declares it. Any of them may still be written,
+and a written one wins.
 
 `defineCheck` owns the verdict: it assembles findings, stamps each one with the rule it
 proves, writes the pass note that says what was examined, and enforces the corpus floor.
@@ -118,8 +121,31 @@ that stopped matching after a format changed. In each case the check ran, examin
 nothing, found nothing wrong, and reported green — for months. The number is usually
 obvious, and stating it turns the entire family from invisible into loud.
 
+**A command says what it was pointed at, and what proves it ran.** A bare `commandCheck`
+believes the exit code, and a tool pointed at nothing usually exits 0: `grep` over a glob
+that matched no file complains on stderr and the check passes, the complaint an info line.
+
+```js
+export const check = commandCheck({
+  cmd: 'node --test --test-reporter=tap "tests/**/*.test.mjs"',
+  rule: 'every test passes',
+  paths: ['tests/'], // verified before the command spawns
+  expect: [/^# pass [1-9]/m], // a zero exit is believed only beside this
+  refuse: [/No such file or directory/], // what the tool prints when it did nothing
+});
+```
+
+**A check that could not look says so.** What it examines may not be on this machine —
+gitignored env files on a CI runner. A `defineCheck` body returns `skipped: 'why'`, and the
+run reports the check as skipped (`cannot-tell`), counted with the skips: never a pass,
+never a failure, and never a measurement for `--tighten`. A body that also reports a defect
+did look, and is judged on it.
+
 **An unknowable diff runs everything.** A range that cannot be read is not "nothing
-changed": read that way, a shallow clone or a first push skips the whole tier.
+changed": read that way, a shallow clone or a first push skips the whole tier. Under CI
+with no `--base`, the range of unpushed commits is empty by construction — the commit is
+already pushed — and it is read the same way: everything runs, and the run says why. Pass
+`--base <ref>` for the narrower run.
 
 **`measured`.** When several findings summarise one total, say the total. Counting
 printed error lines instead would have rewritten thresholds of 17 and 37 down to 0 under
@@ -142,6 +168,9 @@ specwarden check --tighten     # lower each threshold to today's count
 `direction: 'down'` is a debt count (the default); `'up'` is a floor a score must stay
 above. Commit `.specwarden/ratchets/` — it is data, and the next run compares against it.
 
+`--tighten` records only what a passing run measured, and never past the ceiling a check
+declares with `ratchet`: a red run's count is the regression, not a new bar.
+
 Never run `--tighten` in a pre-push hook: a check that under-counted once would pin an
 unreachable target and fail forever.
 
@@ -160,6 +189,56 @@ specwarden doctor                     # what is declared, without running any of
 
 `--reporter tty|json|github`. A reporter never prints the value of an environment
 variable: a finding names what is wrong, not the secret behind it.
+
+### Exit codes
+
+`0` every gate held, or the question was answered. `1` a gate failed — and nothing else is
+ever `1`. `2` the line, the config or a check file could not be used: an unknown flag, a
+config that does not parse, a check file that throws, a tier outside the vocabulary, two
+checks with one id. A load error names its file; a CI log that says `1` means a gate.
+
+### Environment
+
+| Variable           | Effect                                                                   |
+| ------------------ | ------------------------------------------------------------------------ |
+| `CI`               | a CI run — anything but empty, `false` or `0`                            |
+| `GITHUB_ACTIONS`   | a CI run, and the reporter defaults to `github`                          |
+| `SPECWARDEN_BASE`  | the ref a change is measured from, as `--base`                           |
+| `SPECWARDEN_ALL=1` | ignore relevance, as `--all`                                             |
+| `SPECWARDEN_SKIP`  | ids to skip, comma-separated, or `all` — honoured locally, ignored in CI |
+| `SPECWARDEN_SHELL` | the shell a command check and a plan acceptance run under                |
+
+Without `SPECWARDEN_SHELL`, a command runs under `bash` — on Windows the Git bash beside
+`git`, never the `bash.exe` that starts WSL.
+
+### In CI
+
+- **Annotations are automatic** under GitHub Actions: the `github` reporter writes each
+  finding as an annotation on the diff. `--reporter` overrides it.
+- **A pull-request run passes `--base`** — `--base origin/main`, or `SPECWARDEN_BASE`.
+  Without one, a CI run is a full run: the commit is already pushed, so "unpushed commits"
+  is empty by construction, and an empty range read as "nothing changed" would skip the
+  tier. The run says so, on stderr when the reporter writes machine output.
+- **One job per tier** is the parallelism: `check --tier fast` and `check --tier heavy`
+  as two jobs, or `--id <id>` per job for a gate with its own setup, with
+  `check --relevance --id <id>` deciding whether that setup is needed at all. A job for a
+  tier that holds no check is refused, exit 2 — a green job over nothing is the one this
+  product exists against — so a tier's job arrives with its first check.
+- **`--shard i/N` is not a split of the roster.** It is forwarded to a check that shards
+  its own work — a `commandCheck` declared `shardable: true` gets `--shard=i/N` appended. Splitting the roster as well would halve that check's
+  input twice.
+
+### Plans
+
+`specwarden plan status <file>` lists a plan's phases and the acceptance each declares;
+`--verify` runs every acceptance and prints the output of a red one.
+`plan archive <file>` refuses, exit 2, until the plan declares its harvest and every
+destination resolves; it never moves the file — `git mv` does, in a reviewable commit.
+
+A plan declares `**Status:**` — `draft`, `active` or `done` — and each
+`## Phase N — title` declares its acceptance as an `**Acceptance.**` line or a fenced
+`bash` block under the heading, whichever comes first. The keywords are English; a plan
+written otherwise is checked by `@specwarden/plans`, with the patterns it supplies.
 
 ## 8. Rules and coverage
 

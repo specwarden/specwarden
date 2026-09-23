@@ -1,12 +1,13 @@
-import type { ICheck, ICheckIdentity, IFinding } from 'specwarden';
-import { buildCheck, lineOf, verdictFrom } from 'specwarden';
-import { nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
+import type { ICheck, IFinding } from 'specwarden';
+import { buildCheck, checkOptions, lineOf, verdictFrom } from 'specwarden';
+import { DEFAULT_DOCS, nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
+import type { IDocCheckIdentity } from '../_shared/identity/identity.model';
 
-export interface IDocPathsOptions extends ICheckIdentity {
-  /** git pathspec selecting the documentation corpus (e.g. `**\/*.md`). Tracked files
-   * only, as `git ls-files` lists them — a filesystem glob would pull in node_modules
-   * and generated trees. */
-  readonly docs: string;
+export interface IDocPathsOptions extends IDocCheckIdentity {
+  /** git pathspec selecting the documentation corpus. Tracked files only, as
+   * `git ls-files` lists them — a filesystem glob would pull in node_modules and
+   * generated trees. Default: `**\/*.md`, every tracked document. */
+  readonly docs?: string;
   /** Directory prefixes whose documents are skipped — snapshots and archives that
    * quote dead paths as their subject, and generated trees verified elsewhere. */
   readonly skipDirs?: readonly string[];
@@ -55,42 +56,63 @@ function ancestors(dir: string): string[] {
  * facts about one repository and arrive as options.
  */
 export function docPaths(options: IDocPathsOptions): ICheck {
+  checkOptions('docPaths', options, {
+    docs: { kind: 'string' },
+    skipDirs: { kind: 'array' },
+    illustrative: { kind: 'array' },
+    prefixes: { kind: 'array' },
+    externalPrefixes: { kind: 'array' },
+  });
+  const docs = options.docs ?? DEFAULT_DOCS;
   const illustrative = new Set(options.illustrative ?? []);
   const skipDirs = options.skipDirs ?? [];
   const roots = options.prefixes ?? [];
   const externals = options.externalPrefixes ?? [];
 
-  return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx) => {
-    const findings: IFinding[] = [];
-    // What is SCANNED, after the skipped trees: a skip list that swallowed the whole corpus
-    // leaves this check as unable to fail as a pathspec that matched nothing.
-    const corpus = ctx.vcs.trackedFiles(options.docs).filter((file) => !skipDirs.some((d) => file.startsWith(d)));
-    if (corpus.length === 0) return nothingExamined(options.id, options.docs);
-    for (const file of corpus) {
-      const content = ctx.files.read(file);
-      const dir = file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '';
-      const ws = file.split('/')[0];
-      const prefixes = ['', ...ancestors(dir), ...roots.map((r) => r.replace('{ws}', ws))];
-      const seen = new Set<string>();
-      for (const m of content.matchAll(DOC_PATH_RE)) {
-        const ref = m[1];
-        if (seen.has(ref)) continue;
-        seen.add(ref);
-        if (illustrative.has(ref)) continue;
-        if (externals.some((e) => ref.startsWith(e)) || SCOPED_PACKAGE_RE.test(ref)) continue; // outside the repo — unknowable, assumed present
-        const variants = [ref, ref.replace(/^@/, '')];
-        const resolves = variants.some((v) => prefixes.some((p) => ctx.files.exists(p + v)));
-        if (!resolves) {
-          findings.push({
-            severity: 'error',
-            file,
-            line: lineOf(content, m.index ?? 0),
-            message: `${file} names \`${ref}\`, which does not resolve. Often the file gained its own folder and the path did not follow.`,
-            ruleId: options.id,
-          });
+  return buildCheck(
+    {
+      ...options,
+      rule: options.rule ?? {
+        statement: 'a path the documentation names exists',
+        owner: '@specwarden/docs',
+        implied: true,
+      },
+      tier: options.tier ?? 'fast',
+      zone: 'product',
+    },
+    ['read'],
+    (ctx) => {
+      const findings: IFinding[] = [];
+      // What is SCANNED, after the skipped trees: a skip list that swallowed the whole corpus
+      // leaves this check as unable to fail as a pathspec that matched nothing.
+      const corpus = ctx.vcs.trackedFiles(docs).filter((file) => !skipDirs.some((d) => file.startsWith(d)));
+      if (corpus.length === 0) return nothingExamined(options.id, docs);
+      for (const file of corpus) {
+        const content = ctx.files.read(file);
+        const dir = file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '';
+        const ws = file.split('/')[0];
+        const prefixes = ['', ...ancestors(dir), ...roots.map((r) => r.replace('{ws}', ws))];
+        const seen = new Set<string>();
+        for (const m of content.matchAll(DOC_PATH_RE)) {
+          const ref = m[1];
+          if (seen.has(ref)) continue;
+          seen.add(ref);
+          if (illustrative.has(ref)) continue;
+          if (externals.some((e) => ref.startsWith(e)) || SCOPED_PACKAGE_RE.test(ref)) continue; // outside the repo — unknowable, assumed present
+          const variants = [ref, ref.replace(/^@/, '')];
+          const resolves = variants.some((v) => prefixes.some((p) => ctx.files.exists(p + v)));
+          if (!resolves) {
+            findings.push({
+              severity: 'error',
+              file,
+              line: lineOf(content, m.index ?? 0),
+              message: `${file} names \`${ref}\`, which does not resolve. Often the file gained its own folder and the path did not follow.`,
+              ruleId: options.id,
+            });
+          }
         }
       }
-    }
-    return verdictFrom(findings, ctx.ratchet ?? options.ratchet);
-  });
+      return verdictFrom(findings, ctx.ratchet ?? options.ratchet);
+    },
+  );
 }

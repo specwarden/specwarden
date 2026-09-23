@@ -9,9 +9,17 @@ import type { IProcessOptions, IProcessResult, IProcessRunner } from '../../doma
  * the container's job, timeouts and env are the caller's.
  */
 export class ChildProcessRunner implements IProcessRunner {
+  /**
+   * @param cwd Where a command runs when its caller names no directory — the repository
+   *   root, for the CLI. Absent, the process's own directory: a command check run from
+   *   `src/` ran there, while its `paths` were verified against the root, so a command
+   *   pointed at `tests/` checked the one path and ran against another.
+   */
+  constructor(private readonly cwd?: string) {}
+
   run(command: string, args: readonly string[], options: IProcessOptions = {}): IProcessResult {
     const result = spawnSync(command, [...args], {
-      cwd: options.cwd,
+      cwd: options.cwd ?? this.cwd,
       env: options.env ? { ...process.env, ...options.env } : process.env,
       input: options.input,
       timeout: options.timeoutSec ? options.timeoutSec * 1000 : undefined,
@@ -39,7 +47,7 @@ export class ChildProcessRunner implements IProcessRunner {
   runAsync(command: string, args: readonly string[], options: IProcessOptions = {}): Promise<IProcessResult> {
     return new Promise((resolve) => {
       const child = spawn(command, [...args], {
-        cwd: options.cwd,
+        cwd: options.cwd ?? this.cwd,
         env: options.env ? { ...process.env, ...options.env } : process.env,
       });
 

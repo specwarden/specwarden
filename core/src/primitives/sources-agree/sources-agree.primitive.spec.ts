@@ -56,6 +56,34 @@ describe('sourcesAgree — the refusing verdict', () => {
   });
 });
 
+describe('sourcesAgree — where a finding points', () => {
+  // It carried no file, so an editor or a diff annotation had nothing to open.
+  it('names the file that lacks the name — the source named for an existing file', async () => {
+    const verdict = await runCheck(check, { tree: { 'compose.txt': 'api\ndb\n', 'table.txt': 'api\nweb\n' } });
+    expect(verdict.findings.filter((f) => f.severity === 'error').map((f) => [f.message, f.file])).toEqual([
+      ['`db` is in compose.txt but not table.txt.', 'table.txt'],
+      ['`web` is in table.txt but not compose.txt.', 'compose.txt'],
+    ]);
+  });
+
+  it('uses an explicit `file` over the name, and none for a source named in prose', async () => {
+    const prose = sourcesAgree({
+      ...ID,
+      a: { name: 'the compose file', extract: lines('compose.txt'), file: 'compose.txt' },
+      b: { name: 'the service table', extract: lines('table.txt') },
+    });
+    const verdict = await runCheck(prose, { tree: { 'compose.txt': 'api\n', 'table.txt': 'api\nweb\n' } });
+    const [finding] = verdict.findings.filter((f) => f.severity === 'error');
+    expect([finding.message, finding.file]).toEqual([
+      '`web` is in the service table but not the compose file.',
+      'compose.txt',
+    ]);
+
+    const reverse = await runCheck(prose, { tree: { 'compose.txt': 'api\ndb\n', 'table.txt': 'api\n' } });
+    expect(reverse.findings.find((f) => f.severity === 'error')?.file).toBeUndefined();
+  });
+});
+
 describe('sourcesAgree — the passing verdict', () => {
   it('passes when both describe the same set, whatever the order', async () => {
     const verdict = await runCheck(check, { tree: { 'compose.txt': 'api\ndb\n', 'table.txt': 'db\napi\n' } });

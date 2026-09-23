@@ -62,36 +62,21 @@ describe('the acceptance a feature is checked off against', () => {
 });
 
 describe('rules', () => {
-  it('every live check is named by a rule, and every rule names a check that is written', () => {
-    const written = new Set(
-      paths()
-        .filter((p) => p.endsWith('.check.mjs'))
-        .map(
-          (p) =>
-            p
-              .split('/')
-              .pop()
-              ?.replace(/\.check\.mjs$/, '') as string,
-        ),
-    );
-    const named = new Set(
-      speckitTemplate.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
-    );
-    for (const id of written) expect(named.has(id), `${id} enforces no rule`).toBe(true);
-    for (const id of named) expect(written.has(id), `a rule names ${id}, which is not written`).toBe(true);
+  it('every live check states its own rule, so no rule can name a check that is not written', () => {
+    for (const f of speckitTemplate.files(ctx()).filter((x) => x.path.endsWith('.check.mjs')))
+      expect(f.body, `${f.path} states no rule`).toMatch(/^\s+rule: '/m);
+    // Nothing is left for the register: every rule here is stated by the check enforcing it.
+    expect(speckitTemplate.rules(ctx())).toEqual([]);
   });
 
   it('every generated check imports and constructs', async () => {
     for (const file of speckitTemplate.files(ctx()).filter((f) => f.path.endsWith('.check.mjs'))) {
       const abs = join(scratch, file.path.replace(/\//g, '-'));
       writeFileSync(abs, file.body);
-      const mod = (await import(pathToFileURL(abs).href)) as { check?: { id: string } };
-      expect(mod.check?.id).toBe(
-        file.path
-          .split('/')
-          .pop()
-          ?.replace(/\.check\.mjs$/, ''),
-      );
+      const mod = (await import(pathToFileURL(abs).href)) as { check?: { rule?: { statement: string } } };
+      // Named by its file — no `id:` to disagree with it — and owning the rule it enforces.
+      expect(file.body).not.toMatch(/^\s+id: '/m);
+      expect(mod.check?.rule?.statement, `${file.path} states no rule`).toBeTruthy();
     }
   });
 });

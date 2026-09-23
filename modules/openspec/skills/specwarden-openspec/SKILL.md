@@ -16,13 +16,15 @@ export const source = openspec({ root: 'openspec' });
 
 ```js
 // .specwarden/warden.config.mjs
+import { defineConfig } from 'specwarden';
+
 import { source } from './spec-source.mjs';
 
 export default defineConfig({
   specSource: source,
   invariants: {
-    docs: '**/*.md',
-    idPattern: /<!--\s*invariant:\s*([A-Z][A-Z0-9]*-\d{3})\s*-->/g,
+    docs: 'src/**/*_MODULE.md',
+    idPattern: /<!--\s*invariant:\s*([^\s>]+)\s*-->/,
   },
 });
 ```
@@ -33,8 +35,21 @@ export default defineConfig({
 is recognised in the corpus. **With only one of them, `sync-invariants` reports every
 requirement as undeposited** — honest, and useless.
 
-A green `sync-invariants` is not evidence either: it returns 0 in every branch by
-design, including when it found no source at all. What decides is a gate over the corpus.
+A green `sync-invariants` is not evidence either: what decides is a gate over the corpus.
+
+## The marker carries the adapter's id, exactly
+
+The adapter names a requirement `<capability>#<slug-of-its-wording>` —
+`auth#the-system-shall-refuse-an-expired-token` — and `sync-invariants` prints that id on
+each `+` line. A deposit is recognised only when `idPattern`'s first capture group yields
+that string, so the marker is written with it:
+
+```markdown
+<!-- invariant: auth#the-system-shall-refuse-an-expired-token -->
+```
+
+A pattern that captures a shorter, local number (`INV-…`, `AUTH-001`) can never match: every
+requirement reads as undeposited and every marker as an orphan, forever.
 
 ## The identifier must be PERMANENT
 
@@ -53,4 +68,5 @@ silence is not.
 ## Refuse to
 
 - declare a spec source without the invariant pattern, or the reverse;
+- write a marker with any id but the one `sync-invariants` printed;
 - treat a green `sync-invariants` as evidence of anything.

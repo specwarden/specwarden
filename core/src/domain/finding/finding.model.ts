@@ -57,4 +57,15 @@ export interface IVerdict {
    * correct without being touched.
    */
   readonly ratchet?: { readonly value: number };
+  /**
+   * The check ran and COULD NOT LOOK: what it examines is not here — env files a checkout
+   * never has, a machine a CI runner is not. Its reason, in a sentence. The run reports
+   * the check as skipped (`cannot-tell`), never as a pass and never as a failure.
+   *
+   * It is the third state a check had no way to say. Without it, "absent" was a green
+   * tick beside a note reading SKIPPED — a pass nobody earned, counted as one — or a red
+   * that made the check unusable on an ordinary checkout. Ignored on a verdict that is
+   * not ok: a check that found a defect did look.
+   */
+  readonly skipped?: string;
 }

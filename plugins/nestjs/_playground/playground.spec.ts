@@ -30,6 +30,8 @@ const CLEAN: Record<string, string> = {
   'src/modules/gaps/gaps.service.ts': "import { GapRepository } from './repositories/gap.repository';\n",
   'src/modules/gaps/repositories/gap.repository.ts': "import { eq } from 'drizzle-orm';\n",
   'src/modules/gaps/gaps.service.spec.ts': "import { eq } from 'drizzle-orm';\n",
+  // An entity IS the ORM's schema: it cannot be written without importing the ORM.
+  'src/modules/gaps/entities/gap.entity.ts': "import { pgTable } from 'drizzle-orm/pg-core';\n",
 };
 
 /** The same codebase with the query pulled up into the service. */
@@ -87,7 +89,7 @@ describe('@specwarden/plugin-nestjs', () => {
     expect(errorsOf(verdict).join(' ')).toContain('gaps.service.ts');
   });
 
-  it('exempts the repository layer and the tests, which is what makes the rule livable', async () => {
+  it('exempts the repository layer, the entities and the tests, which is what makes the rule livable', async () => {
     const [check] = checksOf(nestjs(OPTIONS));
 
     const verdict = await runCheck(check, { tree: BROKEN, tracked });
@@ -95,6 +97,7 @@ describe('@specwarden/plugin-nestjs', () => {
 
     expect(errors).not.toContain('gap.repository.ts');
     expect(errors).not.toContain('gaps.service.spec.ts');
+    expect(errors).not.toContain('gap.entity.ts');
   });
 
   it('the ratchet is the CONSUMER’s: a tree with existing debt is told what it may keep', async () => {

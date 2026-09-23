@@ -1,15 +1,9 @@
-/**
- * `doc-paths` — every repository-relative path named in documentation resolves.
- *
- * An operational document is read under pressure. A path in a runbook that no longer
- * resolves costs minutes exactly when there are none, and the reader — already halfway
- * through an incident — has to guess what it became.
- */
+// `doc-paths` — every repository-relative path named in documentation resolves.
+// A runbook is read under pressure; a path in it that no longer resolves costs minutes when there are none.
+// `docs` is what is read; `skipDirs` leaves out a tree whose paths are history.
 import { docPaths } from '@specwarden/docs';
 
 export const check = docPaths({
-  id: 'doc-paths',
-  title: 'paths named in documentation exist',
-  tier: 'fast',
-  docs: 'docs/**/*.md',
+  docs: '**/*.md',
+  rule: 'Every repository-relative path named in documentation exists.',
 });

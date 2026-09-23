@@ -89,3 +89,73 @@ describe('what a template needs to know before it writes anything', () => {
     expect(detectRepo(new InMemoryFileSource({ 'src/a.ts': '' })).hasShellScripts).toBe(false);
   });
 });
+
+describe('detectRepo — the facts an example is pointed at', () => {
+  it('counts the package directories the workspace globs match, a negation excluding', () => {
+    // A glob is one line of configuration; `packages/*` over three packages is three.
+    const shape = detectRepo(
+      new InMemoryFileSource({
+        'pnpm-workspace.yaml': "packages:\n  - 'packages/*'\n  - 'tools/'\n  - '!packages/legacy'\n",
+        'packages/api/package.json': '{}',
+        'packages/web/package.json': '{}',
+        'packages/legacy/package.json': '{}',
+        'packages/notes/README.md': '#',
+        'tools/package.json': '{}',
+      }),
+    );
+    expect(shape.workspaces).toEqual(['packages/*', 'tools/', '!packages/legacy']);
+    expect(shape.workspacePackages).toEqual(['packages/api', 'packages/web', 'tools']);
+  });
+
+  it('keeps the test script verbatim, for a runner it cannot name', () => {
+    const shape = detectRepo(new InMemoryFileSource({ 'package.json': '{ "scripts": { "test": "node --test" } }' }));
+    expect(shape.testRunner).toBe('other');
+    expect(shape.testScript).toBe('node --test');
+    expect(detectRepo(new InMemoryFileSource({ 'package.json': '{ "scripts": 3 }' })).testScript).toBeUndefined();
+    expect(detectRepo(new InMemoryFileSource({ 'package.json': '{ nope' })).testScript).toBeUndefined();
+  });
+
+  it('lists the workflows, the conventional ci one first, and GitLab’s file', () => {
+    const shape = detectRepo(
+      new InMemoryFileSource({
+        '.github/workflows/deploy.yml': '',
+        '.github/workflows/ci.yaml': '',
+        '.github/workflows/audit.yml': '',
+        '.gitlab-ci.yml': '',
+      }),
+    );
+    expect(shape.workflows).toEqual([
+      '.github/workflows/ci.yaml',
+      '.github/workflows/audit.yml',
+      '.github/workflows/deploy.yml',
+      '.gitlab-ci.yml',
+    ]);
+    expect(detectRepo(new InMemoryFileSource({})).workflows).toEqual([]);
+  });
+
+  it('finds a Caddyfile or an nginx config wherever it is kept, and the env sample beside a compose file', () => {
+    const shape = detectRepo(
+      new InMemoryFileSource({
+        'deploy/nginx/upstreams.conf': '',
+        'infra/Caddyfile.prod': '',
+        '.env.example': 'A=',
+        'compose.yaml': '',
+      }),
+    );
+    expect(shape.proxyConfigs).toEqual(['infra/Caddyfile.prod', 'deploy/nginx/upstreams.conf']);
+    expect(shape.envSamples).toEqual(['.env.example']);
+  });
+
+  it('asks version control for the proxy config and the workflows when it has a port', () => {
+    const asked: string[] = [];
+    const vcs = {
+      trackedFiles: (p: string) => {
+        asked.push(p);
+        return p === '**/nginx/**/*.conf' ? ['deploy/nginx/site.conf'] : [];
+      },
+    } as unknown as Parameters<typeof detectRepo>[1];
+    const shape = detectRepo(new InMemoryFileSource({ 'deploy/nginx/untracked.conf': '' }), vcs);
+    expect(shape.proxyConfigs).toEqual(['deploy/nginx/site.conf']);
+    expect(asked).toContain('.github/workflows/*.yml');
+  });
+});

@@ -106,7 +106,16 @@ describe('docCounts — the inventory half', () => {
   });
 
   it('does not scan the skipped trees', async () => {
-    expect((await run({ 'docs/_generated/map.md': '4 services' })).ok).toBe(true);
+    expect((await run({ 'docs/_generated/map.md': '4 services', 'README.md': '# a' })).ok).toBe(true);
+  });
+
+  it('a skip list that swallowed every document is a failure, not a clean corpus', async () => {
+    const v = await run({ 'docs/_generated/map.md': '4 services' });
+
+    expect(v.ok).toBe(false);
+    expect(errorsOf(v)).toEqual([
+      'no document matched `**/*.md` — this check examined nothing, and a check that examined nothing cannot fail. Point the pathspec at where the files actually are.',
+    ]);
   });
 
   it('passes a clean corpus and says how many documents it read', async () => {
@@ -116,13 +125,21 @@ describe('docCounts — the inventory half', () => {
     expect(v.findings).toEqual([{ severity: 'info', message: '✓ 2 document(s), no restated counts' }]);
   });
 
-  it('an empty corpus says "0 document(s)" — visible, rather than a blank pass', async () => {
-    // Its corpus is every tracked markdown file, not a pathspec that can drift, so zero
-    // means the repository has no documentation to restate anything in. The count in the
-    // pass line is what keeps that state readable instead of looking like a clean run.
+  it('an empty corpus is a failure naming the pathspec — the floor every other documentation check has', async () => {
+    // It passed as "✓ 0 document(s)": a count check over no documents finds no restated
+    // count, forever, and the green line looked like every other clean run.
     const v = await run({ 'src/index.ts': '' });
 
-    expect(v.findings[0].message).toBe('✓ 0 document(s), no restated counts');
+    expect(v.ok).toBe(false);
+    expect(errorsOf(v)[0]).toContain('no document matched `**/*.md`');
+  });
+
+  it('reads the corpus it is pointed at, not every markdown file', async () => {
+    const tree = { 'docs/a.md': 'There are 4 services.', 'README.md': 'There are 9 services.' };
+
+    expect(errorsOf(await run(tree, { docs: 'docs/**/*.md' }))).toEqual([
+      'docs/a.md:1  "4 services"  There are 4 services.',
+    ]);
   });
 });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { type IParsedArgs, parseArgs } from './parse-args.util';
+import { type IParsedArgs, KNOWN_FLAGS, parseArgs } from './parse-args.util';
 
 /**
  * The argv grammar is the one thing every command shares, so a slip here is a slip in
@@ -32,6 +32,8 @@ describe('parseArgs reads the command and its flags', () => {
       ifRelevant: false,
       relevance: false,
       showSkipped: false,
+      help: false,
+      problems: [],
     });
   });
 
@@ -97,27 +99,68 @@ describe('repeatable and positional input', () => {
   });
 });
 
-describe('a value flag does not swallow what follows it', () => {
-  it('leaves the value unset and still parses the next flag', () => {
-    // `--base` with no value before `--json`: base stays unset and --json is still parsed.
+describe('a value flag does not swallow what follows it — and says it had no value', () => {
+  it('leaves the value unset, still parses the next flag, and records the problem by name', () => {
+    // `--base --json` swallowed nothing, and dropped `--base` in silence: a value flag with
+    // no value is refused now, rather than run as if it had not been typed.
     const a = parseArgs(['check', '--base', '--json']);
-    expect(a.base).toBeUndefined();
-    expect(a.json).toBe(true);
-    expect(parseArgs(['check', '--id', '--all']).ids).toEqual([]);
-    expect(parseArgs(['check', '--id', '--all']).all).toBe(true);
+    expect([a.base, a.json, a.problems]).toEqual([undefined, true, ['--base needs a value, and --json is a flag']]);
+    const b = parseArgs(['check', '--id', '--all']);
+    expect([b.ids, b.all, b.problems]).toEqual([[], true, ['--id needs a value, and --all is a flag']]);
   });
 
-  it('a value flag at the very end of argv is unset, not a crash and not the string "undefined"', () => {
-    expect(parseArgs(['check', '--tier']).tier).toBeUndefined();
-    expect(parseArgs(['check', '--id']).ids).toEqual([]);
+  it('a value flag at the very end of argv is a problem — `--id` there ran EVERY check', () => {
+    expect(parseArgs(['check', '--tier']).problems).toEqual(['--tier needs a value']);
+    expect(parseArgs(['check', '--id']).problems).toEqual(['--id needs a value']);
     expect(parseArgs(['init', '--template']).template).toBeUndefined();
   });
 
-  it('an unknown flag is ignored and never becomes the command', () => {
-    // The first bare token is the command; a `--flag` the grammar does not know is
-    // not bare, so `specwarden --verbose check` is still a check run.
-    const parsed = parseArgs(['--verbose', 'check']);
+  it('a value may start with a single dash — `--jobs -3` is a value, refused later for what it is', () => {
+    expect(parseArgs(['check', '--jobs', '-3'])).toMatchObject({ jobs: '-3', problems: [] });
+  });
+});
+
+describe('what the grammar does not know', () => {
+  it('an unknown flag is a problem, named, and never becomes the command', () => {
+    // `--tighen` and `--fixx` ran a plain check and exited as if nothing had been asked.
+    const parsed = parseArgs(['--verbose', 'check', '--tighen', '-x']);
     expect(parsed.command).toBe('check');
     expect(parsed.positionals).toEqual([]);
+    expect(parsed.problems).toEqual(['unknown flag --verbose', 'unknown flag --tighen', 'unknown flag -x']);
+  });
+
+  it('a clean line has no problems', () => {
+    expect(parseArgs(['check', '--all', '--id', 'a', '--tier', 'fast']).problems).toEqual([]);
+  });
+
+  it.each([['--help'], ['-h']])('%s asks for help wherever it sits', (flag) => {
+    expect(parseArgs([flag]).help).toBe(true);
+    expect(parseArgs(['check', flag]).help).toBe(true);
+  });
+
+  it('`help` as the command asks for help; as a later word it is a positional', () => {
+    expect(parseArgs(['help']).help).toBe(true);
+    expect(parseArgs(['new', 'help'])).toMatchObject({ help: false, positionals: ['help'] });
+  });
+
+  it('names every flag it knows, for the usage text to be held to', () => {
+    expect(KNOWN_FLAGS).toEqual([
+      '--id',
+      '--tier',
+      '--base',
+      '--shard',
+      '--jobs',
+      '--template',
+      '--family',
+      '--reporter',
+      '--all',
+      '--list',
+      '--json',
+      '--fix',
+      '--tighten',
+      '--if-relevant',
+      '--relevance',
+      '--show-skipped',
+    ]);
   });
 });

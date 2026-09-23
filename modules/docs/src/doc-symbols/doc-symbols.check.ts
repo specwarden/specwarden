@@ -1,12 +1,13 @@
-import type { ICheck, ICheckIdentity, IFinding } from 'specwarden';
-import { buildCheck, verdictFrom } from 'specwarden';
-import { nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
+import type { ICheck, IFinding } from 'specwarden';
+import { buildCheck, checkOptions, verdictFrom } from 'specwarden';
+import { type IDocCheckIdentity, optionsError } from '../_shared/identity/identity.model';
+import { DEFAULT_DOCS, nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
 
-export interface IDocSymbolsOptions extends ICheckIdentity {
+export interface IDocSymbolsOptions extends IDocCheckIdentity {
   /** git pathspec(s) for the code corpus that DEFINES symbols. */
   readonly code: readonly string[];
-  /** git pathspec for the documentation corpus scanned for references. */
-  readonly docs: string;
+  /** git pathspec for the documentation corpus scanned for references. Default: `**\/*.md`. */
+  readonly docs?: string;
   /** Substrings; a code path containing any is excluded (built output, e.g. dist). */
   readonly excludeCode?: readonly string[];
   /** Directory prefixes whose documents are skipped (snapshots, plans, archive). */
@@ -53,6 +54,36 @@ export const DEFAULT_DECL_RE = /(?:export\s+)?(?:abstract\s+)?(?:class|const|fun
  * about one codebase and arrive as options.
  */
 export function docSymbols(options: IDocSymbolsOptions): ICheck {
+  checkOptions('docSymbols', options, {
+    code: { kind: 'array', required: true },
+    docs: { kind: 'string' },
+    excludeCode: { kind: 'array' },
+    skipDirs: { kind: 'array' },
+    suffixes: { kind: 'array', required: true },
+    external: { kind: 'array' },
+    illustrative: { kind: 'array' },
+    symbolRef: { kind: 'regexp' },
+    declaration: { kind: 'regexp' },
+  });
+  // EMPTY IS NOT INERT. The suffix group is an alternation, and an alternation of nothing
+  // matches the empty string — so `[]` made every backticked PascalCase name a symbol
+  // reference, the widest setting there is, while the templates' comment called it off.
+  if (options.suffixes.length === 0 || options.suffixes.includes('')) {
+    throw optionsError(
+      'docSymbols',
+      options.id,
+      '`suffixes` is empty — an empty list matches every backticked PascalCase name, not none. ' +
+        "Name the endings that make a word a symbol here, e.g. ['Service', 'Repository'].",
+    );
+  }
+  if (options.code.length === 0) {
+    throw optionsError(
+      'docSymbols',
+      options.id,
+      "`code` is empty — name the pathspecs the declarations live in, e.g. ['src/**/*.ts'].",
+    );
+  }
+  const docs = options.docs ?? DEFAULT_DOCS;
   const suffixRe = new RegExp(`(?:${options.suffixes.join('|')})$`);
   const bareRe = new RegExp(`^(?:${options.suffixes.join('|')})$`);
   const external = new Set(options.external ?? []);
@@ -66,45 +97,58 @@ export function docSymbols(options: IDocSymbolsOptions): ICheck {
   const isReference = (id: string): boolean =>
     !bareRe.test(id) && suffixRe.test(id) && !external.has(id) && !illustrative.has(id);
 
-  return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx) => {
-    const defined = new Set<string>();
-    const codeFiles = codeSpecs
-      .flatMap((s) => ctx.vcs.trackedFiles(s))
-      .filter((f) => !excludeCode.some((e) => f.includes(e)));
-    // Either corpus empty is a failure. No code means nothing is declared and the answer
-    // is compared against nothing; no documents means nothing is read and every symbol
-    // "exists" by default.
-    if (codeFiles.length === 0) return nothingExamined(options.id, codeSpecs.join(', '), 'code file');
-    const docFiles = ctx.vcs.trackedFiles(options.docs).filter((file) => !skipDirs.some((d) => file.startsWith(d)));
-    if (docFiles.length === 0) return nothingExamined(options.id, options.docs);
+  return buildCheck(
+    {
+      ...options,
+      rule: options.rule ?? {
+        statement: 'a class the documentation names exists in the code',
+        owner: '@specwarden/docs',
+        implied: true,
+      },
+      tier: options.tier ?? 'fast',
+      zone: 'product',
+    },
+    ['read'],
+    (ctx) => {
+      const defined = new Set<string>();
+      const codeFiles = codeSpecs
+        .flatMap((s) => ctx.vcs.trackedFiles(s))
+        .filter((f) => !excludeCode.some((e) => f.includes(e)));
+      // Either corpus empty is a failure. No code means nothing is declared and the answer
+      // is compared against nothing; no documents means nothing is read and every symbol
+      // "exists" by default.
+      if (codeFiles.length === 0) return nothingExamined(options.id, codeSpecs.join(', '), 'code file');
+      const docFiles = ctx.vcs.trackedFiles(docs).filter((file) => !skipDirs.some((d) => file.startsWith(d)));
+      if (docFiles.length === 0) return nothingExamined(options.id, docs);
 
-    for (const file of codeFiles) {
-      // `d\.ts` before `tsx?` so `foo.d.ts` → `foo`, not `foo.d` (the `tsx?` branch
-      // would otherwise match the trailing `.ts` first and leave `.d`).
-      const base = (file.split('/').pop() ?? '').replace(/\.(d\.ts|tsx?)$/, '');
-      defined.add(base);
-      const src = ctx.files.tryRead(file);
-      if (src === undefined) continue;
-      for (const m of src.matchAll(declRe)) defined.add(m[1]);
-    }
-
-    const offenders = new Map<string, string>(); // symbol → first file naming it
-    for (const file of docFiles) {
-      const src = ctx.files.tryRead(file);
-      if (src === undefined) continue;
-      for (const m of src.matchAll(symbolRefRe)) {
-        const id = m[1];
-        if (!isReference(id) || defined.has(id) || offenders.has(id)) continue;
-        offenders.set(id, file);
+      for (const file of codeFiles) {
+        // `d\.ts` before `tsx?` so `foo.d.ts` → `foo`, not `foo.d` (the `tsx?` branch
+        // would otherwise match the trailing `.ts` first and leave `.d`).
+        const base = (file.split('/').pop() ?? '').replace(/\.(d\.ts|tsx?)$/, '');
+        defined.add(base);
+        const src = ctx.files.tryRead(file);
+        if (src === undefined) continue;
+        for (const m of src.matchAll(declRe)) defined.add(m[1]);
       }
-    }
 
-    const findings: IFinding[] = [...offenders.entries()].map(([id, file]) => ({
-      severity: 'error',
-      file,
-      message: `${file} names \`${id}\`, which nothing in the code corpus declares. A renamed class leaves the old name in prose; fix the doc, or add the symbol to the framework allowlist.`,
-      ruleId: options.id,
-    }));
-    return verdictFrom(findings, ctx.ratchet ?? options.ratchet);
-  });
+      const offenders = new Map<string, string>(); // symbol → first file naming it
+      for (const file of docFiles) {
+        const src = ctx.files.tryRead(file);
+        if (src === undefined) continue;
+        for (const m of src.matchAll(symbolRefRe)) {
+          const id = m[1];
+          if (!isReference(id) || defined.has(id) || offenders.has(id)) continue;
+          offenders.set(id, file);
+        }
+      }
+
+      const findings: IFinding[] = [...offenders.entries()].map(([id, file]) => ({
+        severity: 'error',
+        file,
+        message: `${file} names \`${id}\`, which nothing in the code corpus declares. A renamed class leaves the old name in prose; fix the doc, or add the symbol to the framework allowlist.`,
+        ruleId: options.id,
+      }));
+      return verdictFrom(findings, ctx.ratchet ?? options.ratchet);
+    },
+  );
 }

@@ -24,22 +24,49 @@ pnpm add -D @specwarden/plans
 ```
 
 ```js
-import { planStaleness, planShape, decisionLogShape } from '@specwarden/plans';
+// .specwarden/checks/plans/plans.check.mjs
+import { planChecks } from '@specwarden/plans';
 
-export const checks = [
-  planStaleness({
-    id: 'plan-staleness',
-    title: 'no plan outlives its work',
-    tier: 'fast',
-    plansDir: 'docs/_plans',
-    archiveDir: 'docs/_archive',
-  }),
-];
+export const checks = planChecks({ plansDir: 'docs/_plans', archiveDir: 'docs/_plans-archive' });
 ```
+
+That is the whole module — `plan-staleness`, `plan-shape` and `decision-log-shape`, each in
+the `fast` tier — and the two folders shown are the defaults, so `planChecks()` says the
+same thing. Each check still takes its own options, laid over the preset's, or `false` to
+leave it out:
+
+```js
+import { planChecks } from '@specwarden/plans';
+
+export const checks = planChecks({
+  plansDir: 'planning',
+  archiveDir: 'planning-archive',
+  shape: { nameRe: /^[A-Z]+-\d+-[a-z0-9-]+\.md$/ },
+  decisions: false,
+});
+```
+
+| Option       | Kind                                   | Default               |
+| ------------ | -------------------------------------- | --------------------- |
+| `plansDir`   | directory                              | `docs/_plans`         |
+| `archiveDir` | directory                              | `docs/_plans-archive` |
+| `staleness`  | `planStaleness` options, or `false`    | the preset's          |
+| `shape`      | `planShape` options, or `false`        | the preset's          |
+| `decisions`  | `decisionLogShape` options, or `false` | the preset's          |
 
 **Keep the archive OUTSIDE the plans folder.** Plans are flat — a folder inside
 `plansDir` is a hard failure, because a nested plans folder is how plans stop being
 deleted.
+
+**A plans folder that does not exist is a failure naming it**, in `planStaleness` and
+`planShape` alike — a `plansDir` left pointing at a folder that moved would otherwise
+report a clean lifecycle forever. A folder that exists and holds no plan yet passes and
+says `nothing in flight`, which is true. An archive that does not exist yet is a
+repository that has finished nothing, and is not a failure.
+
+Every factory takes the engine's identity — `id`, `title`, `tier` (default `fast`),
+`when`, `hint`, `rule`, `ratchet` — and refuses an option it does not have, by name, when
+the file loads.
 
 ## `planStaleness` — three decidable states
 
@@ -57,6 +84,28 @@ so trusts it fully.
 **A checkout with no branch refs SKIPS.** "Cannot tell" stays active: a guess here
 archives live work, which is worse than every defect the check finds.
 
+A link into the archive is read in both spellings: the archive's path written out, and a
+relative link that lands in it, resolved against the document it is written in.
+
+```js
+import { planStaleness } from '@specwarden/plans';
+
+export const check = planStaleness({ id: 'plan-staleness', title: 'no plan outlives its work' });
+```
+
+| Option                    | Kind                                 | Default                                         |
+| ------------------------- | ------------------------------------ | ----------------------------------------------- |
+| `plansDir`                | directory                            | `docs/_plans`                                   |
+| `archiveDir`              | directory                            | `docs/_plans-archive`                           |
+| `branchDeclaration`       | RegExp, the branch in its last group | `**Branch:** <name>`                            |
+| `statusDeclaration`       | RegExp, the status in its last group | `**Status:** draft/active/done`                 |
+| `activeStatuses`          | status words                         | `['active']`                                    |
+| `doneStatuses`            | status words — finished, harvest due | `['done']`                                      |
+| `archiveHeader`           | `[{ label, pattern }]`               | Started, Finished, Branch, Harvested, Left open |
+| `mayCiteArchive`          | files that may link into the archive | both folders' `README.md`                       |
+| `undeclaredStatusRatchet` | plans tolerated with no status       | `0`                                             |
+| `when`                    | relevance                            | a markdown file changed                         |
+
 ### The default convention
 
 Five options describe how a plan declares itself, and a consumer with no convention yet
@@ -68,29 +117,35 @@ written by hand already looks like:
 **Branch:** feature/thing
 ```
 
-Every one is overridable (`branchDeclaration`, `statusDeclaration`, `activeStatuses`,
-`archiveHeader`, `mayCiteArchive`). What is not overridable is that the declarations
-exist.
+Every one is overridable. What is not overridable is that the declarations exist.
 
 ## `planShape`
 
 ```js
-planShape({
-  id: 'plan-shape',
-  title: '…',
-  tier: 'fast',
-  plansDir: 'docs/_plans',
-  nameRe: /^[A-Z]+-\d+-[a-z0-9-]+\.md$/,
-  allowedNonPlans: ['README.md'],
-  sizingPatterns: [/\b\d+\s*(hours?|days?|story points?)\b/i],
-  phaseHeadingRe: /^(#{2,3})\s+Phase\b/,
-  commandRe: /^\s*(pnpm|npm|node|bash)\s/,
-});
+import { planShape } from '@specwarden/plans';
+
+export const check = planShape({ id: 'plan-shape', title: 'a plan names real gates and says when it is done' });
 ```
 
 Hard failures: the filename shape, a folder in the plans directory, and an acceptance
 naming a `--id` that is not a known check. Ratcheted: work sizing, and phases with no
 acceptance command.
+
+| Option              | Kind                         | Default                                                                                 |
+| ------------------- | ---------------------------- | --------------------------------------------------------------------------------------- |
+| `plansDir`          | directory                    | `docs/_plans`                                                                           |
+| `nameRe`            | RegExp over the filename     | `DEFAULT_PLAN_NAME` — kebab-case, `refunds.md`                                          |
+| `allowedNonPlans`   | filenames that are not plans | `['README.md']`                                                                         |
+| `sizingPatterns`    | RegExps                      | `DEFAULT_SIZING` — a number of hours, days, weeks, points                               |
+| `phaseHeadingRe`    | RegExp                       | `DEFAULT_PHASE_HEADING` — `## Phase` or `### Phase`                                     |
+| `commandRe`         | RegExp over a phase's lines  | `DEFAULT_COMMAND` — `pnpm`, `npm`, `npx`, `node`, `bash`, `make` … or `**Acceptance.**` |
+| `knownGateIds`      | check ids                    | the run's own roster                                                                    |
+| `sizingRatchet`     | number                       | `0`                                                                                     |
+| `unacceptedRatchet` | number                       | `0`                                                                                     |
+
+The four patterns are ENGLISH, and exported, so a house that plans in another language
+starts from them rather than meeting a check that finds no phase and calls every plan
+well-shaped.
 
 `knownGateIds` defaults to **the run's own roster** — the list the engine is actually
 running, which is the only honest one. A list built by hand could forget a check, and the
@@ -112,3 +167,15 @@ harvest. A reason is an assertion, not an apology.
 ```
 
 The separator is `—`, `--`, or the word `because`.
+
+```js
+import { decisionLogShape } from '@specwarden/plans';
+
+export const check = decisionLogShape({ id: 'decision-log-shape', title: 'a rejection states why' });
+```
+
+| Option | Kind         | Default            |
+| ------ | ------------ | ------------------ |
+| `docs` | git pathspec | `docs/_plans/*.md` |
+
+A pathspec that matches nothing is a failure naming it.

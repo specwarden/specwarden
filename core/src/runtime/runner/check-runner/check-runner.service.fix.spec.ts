@@ -59,3 +59,38 @@ describe('CheckRunner --fix', () => {
     expect(fixCalled).toBe(false);
   });
 });
+
+describe('CheckRunner --fix over a check with no fix', () => {
+  // It was silent: the red run after `--fix` read as a repair that failed.
+  it('says the check has no fix, and still fails', async () => {
+    const plain = check({ id: 'plain', verdict: { ok: false, findings: [{ severity: 'error', message: 'broken' }] } });
+    const { exitCode, results } = await new CheckRunner(
+      registryOf([plain]),
+      adapters([]),
+      recordingReporter().reporter,
+    ).run({ tier: 'fast', fix: true }, { ci: false });
+    expect(exitCode).toBe(1);
+    expect(results[0].verdict.findings.map((f) => f.message)).toEqual([
+      'broken',
+      'plain has no fix — --fix repairs only what a check can derive, and this one declares no repair.',
+    ]);
+  });
+
+  it('says nothing about a passing check, or without --fix', async () => {
+    const passing = check({ id: 'fine', verdict: { ok: true, findings: [] } });
+    const failing = check({
+      id: 'plain',
+      verdict: { ok: false, findings: [{ severity: 'error', message: 'broken' }] },
+    });
+    const withFix = await new CheckRunner(registryOf([passing]), adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast', fix: true },
+      { ci: false },
+    );
+    const without = await new CheckRunner(registryOf([failing]), adapters([]), recordingReporter().reporter).run(
+      { tier: 'fast' },
+      { ci: false },
+    );
+    expect(withFix.results[0].verdict.findings).toEqual([]);
+    expect(without.results[0].verdict.findings.map((f) => f.message)).toEqual(['broken']);
+  });
+});

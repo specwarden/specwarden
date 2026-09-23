@@ -30,6 +30,10 @@ export type { INamedSource, ISourcesAgreeOptions } from './sources-agree/sources
  */
 export {
   buildCheck,
+  checkOptions,
+  CheckOptionsError,
+  belowCorpusFloor,
+  withExaminedNote,
   frameTolerated,
   verdictFrom,
   resolveCatalog,
@@ -43,7 +47,16 @@ export {
   pathMatches,
   stem,
 } from './_shared';
-export type { ICatalogDisable, ICatalogEntry, ICatalogOptions, IResolvedCatalog } from './_shared';
+export type {
+  ICatalogDisable,
+  ICatalogEntry,
+  ICatalogOptions,
+  ICorpusFloor,
+  IOptionRule,
+  IResolvedCatalog,
+  TOptionKind,
+  TOptionSpec,
+} from './_shared';
 
 /**
  * Reading a corpus, and saying when a check matters.

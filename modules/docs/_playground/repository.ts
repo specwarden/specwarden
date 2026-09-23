@@ -49,27 +49,5 @@ export const BROKEN: Record<string, string> = {
   'THINGS_MODULE.md': '# things\n\nAt the root, where the contract does not put it.\n',
 };
 
-/** The factories this playground claims to exercise. */
-export const COVERED = ['docPaths', 'docSymbols', 'docCounts', 'docPlacement', 'docHygiene'];
-
-/**
- * The one object every export is called with, to find out which of them build a check.
- *
- * It carries the union of the options this package's five factories take. A factory
- * handed options it refuses reads as a helper, and a factory that reads as a helper is
- * exactly the omission the audit exists to prevent — so the union is kept complete here
- * rather than trimmed to what happens to work today.
- */
-export const PROBE = {
-  id: 'probe',
-  title: 'probe',
-  tier: 'fast' as const,
-  docs: '**/*.md',
-  code: ['src/**/*.ts'],
-  suffixes: ['Registry'],
-  allowed: [/^src\//],
-  countableNouns: [],
-  skipped: [],
-  allowlist: () => [],
-  when: () => true,
-};
+/** The factories this playground claims to exercise — the five checks and the preset. */
+export const COVERED = ['docPaths', 'docSymbols', 'docCounts', 'docPlacement', 'docHygiene', 'docsChecks'];

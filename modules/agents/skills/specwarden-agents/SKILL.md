@@ -13,11 +13,15 @@ import { agentDefinitions } from '@specwarden/agents';
 export const check = agentDefinitions({
   id: 'agent-definitions',
   title: 'every agent declares name, description, tools and model, and only an orchestrator spawns another',
-  tier: 'fast',
-  agents: '.claude/agents/*.md',
+  agentsDir: '.claude/agents',
   orchestrators: ['lead'],
 });
 ```
+
+`agentsDir` is a FOLDER, not a glob, and defaults to `.claude/agents`; `orchestrators`
+defaults to `['lead']`. A folder that does not exist is a failure naming it — point
+`agentsDir` at the real roster rather than removing the check. An option the factory does
+not have is refused when the file loads.
 
 ## What it catches, and why each matters
 

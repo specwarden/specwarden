@@ -1,4 +1,5 @@
-import { CHECK_CONTRACT_VERSION, type ICheck, type IFinding, type IVerdict, type TTier } from 'specwarden';
+import { type ICheck, type IFinding, type IVerdict, buildCheck, checkOptions } from 'specwarden';
+import type { IOpsCheckIdentity } from '../_shared/identity/identity.model';
 import { stripHeredocs } from 'specwarden';
 
 /**
@@ -31,14 +32,10 @@ import { stripHeredocs } from 'specwarden';
  * quoting a rule is not a violation of it.
  */
 
-export interface IShellLocalScopeOptions {
-  readonly id: string;
-  readonly title: string;
-  readonly tier?: TTier;
-  readonly hint?: string;
-  /** Which shell files are the subject. A vendored script is not the host's to style. */
-  readonly pathspecs: readonly string[];
-  readonly when: (changed: readonly string[]) => boolean;
+export interface IShellLocalScopeOptions extends IOpsCheckIdentity {
+  /** Which shell files are the subject, as git pathspecs over tracked files. A vendored
+   * script is not the host's to style. Default: every tracked `.sh`, `**\/*.sh`. */
+  readonly pathspecs?: readonly string[];
 }
 
 /** `[start, end]` line indices (0-based, inclusive) of every function body. */
@@ -83,17 +80,23 @@ export function localOutsideFunction(text: string): { line: number; text: string
 }
 
 export function shellLocalScope(options: IShellLocalScopeOptions): ICheck {
-  return {
-    id: options.id,
-    title: options.title,
-    tier: options.tier ?? 'fast',
-    zone: 'product',
-    capabilities: ['read'],
-    contractVersion: CHECK_CONTRACT_VERSION,
-    hint: options.hint,
-    when: options.when,
-    run: (ctx): IVerdict => {
-      const files = [...new Set(options.pathspecs.flatMap((spec) => [...ctx.vcs.trackedFiles(spec)]))];
+  checkOptions('shellLocalScope', options, { pathspecs: { kind: 'array' } });
+  const pathspecs = options.pathspecs ?? ['**/*.sh'];
+
+  return buildCheck(
+    {
+      ...options,
+      rule: options.rule ?? {
+        statement: 'a shell script uses `local` only inside a function',
+        owner: '@specwarden/ops',
+        implied: true,
+      },
+      tier: options.tier ?? 'fast',
+      zone: 'product',
+    },
+    ['read'],
+    (ctx): IVerdict => {
+      const files = [...new Set(pathspecs.flatMap((spec) => [...ctx.vcs.trackedFiles(spec)]))];
 
       // A ZERO-FILE SCAN IS A FAILURE, not a clean run. Checks that walked a tree that was
       // not there have reported success in this codebase before; saying so costs one branch.
@@ -103,7 +106,7 @@ export function shellLocalScope(options: IShellLocalScopeOptions): ICheck {
           findings: [
             {
               severity: 'error',
-              message: `no shell files matched ${options.pathspecs.join(', ')} — this check examined nothing`,
+              message: `no shell files matched ${pathspecs.join(', ')} — this check examined nothing`,
               ruleId: options.id,
             },
           ],
@@ -131,5 +134,5 @@ export function shellLocalScope(options: IShellLocalScopeOptions): ICheck {
             findings: [{ severity: 'info', message: `✓ ${files.length} shell file(s), 0 misplaced \`local\`` }],
           };
     },
-  };
+  );
 }

@@ -20,6 +20,11 @@ describe('computeLifecycle', () => {
     expect(computeLifecycle({ status: 'active', branchExists: false, inArchive: false })).toBe('spent');
   });
 
+  it('is spent when the plan declares itself done — it read as a draft', () => {
+    expect(computeLifecycle({ status: 'done', branchExists: true, inArchive: false })).toBe('spent');
+    expect(computeLifecycle({ status: 'done', inArchive: true })).toBe('archived');
+  });
+
   it('does not guess spent when the checkout cannot tell', () => {
     expect(computeLifecycle({ status: 'active', branchExists: undefined, inArchive: false })).toBe('active');
   });

@@ -25,9 +25,22 @@ import { defineConfig } from 'specwarden';
 
 export default defineConfig({
   specSource: speckit(),
-  invariants: { docs: 'src/**/*_MODULE.md', idPattern: /INV-([A-Z0-9-]+)/ },
+  invariants: { docs: 'src/**/*_MODULE.md', idPattern: /<!--\s*invariant:\s*([^\s>]+)\s*-->/ },
 });
 ```
+
+A deposit is a marker carrying the requirement's full id — the one `sync-invariants`
+prints on its `+` line — in a document `docs` reads:
+
+```markdown
+<!-- invariant: 001-invites#FR-001 -->
+
+An invite expires after seven days. Pinned by `invites.spec.ts` -> "expires an invite".
+```
+
+`idPattern`'s first capture group must yield that id exactly. A pattern capturing a
+shorter local number (`INV-…`) can never equal `001-invites#FR-001`, so the reconciliation
+would never reach "in sync".
 
 Then `specwarden sync-invariants` reconciles the requirements against the invariants
 already deposited in the repository's own documents, in both directions, and writes
@@ -52,12 +65,22 @@ collapse into one id and the second requirement silently stops existing.
 ## Options
 
 ```js
-speckit({ root: 'specs', specFile: 'spec.md', tasksFile: 'tasks.md' });
+// .specwarden/spec-source.mjs
+import { speckit } from '@specwarden/speckit';
+
+export const source = speckit({ root: 'specs', specFile: 'spec.md', tasksFile: 'tasks.md' });
 ```
+
+| Option      | Kind                         | Default    |
+| ----------- | ---------------------------- | ---------- |
+| `root`      | directory                    | `specs`    |
+| `specFile`  | filename inside each feature | `spec.md`  |
+| `tasksFile` | filename inside each feature | `tasks.md` |
 
 Every path is an option, because a tool that reorganises its layout in a minor release is
 the normal case rather than the exception. A repository that moved its features says so
-here instead of discovering the silence later.
+here instead of discovering the silence later. An option the factory does not have is
+refused by name when the config loads.
 
 ## The contract this adapter owes
 

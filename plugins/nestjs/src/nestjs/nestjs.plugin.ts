@@ -1,4 +1,4 @@
-import { type ICheck, type IPlugin, forbidImport } from 'specwarden';
+import { type ICheck, type ICheckIdentity, type IPlugin, checkOptions, forbidImport } from 'specwarden';
 
 /**
  * NestJS conventions as a specwarden plugin.
@@ -27,7 +27,8 @@ export interface INestjsOptions {
   /** The ORM (or any data-access package) a module may not import directly. */
   readonly ormPackage: string;
   /** Glob suffixes under `modulesRoot` that MAY import it — the repository layer itself,
-   * and the tests that exercise it. */
+   * the entities that ARE the ORM's schema, and the tests that exercise them. Default:
+   * `DEFAULT_ALLOWED_FROM`. */
   readonly allowedFrom?: readonly string[];
   /** The consumer's ratchet id and its inline fallback, for a tree that has existing
    * violations. Omit both in a clean tree. */
@@ -35,10 +36,34 @@ export interface INestjsOptions {
   readonly ratchet?: number;
   /** Where the host writes the rule down, named in the finding so a reader can go there. */
   readonly ruleDocument?: string;
+  /** The rule the check enforces, so it joins the host's rule register rather than being
+   * an orphan the register's audit reports. A statement, or `{ statement, owner }`. */
+  readonly rule?: ICheckIdentity['rule'];
 }
 
+/**
+ * Where a module MAY reach the ORM: the repository layer, the entities, and the tests.
+ *
+ * An entity is not a query written in the wrong place — it IS the ORM's schema, and a
+ * TypeORM or Drizzle entity cannot be written without importing the ORM for its
+ * decorators or table builders. Without the entity shapes here every real service was red
+ * on `src/modules/<feature>/entities/*.entity.ts` on its first run.
+ */
+export const DEFAULT_ALLOWED_FROM: readonly string[] = [
+  '**/repositories/**',
+  '**/entities/**',
+  '**/*.entity.ts',
+  '**/*.spec.ts',
+];
+
 export function nestjs(options: INestjsOptions): IPlugin {
-  const allowed = options.allowedFrom ?? ['**/repositories/**', '**/*.spec.ts'];
+  checkOptions('nestjs', options, {
+    modulesRoot: { kind: 'string', required: true },
+    ormPackage: { kind: 'string', required: true },
+    allowedFrom: { kind: 'array' },
+    ruleDocument: { kind: 'string' },
+  });
+  const allowed = options.allowedFrom ?? DEFAULT_ALLOWED_FROM;
 
   const checks: ICheck[] = [
     forbidImport({
@@ -50,6 +75,7 @@ export function nestjs(options: INestjsOptions): IPlugin {
       except: allowed.map((suffix) => `${options.modulesRoot}/${suffix}`),
       ratchetId: options.ratchetId,
       ratchet: options.ratchet,
+      rule: options.rule,
       hint:
         `Move the query behind a repository, or add the file to the excepted set.` +
         (options.ruleDocument ? ` Rule: ${options.ruleDocument}.` : ''),

@@ -137,7 +137,7 @@ export const PACKAGES = Object.freeze([
     summary:
       'Ports, primitives, the runner and the CLI, plus the only checks that verify the harness itself: zones, ratchets and the rule register.',
     deps: [],
-    coverage: { statements: 98, branches: 96, functions: 97, lines: 98, measured: '2026-09-23' },
+    coverage: { statements: 99, branches: 97, functions: 98, lines: 99, measured: '2026-09-23' },
     /** The CLI. A build-free ESM shim that runs the compiled engine and refuses a stale one. */
     bin: { specwarden: './bin/warden.mjs', spw: './bin/warden.mjs' },
     /** Shipped beside `dist` because the shim and its fingerprint are not compiled. */

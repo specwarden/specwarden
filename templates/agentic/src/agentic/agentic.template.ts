@@ -16,19 +16,19 @@ import { agentRolesPart, compose, docPathsPart, perimeterPart, planLifecyclePart
  * reads, the plan and decision lifecycle, and a PERIMETER — rules evaluated BEFORE an
  * action runs, as data rather than as prose the model may or may not have read.
  *
- * The perimeter ships live, not as an example, and its rules are the two nobody
- * disagrees with. It fails OPEN by design: a broken guard must not become a broken
- * agent.
+ * No config fragment: the engine reads the perimeter's rule ids as enforcers itself.
+ *
+ * The documentation corpus is every tracked document: `AGENTS.md` and `CLAUDE.md` are the
+ * first files an agent follows, and a docs-directory glob left exactly those unread. The
+ * plan archive is skipped — a finished plan names files as they were.
  */
 const assembled = (ctx: ITemplateContext) =>
   compose(
     agentRolesPart(ctx),
     docPathsPart(ctx, {
-      header: `every repository-relative path named in documentation resolves.
- *
- * The highest-value check in an agentic repository. An agent follows a path, finds
- * nothing, and INVENTS the rest — confidently, in a diff. A human hitting the same dead
- * link shrugs and greps; the agent writes code against a file that does not exist.`,
+      header: 'An agent follows a dead path, finds nothing, and INVENTS the rest — confidently, in a diff.',
+      docs: '**/*.md',
+      skipDirs: ['docs/_plans-archive/'],
     }),
     planLifecyclePart(ctx),
     perimeterPart(),
@@ -42,5 +42,4 @@ export const agentic: ITemplate = {
 
   files: (ctx: ITemplateContext): readonly ITemplateFile[] => assembled(ctx).files,
   rules: (ctx: ITemplateContext): readonly IRule[] => assembled(ctx).rules,
-  configExtras: (ctx: ITemplateContext) => assembled(ctx).configExtras ?? { fields: '' },
 };

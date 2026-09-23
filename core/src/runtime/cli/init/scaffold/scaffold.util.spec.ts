@@ -53,18 +53,24 @@ describe('renderRules round-trips through the module loader', () => {
     expect(await load(renderRules())).toEqual([]);
   });
 
-  it('pairs each installed module with the rule its generated check enforces', async () => {
-    const rules = await load(renderRules(availableModules(manifest('@specwarden/security', '@specwarden/docs'))));
-    expect(rules.map((r) => [r.id, r.enforcement])).toEqual([
-      ['no-credentials-in-tree', { checkIds: ['secret-scan'] }],
-      ['paths-in-documentation-resolve', { checkIds: ['doc-paths'] }],
-    ]);
-    for (const r of rules) expect(r.owner).toBe('.specwarden/README.md');
+  it("writes each switched-off example's rule commented out — inert until uncommented, then exactly the rule", async () => {
+    // Live, it names a check nobody registered and fails enforcement-resolves on the tree
+    // just written; left out, renaming the example meets a red orphan-check nobody mentioned.
+    const rule = {
+      id: 'doc-counts',
+      statement: "A count's source is the repository.",
+      owner: 'x.mjs',
+      enforcement: { checkIds: ['doc-counts'] },
+    };
+    const source = renderRules([], [rule]);
+    expect(await load(source)).toEqual([]);
+    const line = source.split('\n').find((l) => l.includes("id: 'doc-counts'")) ?? '';
+    expect(await load(source.replace(line, line.replace('  // ', '  ')))).toEqual([rule]);
   });
 
   it("keeps a template rule's wording exactly, apostrophes included", async () => {
     const statement = "A migration's down step is never empty.";
-    const [r] = await load(renderRules([], [{ id: 'x', statement, owner: 'O.md', enforcement: { checkIds: ['c'] } }]));
+    const [r] = await load(renderRules([{ id: 'x', statement, owner: 'O.md', enforcement: { checkIds: ['c'] } }]));
     expect(r).toEqual({ id: 'x', statement, owner: 'O.md', enforcement: { checkIds: ['c'] } });
   });
 
@@ -72,7 +78,7 @@ describe('renderRules round-trips through the module loader', () => {
     // `quote` escaped the apostrophe and nothing else. A backslash then either vanished
     // or — for `\x`, `\u` — made the generated file a SyntaxError on the first run.
     const statement = 'Paths are written C:\\x\\y, never\nwith a trailing slash.';
-    const [r] = await load(renderRules([], [{ id: 'x', statement, owner: 'O.md', enforcement: { checkIds: ['c'] } }]));
+    const [r] = await load(renderRules([{ id: 'x', statement, owner: 'O.md', enforcement: { checkIds: ['c'] } }]));
     expect(r.statement).toBe(statement);
   });
 
@@ -82,13 +88,13 @@ describe('renderRules round-trips through the module loader', () => {
     // an honest "this cannot be automated" produced a tree that was red on day one.
     const reason = 'Branch protection enforces it, in the forge.';
     const [r] = await load(
-      renderRules([], [{ id: 'reviewed', statement: 's', owner: 'O.md', enforcement: { notMechanizable: reason } }]),
+      renderRules([{ id: 'reviewed', statement: 's', owner: 'O.md', enforcement: { notMechanizable: reason } }]),
     );
     expect(r.enforcement).toEqual({ notMechanizable: reason });
   });
 
   it('keeps the commented example of a not-mechanizable rule, so the reader sees the other shape', () => {
-    expect(renderRules()).toContain("//   enforcement: { notMechanizable: '");
+    expect(renderRules()).toMatch(/^ {2}\/\/ \{ id: 'reviews-before-merge'.*enforcement: \{ notMechanizable: '/m);
   });
 });
 
@@ -107,15 +113,15 @@ describe('availableModules reads intent from the manifest', () => {
 });
 
 describe('renderCheckFiles', () => {
-  it('puts each module’s check in its family folder, named for the id inside it', () => {
+  it('puts each module’s check in its family folder, named by its file and stating its rule', () => {
     const files = renderCheckFiles(shape(), availableModules(manifest('@specwarden/security', '@specwarden/docs')));
     expect(files.map((f) => f.path)).toEqual([
       'checks/security/secret-scan.check.mjs',
       'checks/docs/doc-paths.check.mjs',
     ]);
     for (const f of files) {
-      const id = f.path.split('/').pop()?.replace('.check.mjs', '');
-      expect(f.body).toContain(`id: '${id}'`);
+      expect(f.body).not.toMatch(/^\s+(id|title|tier): '/m);
+      expect(f.body).toMatch(/^\s+rule: '/m);
     }
   });
 
@@ -145,20 +151,36 @@ describe('renderConfig', () => {
 });
 
 describe('renderChecksReadme', () => {
-  it('names each installed family and the package it came from', () => {
-    const readme = renderChecksReadme(availableModules(manifest('@specwarden/docs')));
-    expect(readme).toContain('| `docs/` | from `@specwarden/docs` |');
+  it('names each family written, the checks in it, and the package they come from', () => {
+    const readme = renderChecksReadme(renderCheckFiles(shape(), availableModules(manifest('@specwarden/docs'))));
+    expect(readme).toContain('| `docs/` | doc-paths | `@specwarden/docs` |');
     expect(readme).not.toContain('(none yet)');
   });
 
-  it('says there are none yet, and how one appears, when nothing is installed', () => {
-    expect(renderChecksReadme([])).toContain('| _(none yet)_ | install a module and its family folder appears here |');
+  it('says there are none yet, and what to install, when nothing was written', () => {
+    expect(renderChecksReadme([])).toContain('| _(none yet)_ | install a module');
   });
 
-  it('credits the template rather than listing modules when a template wrote the tree', () => {
-    const readme = renderChecksReadme(availableModules(manifest('@specwarden/docs')), 'node-ts');
-    expect(readme).toContain('from the `node-ts` template');
-    expect(readme).not.toContain('`docs/`');
+  it('lists the families a template wrote, marking each example as switched off', () => {
+    // It printed one placeholder row — "the folders beside this README" — for every template.
+    const readme = renderChecksReadme([
+      { path: 'checks/docs/doc-paths.check.mjs', body: "import { docPaths } from '@specwarden/docs';" },
+      { path: 'checks/docs/doc-counts.check.mjs.example', body: "import { docCounts } from '@specwarden/docs';" },
+      { path: 'checks/workspace/lint.check.mjs', body: "import { commandCheck } from 'specwarden';" },
+      { path: 'perimeter.mjs', body: "import { commandRule } from 'specwarden';" },
+    ]);
+    expect(readme).toContain('| `docs/` | doc-paths, doc-counts (example, off) | `@specwarden/docs` |');
+    expect(readme).toContain('| `workspace/` | lint | `specwarden` |');
+    expect(readme).not.toContain('perimeter');
+    expect(readme).not.toContain('the folders beside this README');
+  });
+
+  it('shows adding a check WITH its rule — the field whose absence turns the run red', () => {
+    const readme = renderChecksReadme([]);
+    const example = /```js\n([\s\S]*?)```/.exec(readme)?.[1] ?? '';
+    expect(example).toContain("rule: '");
+    expect(example).not.toContain('id:');
+    expect(readme).toContain('orphan-check');
   });
 });
 
@@ -168,5 +190,25 @@ describe('renderReadme', () => {
     // file exists, and this README is scaffolded into trees that write no perimeter.
     const claims = [...renderReadme().matchAll(/`([^`\s]*\/[^`\s]+)`/g)].map((m) => m[1]);
     expect(claims).toEqual([]);
+  });
+
+  it('lists only what was written — a perimeter or a spec source where there is one, never a folder nobody wrote', () => {
+    const bare = renderReadme();
+    for (const absent of ['perimeter.mjs', 'spec-source.mjs', 'relevance.mjs', 'ratchets/', 'baseline/', '.example'])
+      expect(bare, absent).not.toContain(absent);
+    const agentic = renderReadme([
+      { path: 'perimeter.mjs', body: '' },
+      { path: 'checks/docs/doc-counts.check.mjs.example', body: '' },
+    ]);
+    expect(agentic).toMatch(/^ {2}perimeter\.mjs +what an assistant may not do here/m);
+    expect(agentic).toContain('uncommenting its rule in rules.mjs');
+  });
+
+  it('claims no zone check the tree does not run, and carries no note to the template maintainers', () => {
+    // "fails its own zone check" — the consumer's run assembles no zone-boundary without
+    // `harness.zone`; and a paragraph on how the README dodges doc-paths was a note to us.
+    const readme = renderReadme([{ path: 'perimeter.mjs', body: '' }]);
+    expect(readme).not.toMatch(/zone check/i);
+    expect(readme).not.toContain('on purpose');
   });
 });

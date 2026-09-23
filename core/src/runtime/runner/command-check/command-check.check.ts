@@ -14,7 +14,15 @@ import {
   type TZone,
 } from '../../../domain';
 import { platformShell } from '../../../infrastructure';
-import { type TWhen, resolveWhen } from '../../../primitives/_shared';
+import {
+  type TWhen,
+  CheckOptionsError,
+  UNNAMED_CHECK_ID,
+  checkOptions,
+  normaliseRule,
+  resolveWhen,
+  testStateless,
+} from '../../../primitives/_shared';
 
 /**
  * A pattern the output must NOT contain, with the reason it is fatal. The reason is
@@ -26,12 +34,13 @@ export interface IOutputRefusal {
   readonly why?: string;
 }
 
-/** What a consumer states to wrap a shell command as a check. Everything but id,
- * title, tier and cmd is optional. */
+/** What a consumer states to wrap a shell command as a check. Everything but `cmd` is
+ * optional: the id is the file's name when the file exports the check alone, the title
+ * the rule's statement else the id, the tier `fast`. */
 export interface ICommandCheckSpec {
-  readonly id: string;
-  readonly title: string;
-  readonly tier: TTier;
+  readonly id?: string;
+  readonly title?: string;
+  readonly tier?: TTier;
   /**
    * How to invoke a shell. Defaults to what `resolveShell` finds for this machine —
    * `bash -c` everywhere but Windows, and Git's own bash there, because a bare `bash` on
@@ -51,8 +60,8 @@ export interface ICommandCheckSpec {
   readonly exclusive?: boolean;
   readonly hint?: string;
   /** The rule this gate enforces, declared beside it rather than in a register that
-   * has to be kept in step by hand. */
-  readonly rule?: ICheckRule;
+   * has to be kept in step by hand. A string is the statement. */
+  readonly rule?: string | ICheckRule;
   /** Extra environment for the command (e.g. a flag that makes missing infrastructure
    * fatal instead of skippable). */
   readonly env?: Readonly<Record<string, string>>;
@@ -109,6 +118,18 @@ export interface ICommandCheckSpec {
   readonly refuse?: readonly (RegExp | IOutputRefusal)[];
 }
 
+/** What `commandCheck` takes beside the identity, checked by name when the file loads. */
+const SPEC_OPTIONS = {
+  cmd: { kind: 'string', required: true },
+  shell: { kind: 'object' },
+  env: { kind: 'object' },
+  shardable: { kind: 'boolean' },
+  needs: { kind: 'array' },
+  paths: { kind: 'array' },
+  expect: { kind: ['regexp', 'array'] },
+  refuse: { kind: 'array' },
+} as const;
+
 /**
  * A check whose logic is an external command — the bridge that lets specwarden run
  * a repository's existing gates unchanged while the native rewrites happen check by
@@ -144,16 +165,26 @@ export class CommandCheck implements ICheck {
   private readonly relevant: (changed: readonly string[]) => boolean;
 
   constructor(private readonly spec: ICommandCheckSpec) {
-    this.id = spec.id;
+    checkOptions('commandCheck', spec, SPEC_OPTIONS);
+    const expected = spec.expect === undefined ? [] : Array.isArray(spec.expect) ? spec.expect : [spec.expect];
+    const refused = (spec.refuse ?? []).map((r) => (r instanceof RegExp ? r : (r as Partial<IOutputRefusal>)?.pattern));
+    if (![...expected, ...refused].every((p) => p instanceof RegExp)) {
+      throw new CheckOptionsError(
+        `commandCheck${spec.id ? ` '${spec.id}'` : ''}: every \`expect\` entry must be a RegExp, and every \`refuse\` ` +
+          'entry a RegExp or { pattern: RegExp, why }. A string is not tested — the output would never be doubted.',
+      );
+    }
+    const rule = normaliseRule(spec.rule);
+    this.id = spec.id ?? UNNAMED_CHECK_ID;
     this.cmd = spec.cmd;
-    this.title = spec.title;
-    this.tier = spec.tier;
+    this.title = spec.title ?? rule?.statement ?? this.id;
+    this.tier = spec.tier ?? 'fast';
     this.zone = spec.zone ?? 'consumer';
     this.advisory = Boolean(spec.advisory);
     this.exclusive = spec.exclusive;
     this.needs = spec.needs;
     this.hint = spec.hint;
-    this.rule = spec.rule;
+    this.rule = rule;
     // BOTH: the option kills the child, and the check-level deadline ends the WAIT.
     // They are not redundant — a process runner that ignores the option would leave
     // the run hanging forever, and the deadline is what makes that a failure with a
@@ -248,7 +279,9 @@ export class CommandCheck implements ICheck {
     const expected =
       this.spec.expect === undefined ? [] : Array.isArray(this.spec.expect) ? this.spec.expect : [this.spec.expect];
     for (const pattern of expected as readonly RegExp[]) {
-      if (pattern.test(output)) continue;
+      // Stateless: a `/g` pattern keeps `lastIndex` between calls, so the same check run
+      // twice believed a zero exit on one run and refused it on the next.
+      if (testStateless(pattern, output)) continue;
       findings.push({
         severity: 'error',
         ruleId: this.id,
@@ -260,7 +293,7 @@ export class CommandCheck implements ICheck {
 
     for (const entry of this.spec.refuse ?? []) {
       const refusal: IOutputRefusal = entry instanceof RegExp ? { pattern: entry } : entry;
-      if (!refusal.pattern.test(output)) continue;
+      if (!testStateless(refusal.pattern, output)) continue;
       findings.push({
         severity: 'error',
         ruleId: this.id,

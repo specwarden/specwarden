@@ -63,11 +63,16 @@ describe('main, once a config is found', () => {
       expect(cap.err()).toContain('config declares version 2, newer than this engine (v1). Upgrade specwarden.');
     });
 
-    it('migrate reports an older config honestly — no migration exists yet, so none is claimed', async () => {
+    it('migrate refuses a version older than any there has been — exit 2, never a zero over nothing done', async () => {
+      // It exited 0 with "no migration to v1 is defined yet": a migration that did not
+      // happen, from a version that never existed, reading as done.
       config('export default { version: 0 };');
       const cap = captureIo();
-      expect(await main(['migrate'], {}, dir, cap.io)).toBe(0);
-      expect(cap.out()).toContain('no migration to v1 is defined yet');
+      expect(await main(['migrate'], {}, dir, cap.io)).toBe(2);
+      expect(cap.err()).toBe(
+        'config declares version 0, which no engine ever spoke — the first config version is 1. Set `version: 1`, or remove the key.\n',
+      );
+      expect(cap.out()).toBe('');
     });
 
     it.each([['doctor'], ['sync-invariants'], ['check']])(
@@ -106,10 +111,13 @@ describe('main, once a config is found', () => {
       expect(cap.err()).toContain('a plugin must declare a non-empty name.');
     });
 
-    it('lets a check file that throws on import fail the run loudly, rather than dropping it', async () => {
+    it('a check file that throws on import is a load error — exit 2, the file named, no stack', async () => {
+      // It crashed the CLI with a raw stack and exit 1, the code a red gate uses.
       config('export default {};');
       checkFile('broken.check.mjs', "throw new Error('broken at import');");
-      await expect(main(['check', '--all'], {}, dir, captureIo().io)).rejects.toThrow('broken at import');
+      const cap = captureIo();
+      expect(await main(['check', '--all'], {}, dir, cap.io)).toBe(2);
+      expect(cap.err()).toBe('.specwarden/checks/broken.check.mjs failed to load: broken at import\n');
     });
 
     it('runs a check discovered in the tree, and says how many it discovered', async () => {
@@ -122,6 +130,17 @@ describe('main, once a config is found', () => {
       expect(await main(['check', '--list'], {}, dir, cap.io)).toBe(0);
       expect(cap.out()).toContain('found\tfound\n');
       expect(cap.err()).toContain('ℹ discovered 1 check(s) in 1 file(s) under .specwarden/checks/');
+    });
+
+    it('prints the tree notes for a question about the roster, never on a run', async () => {
+      config('export default { harness: false };');
+      const run = captureIo();
+      await main(['check', '--all'], {}, dir, run.io);
+      expect(run.err()).not.toContain('ℹ');
+
+      const doctor = captureIo();
+      await main(['doctor'], {}, dir, doctor.io);
+      expect(doctor.err()).toContain('ℹ harness self-checks disabled entirely (config.harness = false)');
     });
 
     it('prints the tree notes on stderr, and none under --json, whose consumer is a machine', async () => {

@@ -1,14 +1,9 @@
-/**
- * `doc-paths` — every repository-relative path named in documentation resolves.
- *
- * Including the paths inside `openspec/`: a change proposal that cites a file which
- * has moved is read as current by whoever picks the change up next.
- */
+// `doc-paths` — every repository-relative path named in documentation resolves.
+// A change proposal citing a file that has moved is read as current by whoever picks it up next.
+// `docs` is what is read; `skipDirs` leaves out a tree whose paths are history.
 import { docPaths } from '@specwarden/docs';
 
 export const check = docPaths({
-  id: 'doc-paths',
-  title: 'paths named in documentation exist',
-  tier: 'fast',
   docs: '**/*.md',
+  rule: 'Every repository-relative path named in documentation exists.',
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ICheck, ICheckContext, IProcessResult, IVerdict } from '../domain';
 import { InMemoryFileSource } from '../infrastructure';
+import { matchPathspec } from '../infrastructure/git-vcs/git-pathspec/git-pathspec.util';
 import {
   forbidImport,
   forbidPattern,
@@ -19,7 +20,11 @@ function run(check: ICheck, files: InMemoryFileSource, proc?: (cmd: string) => I
   const ctx = {
     changed: [],
     files,
-    vcs: {} as ICheckContext['vcs'],
+    // The primitives read the TRACKED set; here, every file in the source is tracked.
+    vcs: {
+      trackedFiles: (pathspec?: string) =>
+        matchPathspec(pathspec, [...(files as unknown as { files: Map<string, string> }).files.keys()]),
+    } as unknown as ICheckContext['vcs'],
     clock: {} as ICheckContext['clock'],
     writer: {} as ICheckContext['writer'],
     proc: {
@@ -212,7 +217,7 @@ describe('a factory carries the relevance it was given', () => {
     const check = forbidPattern({
       ...id,
       when: (c: readonly string[]) => c.includes('x'),
-      files: '**/*.ts',
+      in: '**/*.ts',
       pattern: /x/,
       message: 'm',
     });
@@ -229,7 +234,7 @@ describe('a factory carries the relevance it was given', () => {
     const cases = [
       forbidImport({ ...id, when: { under: ['a/'] }, from: 'a/**', to: 'x' }),
       siblingRequired({ ...id, when: { under: ['a/'] }, subjects: 'a/**', require: '{name}.spec.ts' }),
-      pathContract({ ...id, when: { under: ['a/'] }, files: 'a/**', mustMatch: /x/ }),
+      pathContract({ ...id, when: { under: ['a/'] }, kind: 'a/**', allowedIn: ['a/**'] }),
     ];
 
     for (const check of cases) {

@@ -151,15 +151,30 @@ code — and the first run is what decides whether a tool is kept.
 ## Usage
 
 ```
-specwarden check              # run what the changed files make relevant
-specwarden check --all        # the whole roster, regardless of the diff
-specwarden check --tier fast  # one tier
-specwarden check --id <id>    # one check
-specwarden check --list       # what would run, and why
-specwarden check --tighten    # walk ratchets to the observed measurement
-specwarden doctor             # the check roster, capabilities, ownership, rule coverage
-specwarden init               # scaffold a starting tree
+specwarden adopt                  # what this repository already is — reads, writes nothing
+specwarden suggest                # rules it already follows, each armed at today's count
+specwarden init [--template <n>]  # write the starting tree
+specwarden new <id>               # a check and its test, red until the body is written
+
+specwarden check                  # what the changed files make relevant
+specwarden check --all            # the whole roster, regardless of the diff
+specwarden check --tier fast      # one tier
+specwarden check --id <id>        # one check
+specwarden check --base <ref>     # measure the change from <ref> — a pull-request run
+specwarden check --list           # what would run, in order, and why
+specwarden check --fix            # repair what is derivable, then re-run
+specwarden check --tighten        # record a passing run's measurement as the new bar
+specwarden doctor                 # the roster, capabilities, ownership, rule coverage
+
+specwarden plan status <file> [--verify]  # a plan's phases; --verify runs each acceptance
+specwarden plan archive <file>            # refuses until the harvest is declared
+specwarden sync-invariants                # requirements against deposited invariants
+specwarden migrate                        # the config, moved to this engine's version
+specwarden perimeter                      # one assistant action on stdin — the hook entry
 ```
+
+Exit `0` every gate held, `1` a gate failed, `2` the line, the config or a check file
+could not be used. `specwarden --help` lists every flag and environment variable.
 
 `spw` is a shorter alias for the same binary. Requires Node 24 or newer.
 

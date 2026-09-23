@@ -33,3 +33,5 @@ export type { IDocHygieneOptions } from './doc-hygiene/doc-hygiene.check';
 export { DEFAULT_HEDGE, DEFAULT_ORDINAL_LEAD, DEFAULT_NUMBER, DEFAULT_DATED } from './doc-counts/doc-counts.check';
 export type { IClaimGrammar } from './doc-counts/doc-counts.check';
 export { DEFAULT_SYMBOL_REF_RE, DEFAULT_DECL_RE } from './doc-symbols/doc-symbols.check';
+export { docsChecks } from './docs-checks/docs-checks.check';
+export type { IDocsChecksOptions, TDocsOverride } from './docs-checks/docs-checks.check';

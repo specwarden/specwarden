@@ -26,6 +26,41 @@ package, a pattern that stopped matching after a format changed. None of them er
 A primitive is tested as part of the product, so a consumer who uses one writes no test
 for it. That is the larger of the two wins.
 
+The primitives name their corpus differently — `in` on `forbidPattern` and
+`referencesResolve`, `from` on `forbidImport`, `files` on `mustDeclare`, `subjects` on
+`siblingRequired`, `kind` on `pathContract` — and stay that way until a major version: one
+name across them is a rename every consumer's check files would have to follow. A new
+primitive whose corpus is a pathspec to scan takes `in`.
+
+## 2a. Write only what the engine cannot know
+
+A check is the information it carries. Everything else has a default the engine can
+derive, and a field restated where a default would do is a field that drifts:
+
+- **`tier`** — `fast`. A tier outside the config's `tiers` is refused at load: it ran
+  under `--all` and was in no schedule, so no `--tier` ever ran it.
+- **`title`** — the rule's statement, else the id.
+- **`id`** — the file's stem, for a check exported **alone** from `<name>.check.mjs`. A
+  file exporting several checks gives each its own id; one built anywhere else — the
+  config's `checks`, a plugin — must say it, and is refused at load if it does not.
+- **`rule`** — a string is the statement. A rule with no `owner` is owned by the file that
+  declares it.
+
+So the one-line check is one line:
+
+```js
+export const check = forbidPattern({ in: 'src/**/*.ts', pattern: /TODO/, rule: 'no TODO in shipped source' });
+```
+
+**A file that names its check keeps that name.** The id is inferred only when the file is
+silent. Refusing an id that differs from the file name was rejected: a file exporting a
+plugin's checks legitimately carries several ids, none of them its own name.
+
+**Every factory checks its options when the file loads**, by name and with exit 2: a
+missing `pattern` crashed the run, a misspelled `except` was dropped in silence and a
+wrong type surfaced as a crash three layers down. A factory built on `buildCheck` gets
+this by declaring a `checkOptions` spec; one that skips it is the silent drop, back.
+
 ## 3. Say what a green run must have looked at
 
 Not optional where it applies. Each is one line, and each closes a whole family:
@@ -66,6 +101,14 @@ the day they gained a parent directory.
 `rule: { statement, owner }` on the check itself. An unattributed check is one nobody can
 argue with, relax deliberately, or retire — and `orphan-check` fails a check that names
 none.
+
+**A module's check comes with its rule.** Every factory a module ships supplies one,
+marked `implied` and owned by the package (`@specwarden/docs`): the module knows what its
+check enforces, and a preset's checks had nowhere for a consumer to write one, so every
+GUIDE-wired check was an orphan the day a register existed. An implied rule yields — a
+`rule` the consumer writes replaces it, and a register entry naming the check drops it.
+A new module factory supplies one too; a primitive does not, because what a
+`forbidPattern` enforces is the consumer's to say.
 
 A rule enforced by exactly one check belongs **on** that check. The rule register is for
 what can live nowhere else: a rule no single check owns, and a rule nothing can check.

@@ -146,3 +146,15 @@ describe('what the source could see', () => {
     expect(openspec().name).toBe('openspec');
   });
 });
+
+describe('openspec — its options', () => {
+  it('refuses an option it does not have, by name, when the config loads', () => {
+    expect(() => openspec({ specsFile: 'spec.md' } as never)).toThrow('`specsFile` is not an option of openspec');
+  });
+
+  it('refuses a heading given as a string', () => {
+    expect(() => openspec({ requirementHeading: '### Requirement:' } as never)).toThrow(
+      '`requirementHeading` must be a RegExp',
+    );
+  });
+});

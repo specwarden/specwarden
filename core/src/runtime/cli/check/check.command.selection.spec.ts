@@ -26,6 +26,8 @@ const args = (over: Partial<IParsedArgs> = {}): IParsedArgs => ({
   ifRelevant: false,
   relevance: false,
   showSkipped: false,
+  help: false,
+  problems: [],
   ...over,
 });
 
@@ -87,6 +89,27 @@ describe('--list', () => {
 
     expect(await s.run({ list: true, ids: ['a', 'typo'] })).toBe(2);
     expect(s.err()).toContain('unknown check id(s): typo');
+    expect(s.out()).toBe('');
+  });
+
+  it('prints the roster as JSON under --json — it printed the tab-separated list', async () => {
+    const s = setup([inert('a'), inert('b', { tier: 'heavy', advisory: true, exclusive: true })]);
+    expect(await s.run({ list: true, json: true })).toBe(0);
+    expect(JSON.parse(s.out())).toEqual([
+      { id: 'a', title: 'a title', tier: 'fast', advisory: false, exclusive: false },
+      { id: 'b', title: 'b title', tier: 'heavy', advisory: true, exclusive: true },
+    ]);
+  });
+
+  it('refuses an id outside the named tier, as a run does', async () => {
+    const s = setup(roster);
+    expect(await s.run({ list: true, tier: 'heavy', ids: ['a'] })).toBe(2);
+    expect(s.err()).toBe("'a' is in tier fast, not heavy — with --tier, --id names checks of that tier\n");
+  });
+
+  it('answers an empty tier with nothing — a question, not a run', async () => {
+    const s = setup(roster);
+    expect(await s.run({ list: true, tier: 'nightly' })).toBe(0);
     expect(s.out()).toBe('');
   });
 
@@ -163,5 +186,23 @@ describe('--relevance', () => {
       }),
     ]);
     await expect(s.run({ relevance: true, ids: ['gate'] })).rejects.toThrow('predicate exploded');
+  });
+});
+
+describe('a run the line selects nothing for', () => {
+  const roster = [inert('a'), inert('b', { tier: 'heavy' })];
+
+  // Both used to exit 0: "0 gate(s) passed", and a fast check run by a job named heavy.
+  it('refuses a tier that holds no check, exit 2, before anything runs', async () => {
+    const s = setup(roster);
+    expect(await s.run({ all: true, tier: 'nightly' })).toBe(2);
+    expect(s.err()).toBe("tier 'nightly' holds no check — a run over it would pass having run nothing\n");
+    expect(s.out()).toBe('');
+  });
+
+  it('refuses --id outside --tier, exit 2, before anything runs', async () => {
+    const s = setup(roster);
+    expect(await s.run({ all: true, tier: 'heavy', ids: ['a'] })).toBe(2);
+    expect(s.err()).toContain("'a' is in tier fast, not heavy");
   });
 });

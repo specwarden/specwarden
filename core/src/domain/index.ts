@@ -35,7 +35,7 @@ export type {
   IFixable,
   IFixOutcome,
 } from './check/check.model';
-export type { ICheckIdentity, TCheckFactory } from './check-factory/check-factory.model';
+export type { ICheckDeclaration, ICheckIdentity, TCheckFactory } from './check-factory/check-factory.model';
 
 // Ratchets — the value, and the three pure questions every consumer of one asks:
 // which way is forward, what does forward give, and does this measurement hold.
@@ -67,7 +67,12 @@ export { computeLifecycle, isForwardTransition } from './plan-lifecycle/plan-lif
 export type { ILifecycleInputs, TPlanLifecycle } from './plan-lifecycle/plan-lifecycle.model';
 export { parseDecisionLog, rejectionsWithoutReason } from './decision-log/decision-log.model';
 export type { IDecision, IRejectedAlternative } from './decision-log/decision-log.model';
-export { parseHarvest, archiveReadiness } from './plan-archive/plan-archive.model';
+export {
+  ARCHIVE_HEADER_FIELDS,
+  archiveReadiness,
+  missingArchiveHeader,
+  parseHarvest,
+} from './plan-archive/plan-archive.model';
 export type { IHarvestEntry, IHarvestParse, IArchiveReadiness } from './plan-archive/plan-archive.model';
 
 // Ports.
@@ -82,6 +87,7 @@ export type {
   IProcessRunner,
   IRatchetStore,
   IReporter,
+  IRunSummary,
   IVcs,
 } from './ports';
 

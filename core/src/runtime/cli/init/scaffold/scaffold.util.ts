@@ -13,24 +13,19 @@ import type { IRepoShape } from '../../adopt/detect-repo/detect-repo.util';
  * resolve, and nothing else.
  *
  * WHAT IT GENERATES IS THE CONVENTION, NOT A CONFIG. A check is a file under
- * `checks/<family>/<id>.check.mjs`, discovered by the engine; the config names only what
- * the tree cannot express. So `init` writes the tree: a family folder per installed
- * module, one check file in each, a README explaining the shape, and a short config.
- * The first thing a newcomer sees is the structure they will grow, not a list they
- * will have to keep in step with a folder.
+ * `checks/<family>/<id>.check.mjs`, discovered by the engine and named by its file; the
+ * config names only what the tree cannot express.
  *
- * Every generated file is COMMENTED. A scaffold that emits bare configuration teaches
- * nothing, and the reader's next move is to search for documentation elsewhere; the
- * comments are the documentation, at the point of use.
+ * SHORT, AND TRUE OF THIS TREE. Each generated file carries a header and its options;
+ * the reasoning lives in the module's GUIDE. The READMEs describe the files that were
+ * written — a sentence about a check the tree does not run, or a folder nobody wrote, is
+ * the scaffold teaching the newcomer that its prose is decoration.
  */
 
 /** A module the scaffold knows how to wire: where its first check goes, and what it says. */
 interface IKnownModule {
   readonly pkg: string;
   readonly family: string;
-  /** The rule the generated check enforces, so a fresh tree has no orphan: every check
-   * names a rule, every rule names its check, and the newcomer sees the pairing. */
-  readonly rule: { readonly id: string; readonly statement: string; readonly checkId: string };
   readonly render: (shape: IRepoShape) => { readonly file: string; readonly body: string };
 }
 
@@ -39,27 +34,15 @@ const docGlob = (shape: IRepoShape): string => (shape.docDirs.length ? `${shape.
 const SECURITY: IKnownModule = {
   pkg: '@specwarden/security',
   family: 'security',
-  rule: {
-    id: 'no-credentials-in-tree',
-    statement: 'A credential never enters the repository, not even a revoked one.',
-    checkId: 'secret-scan',
-  },
   render: () => ({
     file: 'secret-scan.check.mjs',
-    body: `/**
- * \`secret-scan\` — a credential-shaped string anywhere in the tracked tree.
- *
- * The built-in library covers a few common vendor formats. It is a PRESET, not a
- * mandate: add your own with \`patterns.extra\`, switch one off with \`patterns.disable\`
- * (a reason is required, and it is reported), or supply the whole library with
- * \`patterns.replace\`. A match means ROTATE first, delete second.
- */
+    body: `// \`secret-scan\` — no credential-shaped string in any tracked file.
+// A committed key outlives its deletion in history: a match means rotate first, delete second.
+// Add a format with \`patterns.extra\`; switch one off with \`patterns.disable\`, which takes a reason.
 import { secretScan } from '@specwarden/security';
 
 export const check = secretScan({
-  id: 'secret-scan',
-  title: 'no credential-shaped string is committed',
-  tier: 'fast',
+  rule: 'A credential never enters the repository, not even a revoked one.',
 });
 `,
   }),
@@ -68,31 +51,16 @@ export const check = secretScan({
 const DOCS: IKnownModule = {
   pkg: '@specwarden/docs',
   family: 'docs',
-  rule: {
-    id: 'paths-in-documentation-resolve',
-    statement: 'Every repository-relative path named in documentation exists.',
-    checkId: 'doc-paths',
-  },
   render: (shape) => ({
     file: 'doc-paths.check.mjs',
-    body: `/**
- * \`doc-paths\` — every repository-relative path named in documentation resolves.
- *
- * The commonest way documentation rots: a file moves, the prose does not, and a
- * reader — or an agent — follows the old path, finds nothing, and invents the rest.
- *
- * More from the same module, when you want them: \`docSymbols\` (a renamed class leaves
- * its old name in prose; takes another language's grammar), \`docCounts\` ("seven
- * services" in a document that describes nine; its vocabulary is English by default
- * and overridable), \`docHygiene\`, \`docPlacement\`.
- */
+    body: `// \`doc-paths\` — every repository-relative path named in documentation resolves.
+// A file moves, the prose does not, and a reader follows the old path to nothing.
+// \`docs\` is what is read; the module also has docSymbols, docCounts, docHygiene, docPlacement.
 import { docPaths } from '@specwarden/docs';
 
 export const check = docPaths({
-  id: 'doc-paths',
-  title: 'paths named in documentation exist',
-  tier: 'fast',
   docs: '${docGlob(shape)}',
+  rule: 'Every repository-relative path named in documentation exists.',
 });
 `,
   }),
@@ -126,171 +94,170 @@ export function renderConfig(extras: { imports?: string; fields: string } = { fi
 
 import { rules } from './rules.mjs';${extras.imports ? `\n${extras.imports}` : ''}
 
-/**
- * What this repository enforces — the part the tree cannot say for itself.
- *
- * The engine reads \`checks/\` by convention: every \`*.check.mjs\` under it is a check,
- * found without being named here. The harness's own audits — rule ownership, rule
- * coverage, orphans, enforcer resolution, ratchet direction — are assembled from
- * defaults and appear in the manifest without being declared. So this file holds only
- * what has no other home: plugins, ownership, relevance inputs, and the tier names.
- *
- * Checks are enabled DELIBERATELY, one file each. A check nobody chose, failing on day
- * one, teaches that this tool is noisy — and that lesson outlives the check.
- */
+// Only what the tree cannot say: every *.check.mjs under checks/ is found without being named here.
 export default defineConfig({
   rules,
-${extras.fields}
-  /**
-   * A diff touching one of these can affect anything, so relevance filtering is
-   * skipped for it. Start empty; add a prefix when you notice a gate that should have
-   * run and did not.
-   */
-  sharedBuildInputs: [],
-});
+${extras.fields}});
 `;
 }
 
-export function renderChecksReadme(modules: readonly IKnownModule[], template = ''): string {
-  const families = template
-    ? `| _the folders beside this README_ | from the \`${template}\` template |`
-    : modules.length
-      ? modules.map((m) => `| \`${m.family}/\` | from \`${m.pkg}\` |`).join('\n')
-      : '| _(none yet)_ | install a module and its family folder appears here |';
+/** One file `init` wrote, as the tables in the READMEs describe it. */
+export interface IWrittenFile {
+  readonly path: string;
+  readonly body: string;
+}
+
+/** The family folders under `checks/`, each with the checks in it and where they come from. */
+function familiesOf(written: readonly IWrittenFile[]): readonly string[] {
+  const families = new Map<string, { ids: string[]; from: Set<string> }>();
+  for (const f of written) {
+    const m = /^checks\/([^/]+)\/(.+?)\.check\.mjs(\.example)?$/.exec(f.path);
+    if (!m) continue;
+    const family = families.get(m[1]) ?? { ids: [], from: new Set<string>() };
+    family.ids.push(m[3] ? `${m[2]} (example, off)` : m[2]);
+    for (const [, pkg] of f.body.matchAll(/^import .* from '([^'.][^']*)';$/gm)) family.from.add(`\`${pkg}\``);
+    families.set(m[1], family);
+  }
+  return [...families].map(([name, { ids, from }]) => `| \`${name}/\` | ${ids.join(', ')} | ${[...from].join(', ')} |`);
+}
+
+export function renderChecksReadme(written: readonly IWrittenFile[] = []): string {
+  const rows = familiesOf(written);
+  const table = rows.length
+    ? rows.join('\n')
+    : '| _(none yet)_ | install a module — `docPaths`, `secretScan` and the rest live in them | |';
   return `# checks/
 
 One file per check, grouped by SUBJECT — a family is what a check is about, never
 when it runs. The engine discovers every \`*.check.mjs\` beneath this folder; nothing
 has to import or list it.
 
-| Family | Holds |
-| --- | --- |
-${families}
+| Family | Check files | From |
+| --- | --- | --- |
+${table}
 
 ## Adding a check
 
-Create \`<family>/<id>.check.mjs\` exporting \`check\`, with \`id\` equal to the file name.
-For an external command:
+Create \`<family>/<id>.check.mjs\` exporting \`check\`. The file name is its id, and
+\`rule\` is the statement it enforces, owned by the file. A module's check carries a rule of
+its own; one built with the engine's \`commandCheck\`, \`fromResult\` or \`defineCheck\` has
+none, and with no rule the run is red on orphan-check.
 
 \`\`\`js
 import { commandCheck } from 'specwarden';
-export const check = commandCheck({ id: 'lint', title: 'ESLint', tier: 'heavy', cmd: 'pnpm lint', when: () => true });
+export const check = commandCheck({ cmd: 'pnpm lint', tier: 'heavy', rule: 'Nothing merges while the linter is red.' });
 \`\`\`
 
-For a native one, a module factory (\`docPaths\`, \`secretScan\`, …) or \`fromResult\` over a
-function of your own — it receives the check context, so read through \`ctx.files\` and
-\`ctx.vcs\`, never the disk.
+For a native one, a module factory or \`fromResult\` over a function of your own — it
+receives the check context, so read through \`ctx.files\` and \`ctx.vcs\`, never the disk.
 
 **Show it RED before believing it.** Write the failing case first and watch the check
 reject it. A check nobody has seen fail is a hope.
-
-Then \`specwarden check --list\` shows it — the moment the file exists.
 `;
 }
 
-export function renderRules(modules: readonly IKnownModule[] = [], extra: readonly IRule[] = []): string {
-  // A single-quoted JS literal. The backslash goes first, or the escapes added after it
-  // would themselves be escaped; a line break would end the literal mid-statement.
-  const quote = (s: string) =>
-    s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n');
-  // A not-mechanizable rule keeps its REASON. Rendered as `checkIds: []` it became a rule
-  // neither enforced nor excused — the one state the coverage audit refuses.
-  const enforcementSource = (e: IRule['enforcement']): string =>
-    'notMechanizable' in e
-      ? `{ notMechanizable: '${quote(e.notMechanizable)}' }`
-      : `{ checkIds: [${e.checkIds.map((c) => `'${quote(c)}'`).join(', ')}] }`;
-  const asSource = (id: string, statement: string, owner: string, enforcement: IRule['enforcement']): string =>
-    [
-      '  {',
-      `    id: '${quote(id)}',`,
-      `    statement: '${quote(statement)}',`,
-      `    owner: '${quote(owner)}',`,
-      `    enforcement: ${enforcementSource(enforcement)},`,
-      '  },',
-    ].join('\n');
+/** A single-quoted JavaScript literal. The backslash first, or the escapes after it double. */
+const quote = (s: string): string =>
+  s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n');
 
-  const generated = [
-    ...modules.map((m) =>
-      asSource(m.rule.id, m.rule.statement, '.specwarden/README.md', { checkIds: [m.rule.checkId] }),
-    ),
-    // A template's rules arrive already owned by the caller — it knows where the README
-    // it just wrote is; the template does not.
-    ...extra.map((r) => asSource(r.id, r.statement, r.owner, r.enforcement)),
-  ].join('\n');
-  return `/**
- * What this repository has DECIDED — separate from what it can check.
- *
- * A rule is a decision with an owner document. Some are enforced by a check; some
- * cannot be mechanised at all, and those are declared here WITH A REASON rather than
- * left unsaid. That is the point of the file: \`specwarden doctor\` can then answer
- * "what do we believe, and how much of it is actually verified" — a question no list
- * of passing checks answers.
- *
- * The engine refuses a rule that is unenforced AND has no stated reason. Not because
- * every rule must be automated, but because "we never got to it" and "this cannot be
- * automated" are different states, and only one of them is finished.
- *
- * Declaring this list — even empty — turns the rule audits on. With no \`rules\` key at
- * all the engine leaves them off, so a repository with checks and no rules yet is not
- * met by a red orphan-check for the checks it just enabled.
+/**
+ * A not-mechanizable rule keeps its REASON. Rendered as `checkIds: []` it became a rule
+ * neither enforced nor excused — the one state the coverage audit refuses.
  */
+const enforcementSource = (e: IRule['enforcement']): string =>
+  'notMechanizable' in e
+    ? `{ notMechanizable: '${quote(e.notMechanizable)}' }`
+    : `{ checkIds: [${e.checkIds.map((c) => `'${quote(c)}'`).join(', ')}] }`;
+
+/**
+ * `rules.mjs`: the register, for the rules no single check states.
+ *
+ * `live` are declared; `switchedOff` are the rules of the examples, written COMMENTED
+ * OUT on one line each — live, they would name a check nobody registered and fail
+ * `enforcement-resolves` on the tree just written; left out, the repository's statement
+ * of the rule would live nowhere it can read, and an example built on an engine factory,
+ * which implies no rule, would meet a red orphan-check nobody had mentioned.
+ */
+export function renderRules(live: readonly IRule[] = [], switchedOff: readonly IRule[] = []): string {
+  const declared = live
+    .map((r) =>
+      [
+        '  {',
+        `    id: '${quote(r.id)}',`,
+        `    statement: '${quote(r.statement)}',`,
+        `    owner: '${quote(r.owner)}',`,
+        `    enforcement: ${enforcementSource(r.enforcement)},`,
+        '  },',
+      ].join('\n'),
+    )
+    .join('\n');
+  const off = switchedOff.map(
+    (r) =>
+      `  // { id: '${quote(r.id)}', statement: '${quote(r.statement)}', owner: '${quote(r.owner)}', enforcement: ${enforcementSource(r.enforcement)} },`,
+  );
+  return `// The rules no single check states — a check declares its own (\`rule: '…'\`) and its file owns it.
+// Declaring the list, even empty, turns the rule audits on.
 export const rules = [
-${generated}${generated ? '\n' : ''}  // A rule nothing can mechanise is still declared — with the reason, which is what
-  // separates "we never got to it" from "this cannot be automated":
-  // {
-  //   id: 'reviews-before-merge',
-  //   statement: 'Every change to main is reviewed by someone who did not write it.',
-  //   owner: 'CONTRIBUTING.md',
-  //   enforcement: { notMechanizable: 'Enforced by branch protection in the forge, not here.' },
-  // },
+${declared}${declared ? '\n' : ''}${
+    off.length
+      ? `  // Each switched-off example's rule: uncomment it when the example is renamed.\n${off.join('\n')}\n`
+      : ''
+  }  // A rule no check can enforce is declared with the reason:
+  // { id: 'reviews-before-merge', statement: 'Every change to main is reviewed by someone who did not write it.', owner: 'CONTRIBUTING.md', enforcement: { notMechanizable: 'No check can see a review; branch protection in the forge enforces it.' } },
 ];
 `;
 }
 
-export function renderReadme(): string {
+/** What each file init can write beside `checks/` is for, in one line. */
+const TOP_LEVEL: Readonly<Record<string, string>> = {
+  'warden.config.mjs': 'the entry — only what the tree cannot say for itself',
+  'rules.mjs': "the rules no single check states, and each example's rule, commented out",
+  'README.md': 'this file',
+  'perimeter.mjs': 'what an assistant may not do here, checked by a hook before the action runs',
+  'spec-source.mjs': 'where requirements and tasks come from, for specwarden sync-invariants',
+};
+
+/** The one line `init` prints and the README lists for a file written beside `checks/`. */
+export const describeTopLevel = (file: string): string => TOP_LEVEL[file] ?? 'written by the template';
+
+/** The files written beside `checks/`, in the order the README lists them. */
+export function topLevelFiles(written: readonly IWrittenFile[]): readonly string[] {
+  return ['warden.config.mjs', 'rules.mjs', 'README.md', ...written.map((f) => f.path).filter((p) => !p.includes('/'))];
+}
+
+export function renderReadme(written: readonly IWrittenFile[] = []): string {
+  const files = topLevelFiles(written);
+  // Only where there is one: a paragraph about examples in a tree with none describes nothing.
+  const examples = written.some((f) => f.path.endsWith('.example'))
+    ? '\nAn `.example` under checks is switched off: it says what it needs, and is switched on by\nrenaming it AND uncommenting its rule in rules.mjs.'
+    : '';
+  const width = Math.max(...files.map((f) => f.length), 'checks/'.length) + 3;
+  const listing = [...files, 'checks/']
+    .map((f) =>
+      f === 'checks/'
+        ? `  ${'checks/'.padEnd(width)}one file per check, by family; the engine discovers every *.check.mjs`
+        : `  ${f.padEnd(width)}${describeTopLevel(f)}`,
+    )
+    .join('\n');
   return `# .specwarden/
 
-This repository's own facts. The engine is the package; everything here is yours.
+This repository's own checks and rules. The engine is the package; everything here is yours.
 
 \`\`\`
 .specwarden/
-  warden.config.mjs   the ENTRY — only what the tree cannot say for itself
-  rules.mjs           what this repository has decided, and who owns each decision
-  checks/             one file per check, by family; the engine discovers them
-  perimeter.mjs       what an assistant may not do here (optional)
-  relevance.mjs       which paths a gate cares about, when a diff should skip it (optional)
-  ratchets/           DATA, written by --tighten — commit it
-  baseline/           DATA — same reasoning
+${listing}
 \`\`\`
 
-Every declaration above may instead live in its OWN FOLDER together with its test: a
-\`perimeter\` folder holding \`perimeter.mjs\` beside \`perimeter.test.mjs\`, named for the
-stem before the first dot. The engine resolves both layouts, so a house style that keeps a
-tested file and its test together does not have to argue with the CLI. A check under
-\`checks/\` is discovered at any depth and needs no permission at all.
-
-*(That example names a folder and two files rather than two paths on purpose: a
-\`doc-paths\` check reads any backticked path carrying a slash as a claim that the file
-exists, and this document is scaffolded into trees that write no perimeter. A starter tree
-that fails the first gate it ships with teaches the wrong thing about the gate.)*
-
-## The one rule about this folder
-
-**Repository facts live here; the engine never learns them.** A workspace name, a
-table, a vendor, a directory layout — all of it belongs on this side. That boundary is
-what lets the engine be upgraded without re-learning your repository, and it is
-enforced: a product source naming a host literal fails its own zone check.
+A check states the rule it enforces (\`rule: '…'\`), and its file owns that rule.${examples}
+\`specwarden check --tighten\` writes a ratchets folder here the first time a ratchet has
+something to hold — commit it.
 
 ## Getting further
 
 - \`specwarden check --all\` — run everything, ignoring relevance filtering.
-- \`specwarden check --list\` — the manifest: every check the engine found, in run order.
+- \`specwarden check --list\` — every check the engine found, in run order.
 - \`specwarden doctor\` — what is declared, without running any of it.
-- \`specwarden suggest\` — rules this repository already follows, each ratchet set to
-  current reality. Nothing is enabled for you.
 - \`specwarden check --tighten\` — lower every ratchet to today's count, so the next
   regression fails.
-- \`specwarden check --jobs 4\` — overlap the work; a check that cannot share the machine
-  declares \`exclusive: true\`.
 `;
 }

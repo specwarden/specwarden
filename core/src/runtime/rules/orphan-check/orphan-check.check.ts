@@ -34,7 +34,9 @@ export function orphanCheck(options: IOrphanCheckOptions): ICheck {
     capabilities: [],
     contractVersion: CHECK_CONTRACT_VERSION,
     advisory: options.advisory ?? true,
-    hint: 'Declare a rule that names this check in .specwarden/rules.mjs, or state why it enforces nothing.',
+    // The smallest fix first: one line on the check itself. The register is for a rule
+    // no single check owns, and pointing everyone at it made the common case the long one.
+    hint: "Add `rule: '<the statement it enforces>'` to the check — or, for a rule several checks share, name it in the rule register.",
     when: () => true,
     run: () => {
       const ids = options.checkIds().filter((c) => c !== id);

@@ -26,33 +26,26 @@ import {
  * scaffold must not be the reason a first run is red.
  *
  * The env-file and upstream checks need a fact about YOUR deployment — which modes exist,
- * which of them run the proxy on the host, where the application declares its keys — so
- * they ship as `.example` with the one thing to fill in named at the top. Guessed, each
- * would be wrong in half the repositories that installed it, and a check that fails a
- * correct tree teaches a team to skip the gate.
+ * which of them run the proxy on the host, which service verifies a key — so they ship as
+ * `.example`, pointed at the compose file, proxy config and workflow `init` found.
  *
- * The doc-path check earns its place here for a specific reason: an operational document
- * is read under pressure, and a path in a runbook that no longer resolves costs minutes
- * exactly when there are none.
+ * The doc-path check reads every tracked document: the README is where an operator starts
+ * ("when something is on fire, start at …"), and a runbook path that no longer resolves
+ * costs minutes exactly when there are none.
  */
 const assembled = (ctx: ITemplateContext) =>
   compose(
     secretScanPart(ctx, {
-      header: `a credential-shaped string anywhere in the tracked tree.
- *
- * An infrastructure repository is where connection strings, tokens and signing keys are
- * most likely to arrive by accident — pasted into a compose file "just to test". A match
- * means ROTATE first, delete second: the history keeps what the diff removes.`,
+      header:
+        'Connection strings and tokens arrive here by accident, pasted into a compose file "just to test".\nA match means rotate first, delete second: the history keeps what the diff removes.',
     }),
     shellScopePart(ctx, { pathspecs: ['scripts/**/*.sh', 'deploy/**/*.sh', '*.sh'] }),
     envFilesExamplePart(ctx),
     upstreamsExamplePart(ctx),
     docPathsPart(ctx, {
-      header: `every repository-relative path named in documentation resolves.
- *
- * An operational document is read under pressure. A path in a runbook that no longer
- * resolves costs minutes exactly when there are none, and the reader — already halfway
- * through an incident — has to guess what it became.`,
+      header:
+        'A runbook is read under pressure; a path in it that no longer resolves costs minutes when there are none.',
+      docs: '**/*.md',
     }),
     ciCoveragePart(ctx),
   );

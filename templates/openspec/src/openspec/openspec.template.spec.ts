@@ -49,7 +49,7 @@ describe('the seam it exists for', () => {
   it('says, in the file itself, that nothing is ever written back to the spec tool', () => {
     // The ownership boundary is the whole relationship: reading a foreign tool's tree is
     // interop, writing to it is two tools owning one fact.
-    expect(bodyOf('spec-source.mjs')).toMatch(/never WRITES here/i);
+    expect(bodyOf('spec-source.mjs')).toContain('Nothing here is ever written.');
   });
 });
 
@@ -72,36 +72,21 @@ describe('what it adds beside the seam', () => {
     ]);
   });
 
-  it('every check it writes is named by a rule', () => {
-    const live = paths()
-      .filter((p) => p.endsWith('.check.mjs'))
-      .map(
-        (p) =>
-          p
-            .split('/')
-            .pop()
-            ?.replace(/\.check\.mjs$/, '') as string,
-      );
-    const named = new Set(
-      openspecTemplate.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
-    );
-    for (const id of live) expect(named.has(id), `${id} enforces no rule`).toBe(true);
-    // And the reverse: a rule naming a check nobody wrote fails `enforcement-resolves` on
-    // the tree the scaffold just produced.
-    for (const id of named) expect(live, `a rule names ${id}, which is not written`).toContain(id);
+  it('every check it writes states its own rule, so a fresh tree has no orphan', () => {
+    for (const f of openspecTemplate.files(ctx()).filter((x) => x.path.endsWith('.check.mjs')))
+      expect(f.body, `${f.path} states no rule`).toMatch(/^\s+rule: '/m);
+    // Nothing is left for the register: every rule here is stated by the check enforcing it.
+    expect(openspecTemplate.rules(ctx())).toEqual([]);
   });
 
   it('every generated check imports and constructs', async () => {
     for (const file of openspecTemplate.files(ctx()).filter((f) => f.path.endsWith('.check.mjs'))) {
       const abs = join(scratch, file.path.replace(/\//g, '-'));
       writeFileSync(abs, file.body);
-      const mod = (await import(pathToFileURL(abs).href)) as { check?: { id: string } };
-      expect(mod.check?.id).toBe(
-        file.path
-          .split('/')
-          .pop()
-          ?.replace(/\.check\.mjs$/, ''),
-      );
+      const mod = (await import(pathToFileURL(abs).href)) as { check?: { rule?: { statement: string } } };
+      // Named by its file — no `id:` to disagree with it — and owning the rule it enforces.
+      expect(file.body).not.toMatch(/^\s+id: '/m);
+      expect(mod.check?.rule?.statement, `${file.path} states no rule`).toBeTruthy();
     }
   });
 });

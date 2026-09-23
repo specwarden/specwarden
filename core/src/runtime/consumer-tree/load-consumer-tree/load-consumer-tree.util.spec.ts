@@ -70,7 +70,20 @@ describe('loadConsumerTree', () => {
       'ratchet-direction',
     ];
     expect([...enforcement.checkIds].sort()).toEqual([...selfChecks].sort());
-    expect(harnessRule?.owner).toBe('.specwarden/README.md');
+  });
+
+  it('the harness rule is owned by the README init writes, and by the engine where there is none', async () => {
+    // A hand-written tree has no README, and `rules: []` met a red rule-owner-resolves
+    // over a rule the consumer never declared.
+    const bare = await loadConsumerTree(files(), '.specwarden', { rules: RULES });
+    expect(bare.rules.find((r) => r.id === 'harness-integrity')?.owner).toBe('the specwarden engine');
+
+    write('README.md', '# .specwarden\n');
+    const initialised = await loadConsumerTree(files(), '.specwarden', { rules: RULES });
+    expect(initialised.rules.find((r) => r.id === 'harness-integrity')?.owner).toBe('.specwarden/README.md');
+
+    const named = await loadConsumerTree(files(), '.specwarden', { rules: RULES, harness: { ruleOwner: 'docs/x.md' } });
+    expect(named.rules.find((r) => r.id === 'harness-integrity')?.owner).toBe('docs/x.md');
   });
 
   it('no harness rule when the consumer declared no registry — the audits are off anyway', async () => {
@@ -253,5 +266,162 @@ describe('loadConsumerTree — one id, one declaration', () => {
     });
 
     expect(tree.rules.find((r) => r.id === 'shared')?.enforcement).toEqual({ checkIds: ['a', 'b'] });
+  });
+});
+
+describe('loadConsumerTree — a perimeter rule is an enforcer without a config line', () => {
+  let root: string;
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'spw-tree-perimeter-'));
+    mkdirSync(join(root, '.specwarden', 'checks'), { recursive: true });
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  const files = () => new NodeFileSource(root);
+  const write = (rel: string, body: string) => {
+    mkdirSync(join(root, '.specwarden', rel, '..'), { recursive: true });
+    writeFileSync(join(root, '.specwarden', rel), body);
+  };
+  const PERIMETER = "export const rules = [{ id: 'no-force-push', evaluate: () => ({ blocked: false }) }];\n";
+  const NAMING_IT: readonly IRule[] = [
+    {
+      id: 'history',
+      statement: 'shared history is not rewritten',
+      owner: 'README.md',
+      enforcement: { checkIds: ['no-force-push'] },
+    },
+  ];
+  const resolves = async (config: Parameters<typeof loadConsumerTree>[2]) => {
+    const tree = await loadConsumerTree(files(), '.specwarden', config);
+    const verdict = await tree.checks
+      .find((c) => c.id === 'enforcement-resolves')
+      ?.run({ files: files(), changed: [] } as never);
+    return verdict;
+  };
+
+  it.each([['perimeter.mjs'], ['perimeter/perimeter.mjs']])(
+    'a rule naming a perimeter rule resolves, from %s — it was red until the config repeated the ids',
+    async (at) => {
+      write(at, PERIMETER);
+      expect((await resolves({ rules: NAMING_IT }))?.ok).toBe(true);
+    },
+  );
+
+  it('a default export of rules counts the same way', async () => {
+    write('perimeter.mjs', PERIMETER.replace('export const rules =', 'export default'));
+    expect((await resolves({ rules: NAMING_IT }))?.ok).toBe(true);
+  });
+
+  it('with no perimeter the id stays unresolved — the rule names an enforcer nothing declares', async () => {
+    expect((await resolves({ rules: NAMING_IT }))?.ok).toBe(false);
+  });
+
+  it('a config naming more enforcers adds to the perimeter, never replaces it', async () => {
+    write('perimeter.mjs', PERIMETER);
+    const both: readonly IRule[] = [
+      ...NAMING_IT,
+      { ...NAMING_IT[0], id: 'hook', enforcement: { checkIds: ['pre-push-hook'] } },
+    ];
+    expect((await resolves({ rules: both, harness: { otherEnforcerIds: () => ['pre-push-hook'] } }))?.ok).toBe(true);
+  });
+
+  // Not a load error: every run stopped over a file only the hook and this audit read.
+  it('a perimeter that does not load fails enforcement-resolves, naming the file — and nothing else', async () => {
+    write('perimeter.mjs', 'export const rules = [\n');
+    const tree = await loadConsumerTree(files(), '.specwarden', { rules: NAMING_IT });
+    const audit = tree.checks.find((c) => c.id === 'enforcement-resolves');
+    await expect(Promise.resolve().then(() => audit?.run({ files: files(), changed: [] } as never))).rejects.toThrow(
+      /^\.specwarden\/perimeter\.mjs failed to load: .* — its rules enforce nothing until it loads$/,
+    );
+  });
+
+  it('harness: false reads no perimeter', async () => {
+    write('perimeter.mjs', 'export const rules = [\n');
+    await expect(loadConsumerTree(files(), '.specwarden', { rules: [], harness: false })).resolves.toBeDefined();
+  });
+});
+
+describe('loadConsumerTree — rules.mjs is read by convention', () => {
+  let root: string;
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'spw-tree-register-'));
+    mkdirSync(join(root, '.specwarden', 'checks'), { recursive: true });
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  const files = () => new NodeFileSource(root);
+  const write = (rel: string, body: string) => writeFileSync(join(root, '.specwarden', rel), body);
+  const REGISTER =
+    "export const rules = [{ id: 'r', statement: 's', owner: 'README.md', enforcement: { notMechanizable: 'a person decides' } }];\n";
+
+  // It sat beside the config, read by nothing, and the rule audits were off.
+  it('a rules.mjs the config does not name is the register, the audits are on, and a note says where it came from', async () => {
+    write('rules.mjs', REGISTER);
+    const tree = await loadConsumerTree(files(), '.specwarden', {});
+    expect(tree.rulesDeclared).toBe(true);
+    expect(tree.rules.map((r) => r.id)).toEqual(['r', 'harness-integrity']);
+    expect(tree.checks.map((c) => c.id)).toContain('orphan-check');
+    expect(tree.notes).toContain('rules read from .specwarden/rules.mjs — the config names none');
+  });
+
+  it('the config naming `rules` wins, file or no file', async () => {
+    write('rules.mjs', REGISTER);
+    const tree = await loadConsumerTree(files(), '.specwarden', { rules: [] });
+    expect(tree.rules.map((r) => r.id)).toEqual(['harness-integrity']);
+    expect(tree.notes.some((n) => n.startsWith('rules read from'))).toBe(false);
+  });
+
+  it('no file and no key: no register, and the audits stay off', async () => {
+    const tree = await loadConsumerTree(files(), '.specwarden', {});
+    expect([tree.rulesDeclared, tree.rules]).toEqual([false, []]);
+  });
+
+  it('a rules.mjs exporting no array is a load error naming the file', async () => {
+    write('rules.mjs', 'export const rule = {};\n');
+    await expect(loadConsumerTree(files(), '.specwarden', {})).rejects.toThrow(
+      '.specwarden/rules.mjs exports no `rules` array — export `const rules = [ … ]`.',
+    );
+  });
+});
+
+describe('loadConsumerTree — a rule the factory implied yields to the register', () => {
+  let root: string;
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'spw-tree-implied-'));
+    mkdirSync(join(root, '.specwarden', 'checks'), { recursive: true });
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  const files = () => new NodeFileSource(root);
+  const moduleCheck = (id: string): ICheck => ({
+    ...inline(id),
+    rule: { statement: `${id} holds`, owner: '@specwarden/docs', implied: true },
+  });
+  const ruleIds = async (rules: readonly IRule[]) =>
+    (await loadConsumerTree(files(), '.specwarden', { rules, checks: [moduleCheck('doc-paths')] })).rules.map(
+      (r) => r.id,
+    );
+
+  it('names the check it came with, so a module check is no orphan the day it is wired', async () => {
+    expect(await ruleIds([])).toEqual(['doc-paths', 'harness-integrity']);
+  });
+
+  it('is dropped where a register rule already names the check — the consumer said what it enforces', async () => {
+    const register: IRule[] = [
+      { id: 'paths-resolve', statement: 's', owner: 'README.md', enforcement: { checkIds: ['doc-paths'] } },
+    ];
+    expect(await ruleIds(register)).toEqual(['paths-resolve', 'harness-integrity']);
+  });
+
+  it('is not refused as a duplicate of a register rule with its id — the register wins', async () => {
+    const register: IRule[] = [
+      {
+        id: 'doc-paths',
+        statement: 'mine',
+        owner: 'README.md',
+        enforcement: { notMechanizable: 'a person reads them' },
+      },
+    ];
+    expect(await ruleIds(register)).toEqual(['doc-paths', 'harness-integrity']);
   });
 });

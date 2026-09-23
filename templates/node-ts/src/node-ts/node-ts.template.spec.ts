@@ -31,15 +31,13 @@ describe('it emits a tree, not a config', () => {
     ]);
   });
 
-  it('every file names its check with the id the file name promises', () => {
-    // The convention the engine discovers by: `<id>.check.mjs` exports a check whose id
-    // is that word. A template that broke it would produce a tree the engine refuses.
+  it('every file exports one check and names no id — discovery names it after its file', () => {
+    // The convention the engine discovers by: `<id>.check.mjs` exporting one check is
+    // that id. An `id:` restating the file name is a second copy that can disagree.
     for (const f of nodeTs.files(ctx())) {
-      const id = f.path
-        .split('/')
-        .pop()
-        ?.replace(/\.check\.mjs(\.example)?$/, '');
-      expect(f.body).toContain(`id: '${id}'`);
+      // The example names the id its commented rule names, so the two stay linked.
+      if (f.path.endsWith('.check.mjs')) expect(f.body).not.toMatch(/^\s+id: '/m);
+      else expect(f.body).toContain("  id: 'doc-symbols',");
       expect(f.body).toContain('export const check =');
     }
   });
@@ -56,10 +54,9 @@ describe('it emits a tree, not a config', () => {
 
 describe('what it leaves out is the deliberate part', () => {
   it('the symbol check is written but NOT registered — it must be told what a symbol looks like here', () => {
-    // Live, with an empty suffix list, it would register a check that can never fire,
-    // and coverage that cannot fail is what this engine exists to refuse. As an
-    // `.example` the reader gets the check and the caveat together, which beats the
-    // absence: nobody adopts a check they never learned existed.
+    // Live, with a guessed suffix list, it would register a check reporting on names
+    // nobody chose. As an `.example` the reader gets the check and the caveat together,
+    // which beats the absence: nobody adopts a check they never learned existed.
     expect(paths(ctx())).toContain('checks/docs/doc-symbols.check.mjs.example');
     expect(paths(ctx()).includes('checks/docs/doc-symbols.check.mjs')).toBe(false);
   });
@@ -92,23 +89,16 @@ describe('it follows the repository it was pointed at', () => {
   });
 });
 
-describe('every generated check is named by a rule', () => {
+describe('every generated check carries its rule', () => {
   it('so a fresh tree has no orphan', () => {
-    // Examples are excluded: nothing loads them until somebody renames one, and a rule
-    // naming an unregistered check fails `enforcement-resolves` on the tree init just
-    // wrote — the harness reporting its own scaffold as a defect.
-    const ids = paths(ctx())
-      .filter((p) => p.endsWith('.check.mjs'))
-      .map((p) =>
-        p
-          .split('/')
-          .pop()
-          ?.replace(/\.check\.mjs$/, ''),
-      );
-    const named = new Set(
-      nodeTs.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
-    );
-    for (const id of ids) expect(named.has(id as string), `${id} enforces no rule`).toBe(true);
+    // On the check, owned by its file: a rule in a register far away is a second list
+    // kept in step by memory.
+    for (const f of nodeTs.files(ctx()).filter((x) => x.path.endsWith('.check.mjs')))
+      expect(f.body, `${f.path} states no rule`).toMatch(/^\s+rule: '/m);
+  });
+
+  it("and the register holds only the example's rule, for init to write commented out", () => {
+    expect(nodeTs.rules(ctx()).map((r) => r.id)).toEqual(['doc-symbols']);
   });
 
   it('and every rule names a check the template actually writes', () => {
@@ -117,7 +107,7 @@ describe('every generated check is named by a rule', () => {
         p
           .split('/')
           .pop()
-          ?.replace(/\.check\.mjs$/, ''),
+          ?.replace(/\.check\.mjs(\.example)?$/, ''),
       ),
     );
     for (const rule of nodeTs.rules(ctx())) {
@@ -127,7 +117,7 @@ describe('every generated check is named by a rule', () => {
     }
   });
 
-  it('leaves the owner for the caller to fill — it knows where its README is', () => {
+  it('leaves the owner for init to fill — it knows which file it wrote holds the reasoning', () => {
     for (const rule of nodeTs.rules(ctx())) expect(rule.owner).toBe('');
   });
 });
@@ -148,12 +138,12 @@ describe('a wrapper is written only when the script exists', () => {
     expect(paths(ctx({ scripts: ['lint'] }))).not.toContain('checks/workspace/unit.check.mjs');
   });
 
-  it('and the rule follows, naming only the checks that were written', () => {
-    const rules = nodeTs.rules(ctx({ scripts: ['test'] }));
-    const suite = rules.find((r) => r.id === 'the-suite-and-the-linter-pass');
-    expect((suite?.enforcement as { checkIds: readonly string[] }).checkIds).toEqual(['unit']);
-    // ...and disappears entirely when neither exists, so no rule names a missing check
-    expect(nodeTs.rules(ctx({ scripts: [] })).some((r) => r.id === 'the-suite-and-the-linter-pass')).toBe(false);
+  it('and each wrapper carries its own rule, so a missing script takes its rule with it', () => {
+    const files = nodeTs.files(ctx({ scripts: ['test'] }));
+    expect(files.find((f) => f.path.endsWith('unit.check.mjs'))?.body).toContain(
+      "rule: 'Nothing merges while the test suite is red.'",
+    );
+    expect(nodeTs.rules(ctx({ scripts: [] })).map((r) => r.id)).toEqual(['doc-symbols']);
   });
 });
 
@@ -171,20 +161,15 @@ const scratch = mkdtempSync(
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe('the generated tree actually loads', () => {
-  it('every live check and every example, renamed, imports and exports the id its file promises', async () => {
+  it('every live check and every example, renamed, imports and constructs a check', async () => {
     const files = nodeTs.files(ctx()).filter((f) => /\.check\.mjs(\.example)?$/.test(f.path));
     expect(files.length).toBeGreaterThan(0);
 
     for (const file of files) {
       const abs = join(scratch, file.path.replace(/\//g, '-').replace(/\.example$/, ''));
       writeFileSync(abs, file.body);
-      const mod = (await import(pathToFileURL(abs).href)) as { check?: { id: string } };
-      expect(mod.check?.id, `${file.path} does not load as a check`).toBe(
-        file.path
-          .split('/')
-          .pop()
-          ?.replace(/\.check\.mjs(\.example)?$/, ''),
-      );
+      const mod = (await import(pathToFileURL(abs).href)) as { check?: { run: unknown } };
+      expect(typeof mod.check?.run, `${file.path} does not load as a check`).toBe('function');
     }
   });
 });

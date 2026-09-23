@@ -26,3 +26,16 @@ export function verdictsIn(dir: string): {
   readonly results: readonly IPlaygroundResult[];
   readonly failed: readonly string[];
 };
+
+/** Run the CLI in `dir` — never throws on a non-zero exit; the exit IS the answer. */
+export function warden(
+  dir: string,
+  args: readonly string[],
+  options?: { readonly timeoutSec?: number; readonly input?: string },
+): { readonly status: number | null; readonly stdout: string; readonly stderr: string };
+
+/** Link each `[name, source directory]` into `dir/node_modules`. */
+export function linkPackages(dir: string, installed: readonly (readonly [string, string])[]): void;
+
+/** The repository root. */
+export const ROOT: string;

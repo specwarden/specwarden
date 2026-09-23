@@ -13,6 +13,7 @@ import {
   TtyReporter,
 } from '../../../infrastructure';
 import { CheckRunner, RunnerUsageError } from '../../runner';
+import { selectChecks } from '../../runner/check-runner/check-runner.service';
 import type { CheckRegistry, IEngineAdapters } from '../../container';
 import type { IWardenConfig } from '../../config/config.model';
 import type { ICliIo } from '../_shared/cli-io/cli-io.model';
@@ -44,6 +45,26 @@ function shardProblem(shard: string | undefined): string | undefined {
   return undefined;
 }
 
+/** Why a `--jobs` value cannot be used, or `undefined` when it can. `abc`, `0` and `-3`
+ * all ran serially and exited 0 — a concurrency nobody asked for, in silence. */
+function jobsProblem(jobs: string | undefined): string | undefined {
+  if (jobs === undefined || /^[1-9]\d*$/.test(jobs)) return undefined;
+  return `--jobs must be a positive whole number of checks to run at once; got "${jobs}"`;
+}
+
+/**
+ * Whether this process is running under CI — the arbiter, where a skip is a hole.
+ *
+ * `CI` is set by nearly every CI service, in several spellings: `true`, `1`, `True`. Only
+ * `true` counted, so under `CI=1` a `SPECWARDEN_SKIP` reached the arbiter and a red gate
+ * exited 0. Anything but empty, `false` or `0` is CI now. `GITHUB_ACTIONS` is read as the
+ * reporter reads it — `true` — where ANY value used to count, `false` included.
+ */
+export function isCi(env: NodeJS.ProcessEnv): boolean {
+  const ci = (env.CI ?? '').trim().toLowerCase();
+  return (ci !== '' && ci !== 'false' && ci !== '0') || env.GITHUB_ACTIONS === 'true';
+}
+
 /**
  * Which built-in renders this run.
  *
@@ -54,8 +75,12 @@ function shardProblem(shard: string | undefined): string | undefined {
  * observable from the environment and wrong nowhere else; `--reporter tty` overrides it
  * for anyone debugging a workflow by eye.
  */
+function reporterName(args: IParsedArgs, env: NodeJS.ProcessEnv): string {
+  return args.reporter ?? (args.json ? 'json' : undefined) ?? (env.GITHUB_ACTIONS === 'true' ? 'github' : 'tty');
+}
+
 function builtInReporter(args: IParsedArgs, env: NodeJS.ProcessEnv, io: ICliIo): IReporter {
-  const named = args.reporter ?? (args.json ? 'json' : undefined) ?? (env.GITHUB_ACTIONS === 'true' ? 'github' : 'tty');
+  const named = reporterName(args, env);
   if (named === 'json') return new JsonReporter(io.out);
   if (named === 'github') return new GithubReporter(io.out);
   return new TtyReporter(io.out, { showSkipped: args.showSkipped, slowest: 3 });
@@ -81,21 +106,42 @@ export async function check(
   env: NodeJS.ProcessEnv,
   io: ICliIo,
 ): Promise<number> {
+  // `--list` answers from the same selection a run uses — `--tier` with `--id` included —
+  // and before any flag it does not use is validated: a query is not refused over a shard.
+  // `--json` is honoured; it printed the tab-separated list.
   if (args.list) {
     // An id that names nothing is refused here exactly as a run refuses it. It was dropped
     // in silence, so `--list --id typo` printed nothing and exited 0 — a listing that
     // could not tell a missing check from an empty selection.
     const unknown = args.ids.filter((id) => registry.byId(id) === undefined);
     if (unknown.length > 0) {
-      io.err(`unknown check id(s): ${unknown.join(', ')}\n`);
+      io.err(`unknown check id(s): ${unknown.join(', ')}
+`);
       return 2;
     }
-    const selected: readonly ICheck[] = args.ids.length
-      ? args.ids.map((id) => registry.byId(id)).filter((c): c is ICheck => c !== undefined)
-      : args.tier
-        ? registry.forTier(args.tier)
-        : registry.all();
-    for (const c of selected) io.out(`${c.id}\t${c.title}\n`);
+    let selected: readonly ICheck[];
+    try {
+      selected = selectChecks(registry, { ids: args.ids, tier: args.tier });
+    } catch (err) {
+      if (!(err instanceof RunnerUsageError)) throw err;
+      io.err(`${err.message}
+`);
+      return 2;
+    }
+    if (args.json) {
+      const rows = selected.map((c) => ({
+        id: c.id,
+        title: c.title,
+        tier: c.tier,
+        advisory: Boolean(c.advisory),
+        exclusive: Boolean(c.exclusive),
+      }));
+      io.out(`${JSON.stringify(rows)}
+`);
+    } else
+      for (const c of selected)
+        io.out(`${c.id}	${c.title}
+`);
     return 0;
   }
 
@@ -104,12 +150,17 @@ export async function check(
     io.err(`${shardError}\n`);
     return 2;
   }
+  const jobsError = jobsProblem(args.jobs);
+  if (jobsError !== undefined) {
+    io.err(`${jobsError}\n`);
+    return 2;
+  }
   if (args.reporter !== undefined && !REPORTERS.includes(args.reporter)) {
     io.err(`unknown reporter "${args.reporter}" — expected one of: ${REPORTERS.join(', ')}\n`);
     return 2;
   }
 
-  const proc = new ChildProcessRunner();
+  const proc = new ChildProcessRunner(root);
   const defaults: IEngineAdapters = {
     files: new NodeFileSource(root),
     vcs: new GitVcs(proc, root),
@@ -122,6 +173,19 @@ export async function check(
   // substituted for them, so overriding one does not oblige a caller to construct
   // the other five — the reason this is a socket and not a required field.
   const adapters: IEngineAdapters = { ...defaults, ...config.adapters?.(defaults, { root }) };
+
+  // A `--base` typed on the line must name a commit. An unresolvable one was read as an
+  // unreadable range — the fail-safe full run, exit 0, blaming "the range" — so a typo
+  // was indistinguishable from a shallow clone. The environment's base stays fail-safe:
+  // it is set once for a whole job, and the value is never printed.
+  if (args.base !== undefined && !adapters.vcs.refExists(args.base)) {
+    io.err(`--base ${args.base} does not resolve to a commit here — name a branch, a tag or a commit that exists.\n`);
+    return 2;
+  }
+
+  // Whether stdout belongs to a machine: a document or annotations that a stray line of
+  // prose would corrupt. A consumer's own reporter is treated as one — its stdout is its own.
+  const machine = config.reporter !== undefined || reporterName(args, env) !== 'tty';
   const reporter = config.reporter ? config.reporter({ json: args.json, out: io.out }) : builtInReporter(args, env, io);
   const runner = new CheckRunner(registry, adapters, reporter);
 
@@ -141,7 +205,7 @@ export async function check(
     denyCapabilities: config.denyCapabilities,
   };
   const runnerEnv = {
-    ci: env.CI === 'true' || Boolean(env.GITHUB_ACTIONS),
+    ci: isCi(env),
     skip: env.SPECWARDEN_SKIP,
     all: env.SPECWARDEN_ALL === '1',
     base: env.SPECWARDEN_BASE,
@@ -171,8 +235,16 @@ export async function check(
     // Say why relevance did not apply. Without this line a run that filtered nothing
     // and a run that filtered everything print the same output, and the triggers
     // behind the full run cannot be told from the tier they replaced.
-    if (outcome.fullRunReason !== undefined && !args.json)
-      io.out(`\nℹ full run — no relevance filter: ${outcome.fullRunReason}\n`);
+    //
+    // To stdout only for the terminal. A machine reporter's stdout is a document or a
+    // stream of annotations, and the line appended after `--reporter json` made the
+    // output not JSON; it goes to stderr there. `--json` keeps stderr quiet, as it does
+    // for every other note.
+    if (outcome.fullRunReason !== undefined && !args.json) {
+      const note = `\nℹ full run — no relevance filter: ${outcome.fullRunReason}\n`;
+      if (machine) io.err(note);
+      else io.out(note);
+    }
     return outcome.exitCode;
   } catch (err) {
     if (err instanceof RunnerUsageError) {

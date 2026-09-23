@@ -136,14 +136,22 @@ describe('upstreamsResolve', () => {
    * The honest "cannot tell", and the one state where this check examines nothing: it is
    * green, but it prints no ✓ — only what it skipped, so nobody reads it as verified.
    */
-  it('with every file absent, passes with SKIPPED lines only, never the ✓ line', async () => {
+  it('with EVERY file absent, fails naming them — it was a green run of SKIPPED lines', async () => {
+    // "Every file missing" is `fileFor` pointed at the wrong place, not a repository with
+    // no proxy: a repository with no proxy does not wire this check.
     const verdict = await runOver({});
 
-    expect(verdict.ok).toBe(true);
-    expect(verdict.findings.map((f) => f.message)).toEqual([
-      'SKIPPED local: caddy/Caddyfile.local not present.',
-      'SKIPPED prod: caddy/Caddyfile.prod not present.',
+    expect(verdict.ok).toBe(false);
+    expect(errorsOf(verdict)).toEqual([
+      'none of the proxy configs `fileFor` names exists (caddy/Caddyfile.local, caddy/Caddyfile.prod) — this check examined nothing, and a check that examined nothing cannot fail. Point `fileFor` at where they are.',
     ]);
+  });
+
+  it('with SOME files absent, reads the rest and notes each one it skipped', async () => {
+    const verdict = await runOver({ 'caddy/Caddyfile.prod': 'reverse_proxy api:3000\n' });
+
+    expect(verdict.ok).toBe(true);
+    expect(verdict.findings.map((f) => f.message)).toEqual(['SKIPPED local: caddy/Caddyfile.local not present.']);
   });
 
   /** A file whose upstreams stopped being found is a check reporting success about

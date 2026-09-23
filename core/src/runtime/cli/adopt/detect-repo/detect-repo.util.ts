@@ -30,6 +30,19 @@ export interface IRepoShape {
    * the repository. So the shell checks are written where there is shell.
    */
   readonly hasShellScripts: boolean;
+  /**
+   * The package directories the workspace globs MATCH — `packages/api`, not `packages/*`.
+   * A glob is one line of configuration and says nothing about how many packages there are.
+   */
+  readonly workspacePackages: readonly string[];
+  /** The `test` script, verbatim — named when the runner is none this knows by name. */
+  readonly testScript?: string;
+  /** The workflow files CI runs, the conventional `ci` one first. */
+  readonly workflows: readonly string[];
+  /** Reverse-proxy configs — a `Caddyfile`, an nginx `.conf` — in the order found. */
+  readonly proxyConfigs: readonly string[];
+  /** Env-file samples a repository commits for its compose stack — `.env.example`. */
+  readonly envSamples: readonly string[];
 }
 
 /**
@@ -39,33 +52,58 @@ export interface IRepoShape {
  * found, and a wrong guess there is worse than a blank.
  */
 export function detectRepo(files: IFileSource, vcs?: IVcs): IRepoShape {
+  // Asked the way a CHECK will ask it: tracked files where there is a VCS port, the disk
+  // only as the fallback for a caller without one.
+  const find = (glob: string): readonly string[] => (vcs ? vcs.trackedFiles(glob) : files.glob(glob));
+  const workspaces = detectWorkspaces(files);
   return {
     packageManager: detectPackageManager(files),
-    workspaces: detectWorkspaces(files),
+    workspaces,
+    workspacePackages: workspacePackages(workspaces, find),
+    testScript: scriptsOf(files).test,
+    workflows: detectWorkflows(find),
+    proxyConfigs: unique(PROXY_GLOBS.flatMap(find)),
+    envSamples: ENV_SAMPLES.filter((f) => files.exists(f)),
     testRunner: detectTestRunner(files),
     hasAgentRouter: files.exists('AGENTS.md') || files.exists('CLAUDE.md'),
     docDirs: ['docs', 'doc'].filter((d) => files.isDirectory(d)),
     ci: detectCi(files),
     specFramework: detectSpecFramework(files),
     composeFiles: COMPOSE_CANDIDATES.filter((f) => files.exists(f)),
-    hasShellScripts: detectShellScripts(files, vcs),
+    hasShellScripts: SHELL_GLOBS.some((g) => find(g).length > 0),
   };
 }
 
-/**
- * Whether there is shell to check — asked the way the CHECK will ask it.
- *
- * A check reads TRACKED files, so detection must too. Reading the filesystem instead
- * finds the scripts of a repository whose first commit has not happened yet, writes the
- * check, and the check then correctly reports that it examined nothing — a red first
- * run caused by the scaffold rather than by the repository. Detection and enforcement
- * disagreeing about the same question is a defect wherever it appears; here it is a
- * one-line fix, and the filesystem stays the fallback for a caller with no VCS port.
- */
-function detectShellScripts(files: IFileSource, vcs?: IVcs): boolean {
-  if (vcs) return SHELL_GLOBS.some((g) => vcs.trackedFiles(g).length > 0);
-  return SHELL_GLOBS.some((g) => files.glob(g).length > 0);
+const unique = (list: readonly string[]): readonly string[] => [...new Set(list)];
+
+/** Each workspace glob expanded to the directories holding a manifest; a negation excludes. */
+function workspacePackages(globs: readonly string[], find: (glob: string) => readonly string[]): readonly string[] {
+  const dirOf = (manifest: string) => manifest.slice(0, -'/package.json'.length);
+  const matched = globs.filter((g) => !g.startsWith('!')).flatMap((g) => find(`${g.replace(/\/+$/, '')}/package.json`));
+  const excluded = new Set(globs.filter((g) => g.startsWith('!')).flatMap((g) => find(`${g.slice(1)}/package.json`)));
+  return [...unique(matched.filter((m) => !excluded.has(m)).map(dirOf))].sort();
 }
+
+function scriptsOf(files: IFileSource): Record<string, string> {
+  try {
+    const scripts = (JSON.parse(files.tryRead('package.json') ?? '{}') as { scripts?: unknown }).scripts;
+    return typeof scripts === 'object' && scripts !== null ? (scripts as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** GitHub's workflows, `ci.yml` first because that is the one a gate-coverage check means. */
+function detectWorkflows(find: (glob: string) => readonly string[]): readonly string[] {
+  const github = unique([...find('.github/workflows/*.yml'), ...find('.github/workflows/*.yaml')])
+    .slice()
+    .sort();
+  const conventional = github.filter((f) => /\/ci\.ya?ml$/.test(f));
+  return unique([...conventional, ...github, ...find('.gitlab-ci.yml')]);
+}
+
+const PROXY_GLOBS = ['**/Caddyfile*', '**/nginx.conf', '**/nginx/**/*.conf'] as const;
+const ENV_SAMPLES = ['.env.example', '.env.sample', '.env.template'] as const;
 
 const SHELL_GLOBS = ['*.sh', 'scripts/**/*.sh', 'bin/**/*.sh', 'deploy/**/*.sh'] as const;
 

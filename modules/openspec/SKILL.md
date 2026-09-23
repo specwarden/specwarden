@@ -34,6 +34,13 @@ it inside somebody else's repository is
    into one id and the second requirement silently stops existing — with every count
    still looking right.
 
+6. **The documented marker carries the FULL id, and the round trip is proved through the
+   CLI.** The GUIDE's `idPattern` once captured `INV-…`, which can never equal
+   `auth#the-system-…`: every requirement read as undeposited and every marker as an
+   orphan, and "in sync" was unreachable by following the documentation. The journey spec
+   runs the GUIDE's own config, as written, over a deposit and asserts "in sync"; change
+   the marker convention and that scene changes with it.
+
 ## Why this is a module at all
 
 An integration with somebody else's tool cannot be a mandatory part of a quality harness.

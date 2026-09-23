@@ -22,8 +22,11 @@ export function testStateless(re: RegExp, s: string): boolean {
 }
 
 /** Whether an import `specifier` matches `target`: a RegExp (its global flag stripped
- * so `.test` is stateless), or a string that is the module exactly or its prefix `to/…`. */
+ * so `.test` is stateless), or a string that is the module exactly or its prefix `to/…`.
+ * A target written WITH its trailing slash (`@db/`) is that prefix and only that: it
+ * used to be compared as `@db//…`, which no specifier is, so the ban matched nothing. */
 export function matchesSpecifier(specifier: string, target: string | RegExp): boolean {
   if (target instanceof RegExp) return testStateless(target, specifier);
+  if (target.endsWith('/')) return specifier.startsWith(target);
   return specifier === target || specifier.startsWith(`${target}/`);
 }

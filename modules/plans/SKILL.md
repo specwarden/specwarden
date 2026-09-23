@@ -38,10 +38,23 @@ engine, and a rule that assumes this lifecycle belongs here with its assumption 
 5. **Plans are flat.** A directory inside `plansDir` is an error, because a nested plans
    folder is how plans stop being deleted. The archive therefore lives outside it.
 
+6. **An absent plans folder FAILS; an empty one passes as "nothing in flight".** Three
+   checks gave three answers to "the folder is not there" — a green tick, "nothing to
+   verify", a failure — and the first two are a `plansDir` pointing at a folder that moved,
+   reported clean forever. `_shared/plans-folder` is the one answer; an archive that does
+   not exist yet is a repository that has finished nothing, and is not a failure.
+
+7. **Every option has a default, and every factory checks its options.** The folders
+   default to the ones the scaffolds write, `planShape`'s four patterns to the English
+   convention (`DEFAULT_*`, exported). A skill that named `plans` and `statuses` crashed
+   the run inside a Node path call; `checkOptions` now refuses both by name at load, so a
+   new option goes into the factory's spec in the same edit.
+
 ## Changing a check
 
 - The fixture is [`_playground/repository.ts`](./_playground/repository.ts) — `CLEAN` and
-  `BROKEN`, one defect per rule, each commented.
+  `BROKEN`, one defect per rule, each commented. A new factory is named in `COVERED`; the
+  playground finds every export that builds checks and fails when the two lists differ.
 - `planStaleness` reads `ctx.vcs.branchNames()`, which returns `undefined` for "cannot
   tell". A test that passes a list is not testing the branch this invariant protects; the
   playground passes `branches: null` for that.

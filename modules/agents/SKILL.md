@@ -11,17 +11,20 @@ it inside somebody else's repository is
 
 ## Invariants
 
-1. **No agent directory is a PASS, not a violation.** "Nobody runs agents here" and "the
-   roster is broken" are different answers, and only one of them is red. This is what
-   keeps the module installable in a repository that has not adopted agents yet.
+1. **An absent agent directory FAILS, naming it; an empty one passes.** It was a pass, on
+   the reasoning that "nobody runs agents here" is not a broken roster — and the same pass
+   covered an `agentsDir` pointing at a roster that moved, and a skill's `agents:` for
+   `agentsDir`, forever. "Nobody runs agents here" is a repository that does not install
+   the module. A folder made before its first role still passes, saying it read none.
 
 2. **The spawn restriction is the reason this module exists.** Everything else here is
    frontmatter validation, which is cheap and mildly useful. A leaf role that can spawn
    turns a bounded pipeline into an unbounded one — do not soften it into a warning.
 
-3. **`orchestrators` is asked for, never inferred.** Inferring it from which roles
-   already spawn makes the check agree with whatever the repository currently does, which
-   is a check that cannot fail.
+3. **`orchestrators` is stated, never inferred.** Inferring it from which roles already
+   spawn makes the check agree with whatever the repository currently does, which is a
+   check that cannot fail. Its default, `['lead']`, is a fixed name the GUIDE and the
+   skill both state — not a reading of the roster.
 
 4. **The assistant's vocabulary is an option.** `spawnTools` names tools that start
    another agent, and which tool does that is a fact about the assistant, not about this

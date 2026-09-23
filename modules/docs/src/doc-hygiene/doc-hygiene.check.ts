@@ -1,10 +1,11 @@
-import type { ICheck, ICheckContext, ICheckIdentity, IFinding, IVerdict } from 'specwarden';
-import { buildCheck, frameTolerated } from 'specwarden';
-import { nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
+import type { ICheck, ICheckContext, IFinding, IVerdict } from 'specwarden';
+import { buildCheck, checkOptions, frameTolerated } from 'specwarden';
+import type { IDocCheckIdentity } from '../_shared/identity/identity.model';
+import { DEFAULT_DOCS, nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
 
-export interface IDocHygieneOptions extends ICheckIdentity {
-  /** git pathspec for the markdown corpus. */
-  readonly docs: string;
+export interface IDocHygieneOptions extends IDocCheckIdentity {
+  /** git pathspec for the markdown corpus. Default: `**\/*.md`. */
+  readonly docs?: string;
   /** Sources RENDERED into another tracked document — counting both counts the
    * same prose twice (the router overlay is assembled into CLAUDE.md). */
   readonly renderedSources?: readonly string[];
@@ -51,98 +52,117 @@ function sectionsMovedIn(headings: readonly string[]): Set<string> {
  * universal; the corpus, the rendered sources and the budget are options.
  */
 export function docHygiene(options: IDocHygieneOptions): ICheck {
+  checkOptions('docHygiene', options, {
+    docs: { kind: 'string' },
+    renderedSources: { kind: 'array' },
+    fatCellLimit: { kind: 'number' },
+  });
+  const docs = options.docs ?? DEFAULT_DOCS;
   const limit = options.fatCellLimit ?? 300;
   const ratchet = options.ratchet ?? 0;
   const rendered = new Set(options.renderedSources ?? []);
 
-  return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx: ICheckContext): IVerdict => {
-    const files = ctx.vcs.trackedFiles(options.docs).filter((f) => !rendered.has(f));
-    // Zero documents is a failure, not a clean run: otherwise a `docs` pathspec that
-    // stopped matching reports every link resolving over a corpus of nothing.
-    if (files.length === 0) return nothingExamined(options.id, options.docs);
-    const text = new Map<string, string>();
-    const headings = new Map<string, string[]>();
-    for (const f of files) {
-      const src = ctx.files.tryRead(f);
-      if (src === undefined) continue;
-      text.set(f, src);
-      headings.set(
-        f,
-        src
-          .split('\n')
-          .filter((l) => HEADING_RE.test(l))
-          .map((l) => l.replace(/^#+\s*/, '').trim()),
-      );
-    }
+  return buildCheck(
+    {
+      ...options,
+      rule: options.rule ?? {
+        statement: 'documentation links resolve, point at no moved section, and keep table cells readable',
+        owner: '@specwarden/docs',
+        implied: true,
+      },
+      tier: options.tier ?? 'fast',
+      zone: 'product',
+    },
+    ['read'],
+    (ctx: ICheckContext): IVerdict => {
+      const files = ctx.vcs.trackedFiles(docs).filter((f) => !rendered.has(f));
+      // Zero documents is a failure, not a clean run: otherwise a `docs` pathspec that
+      // stopped matching reports every link resolving over a corpus of nothing.
+      if (files.length === 0) return nothingExamined(options.id, docs);
+      const text = new Map<string, string>();
+      const headings = new Map<string, string[]>();
+      for (const f of files) {
+        const src = ctx.files.tryRead(f);
+        if (src === undefined) continue;
+        text.set(f, src);
+        headings.set(
+          f,
+          src
+            .split('\n')
+            .filter((l) => HEADING_RE.test(l))
+            .map((l) => l.replace(/^#+\s*/, '').trim()),
+        );
+      }
 
-    const broken: IFinding[] = [];
-    const moved: IFinding[] = [];
-    let fatCells = 0;
-    const fatByFile = new Map<string, number>();
+      const broken: IFinding[] = [];
+      const moved: IFinding[] = [];
+      let fatCells = 0;
+      const fatByFile = new Map<string, number>();
 
-    for (const [f, src] of text) {
-      const lines = src.split('\n');
-      let inFence = false;
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (/^\s*```/.test(line)) {
-          inFence = !inFence;
-          continue;
-        }
-        if (inFence) continue;
+      for (const [f, src] of text) {
+        const lines = src.split('\n');
+        let inFence = false;
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (/^\s*```/.test(line)) {
+            inFence = !inFence;
+            continue;
+          }
+          if (inFence) continue;
 
-        if (/^\s*\|/.test(line) && line.length > limit) {
-          fatCells++;
-          fatByFile.set(f, (fatByFile.get(f) ?? 0) + 1);
-        }
+          if (/^\s*\|/.test(line) && line.length > limit) {
+            fatCells++;
+            fatByFile.set(f, (fatByFile.get(f) ?? 0) + 1);
+          }
 
-        for (const m of line.matchAll(REL_LINK_RE)) {
-          if (!ctx.files.exists(resolveRel(f, m[1])))
-            broken.push({
-              severity: 'error',
-              file: f,
-              line: i + 1,
-              message: `${f}:${i + 1} links to \`${m[1]}\`, which does not exist.`,
-              ruleId: options.id,
-            });
-        }
+          for (const m of line.matchAll(REL_LINK_RE)) {
+            if (!ctx.files.exists(resolveRel(f, m[1])))
+              broken.push({
+                severity: 'error',
+                file: f,
+                line: i + 1,
+                message: `${f}:${i + 1} links to \`${m[1]}\`, which does not exist.`,
+                ruleId: options.id,
+              });
+          }
 
-        for (const m of line.matchAll(SECTION_PTR_RE)) {
-          const named = m[1];
-          const base = named.replace(/^.*\//, '');
-          const hit = [...text.keys()].find((k) => k === named || k.endsWith('/' + base));
-          if (hit && sectionsMovedIn(headings.get(hit) ?? []).has(m[2].toLowerCase())) {
-            moved.push({
-              severity: 'error',
-              file: f,
-              line: i + 1,
-              message: `${f}:${i + 1} points at ${named} §${m[2]}, a MOVED stub — point at the document that now owns the content.`,
-              ruleId: options.id,
-            });
+          for (const m of line.matchAll(SECTION_PTR_RE)) {
+            const named = m[1];
+            const base = named.replace(/^.*\//, '');
+            const hit = [...text.keys()].find((k) => k === named || k.endsWith('/' + base));
+            if (hit && sectionsMovedIn(headings.get(hit) ?? []).has(m[2].toLowerCase())) {
+              moved.push({
+                severity: 'error',
+                file: f,
+                line: i + 1,
+                message: `${f}:${i + 1} points at ${named} §${m[2]}, a MOVED stub — point at the document that now owns the content.`,
+                ruleId: options.id,
+              });
+            }
           }
         }
       }
-    }
 
-    const findings: IFinding[] = [...broken, ...moved];
-    if (fatCells > ratchet) {
-      const worst = [...fatByFile.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([f, n]) => `${n} ${f}`)
-        .join(', ');
-      findings.push({
-        severity: 'error',
-        message: `${fatCells} table rows over ${limit} chars; the ratchet is ${ratchet}. Fix the longest tables (${worst}).`,
-        ruleId: options.id,
-      });
-    }
-    // broken/moved links never pass; a passing verdict's only error is the fat-cell
-    // count tolerated by the ratchet — frame it so the ✅ is not printed above it.
-    return frameTolerated(
-      broken.length === 0 && moved.length === 0 && fatCells <= ratchet,
-      findings,
-      `the fat-cell ratchet ${ratchet}`,
-    );
-  });
+      const findings: IFinding[] = [...broken, ...moved];
+      if (fatCells > ratchet) {
+        const worst = [...fatByFile.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([f, n]) => `${n} ${f}`)
+          .join(', ');
+        findings.push({
+          severity: 'error',
+          message: `${fatCells} table rows over ${limit} chars; the ratchet is ${ratchet}. Fix the longest tables (${worst}).`,
+          ruleId: options.id,
+        });
+      }
+      // broken/moved links never pass; a passing verdict's only error is the fat-cell
+      // count tolerated by the ratchet — frame it so the ✅ is not printed above it.
+      return frameTolerated(
+        broken.length === 0 && moved.length === 0 && fatCells <= ratchet,
+        findings,
+        `the fat-cell ratchet ${ratchet}`,
+      );
+    },
+  );
 }

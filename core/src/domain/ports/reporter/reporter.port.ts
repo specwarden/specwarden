@@ -15,6 +15,15 @@ export interface IReporter {
   checkStarted(meta: ICheckMeta): void;
   /** A check finished (or was skipped). */
   checkFinished(result: ICheckResult): void;
-  /** The whole run finished — the place for the closing summary line. */
-  runFinished(results: readonly ICheckResult[], totalMs: number): void;
+  /** The whole run finished — the place for the closing summary line. `run` says what
+   * shaped it; a reporter written before it existed ignores it. */
+  runFinished(results: readonly ICheckResult[], totalMs: number, run?: IRunSummary): void;
+}
+
+/** What a reporter is told about the run as a whole, beside its results. */
+export interface IRunSummary {
+  /** Why relevance did not filter this run — `--all`, a shared build input, an
+   * unreadable range, CI with no base — or absent when it did. A run that filtered
+   * nothing and a run that filtered everything look alike without it. */
+  readonly fullRunReason?: string;
 }

@@ -1,4 +1,11 @@
 export { CapabilityError } from './capability-error/capability-error.error';
 export { buildContext } from './gated-context/gated-context.factory';
 export type { IEngineAdapters } from './gated-context/gated-context.factory';
-export { CheckRegistry, CheckContractVersionError, DuplicateCheckError } from './check-registry/check-registry.service';
+export {
+  CheckRegistry,
+  CheckContractVersionError,
+  DuplicateCheckError,
+  UnknownTierError,
+  UnnamedCheckError,
+} from './check-registry/check-registry.service';
+export type { ICheckRegistryOptions } from './check-registry/check-registry.service';

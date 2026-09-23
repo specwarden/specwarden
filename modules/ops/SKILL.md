@@ -42,6 +42,22 @@ nothing is the normal way to be broken.
 *` makes that ambiguous — silently in an editor, then loudly at the declaration emit —
    and naming them is also how the collision gets a decision instead of a default.
 
+6. **Every factory goes through `buildCheck`, and checks its options first.** The five
+   were hand-written check literals with `when` REQUIRED and passed through untouched, so
+   a check wired without one — as the package's own skill wired it — killed every run that
+   filtered by relevance with "when is not a function". `buildCheck` resolves an absent
+   `when` to "always"; `checkOptions` refuses a misspelled option (`arbiter` for
+   `arbiterJob`) at load rather than reporting `undefined` three times.
+
+7. **"Every mode's file absent" is a failure; "some absent" is SKIPPED.** A proxy config
+   is committed, so no file at all is `fileFor` pointed at the wrong place. Env files are
+   the opposite case — gitignored by design — and keep invariant 2.
+
+8. **The verifier rule does not depend on a mount.** A declared key a sending service's
+   file sets must be non-empty in the verifier's file, whether or not any config
+   interpolates it. It was found only through a mounted config, and the stack with no
+   mount was green over the defect the check is named for.
+
 ## Changing a check
 
 - The fixture is [`_playground/repository.ts`](./_playground/repository.ts): ONE
@@ -49,7 +65,8 @@ nothing is the normal way to be broken.
   the same repository from five angles, and a fixture per check lets those angles drift
   until the playground describes a repository nobody could have.
 - The unit specs carry the parser cases; the playground carries the wiring. Both, for a
-  new rule.
+  new rule. A new factory is named in `COVERED`; the playground finds every export that
+  builds a check and fails when the two lists differ.
 - Run `pnpm --filter @specwarden/ops test`.
 
 ## What belongs somewhere else

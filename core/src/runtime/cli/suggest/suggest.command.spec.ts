@@ -1,7 +1,14 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { InMemoryFileSource } from '../../../infrastructure';
 import { suggest } from './suggest.command';
+
+/** The engine's own barrel, which a pasted file's `from 'specwarden'` resolves to. */
+const ENGINE = fileURLToPath(new URL('../../../index.ts', import.meta.url));
 
 function run(tree: Record<string, string>) {
   let out = '';
@@ -55,6 +62,33 @@ describe('what suggest proposes', () => {
     expect(line.endsWith(', …')).toBe(true);
     expect(line).toContain('src/s060.service.ts');
     expect(line).not.toContain('src/s065.service.ts');
+  });
+
+  it('prints the whole check file and where to save it — under checks/, never "copy into the config"', async () => {
+    // It said to copy a one-line call into warden.config.mjs: a check lives in its own
+    // file under checks/, and the call alone was not a file that could load.
+    const r = run(services(10, 9));
+    expect(r.out).toContain('Save as .specwarden/checks/tests/service-has-spec.check.mjs:\n');
+    expect(r.out).not.toContain('warden.config.mjs');
+    const file = /\.check\.mjs:\n\n([\s\S]*?\n\}\);)\n/.exec(r.out)?.[1] ?? '';
+    expect(file).toContain("import { siblingRequired } from 'specwarden';");
+    expect(file).toContain('ratchet: 1,');
+    expect(file).toContain("rule: 'Every **/*.service.ts has its {name}.spec.ts beside it.',");
+    // …and it loads as pasted, a check stating its rule.
+    const dir = mkdtempSync(join(tmpdir(), 'spw-suggest-'));
+    try {
+      const abs = join(dir, 'service-has-spec.check.mjs');
+      writeFileSync(abs, file.replace("from 'specwarden'", `from '${pathToFileURL(ENGINE).href}'`));
+      const { check } = (await import(pathToFileURL(abs).href)) as { check: { rule?: { statement: string } } };
+      expect(check.rule?.statement).toBe('Every **/*.service.ts has its {name}.spec.ts beside it.');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('names a controller convention after what it pairs', () => {
+    const r = run({ 'api/a.controller.ts': '', 'api/a.controller.spec.ts': '' });
+    expect(r.out).toContain('.specwarden/checks/tests/controller-has-spec.check.mjs');
   });
 
   it('reports each candidate convention on its own — controllers as well as services', () => {

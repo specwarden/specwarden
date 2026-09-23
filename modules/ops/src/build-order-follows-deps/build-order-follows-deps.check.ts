@@ -1,4 +1,5 @@
-import { CHECK_CONTRACT_VERSION, type ICheck, type IFinding, type IVerdict, type TTier } from 'specwarden';
+import { type ICheck, type IFinding, type IVerdict, buildCheck, checkOptions } from 'specwarden';
+import type { IOpsCheckIdentity } from '../_shared/identity/identity.model';
 
 /**
  * A container build compiles a workspace package only AFTER the workspace packages it
@@ -24,11 +25,7 @@ import { CHECK_CONTRACT_VERSION, type ICheck, type IFinding, type IVerdict, type
  * are container files. None of that is a fact about the rule.
  */
 
-export interface IBuildOrderOptions {
-  readonly id: string;
-  readonly title: string;
-  readonly tier?: TTier;
-  readonly hint?: string;
+export interface IBuildOrderOptions extends IOpsCheckIdentity {
   /** Where the workspace packages live, repo-relative. */
   readonly packagesDir: string;
   /** A workspace package's name prefix — `@scope/`. Anything else is an external dep. */
@@ -40,7 +37,6 @@ export interface IBuildOrderOptions {
    * string: how a build is spelled is a fact about the host's tooling, not about ordering.
    */
   readonly buildInvocation: string;
-  readonly when: (changed: readonly string[]) => boolean;
 }
 
 /** `@scope/x` → the workspace packages it depends on, also as `@scope/x`. */
@@ -111,16 +107,26 @@ export function violationsFor(order: readonly string[], graph: ReadonlyMap<strin
 }
 
 export function buildOrderFollowsDeps(options: IBuildOrderOptions): ICheck {
-  return {
-    id: options.id,
-    title: options.title,
-    tier: options.tier ?? 'fast',
-    zone: 'product',
-    capabilities: ['read'],
-    contractVersion: CHECK_CONTRACT_VERSION,
-    hint: options.hint,
-    when: options.when,
-    run: (ctx): IVerdict => {
+  checkOptions('buildOrderFollowsDeps', options, {
+    packagesDir: { kind: 'string', required: true },
+    scopePrefix: { kind: 'string', required: true },
+    containerFiles: { kind: 'string', required: true },
+    buildInvocation: { kind: 'string', required: true },
+  });
+
+  return buildCheck(
+    {
+      ...options,
+      rule: options.rule ?? {
+        statement: 'a build builds every workspace dependency before the package that needs it',
+        owner: '@specwarden/ops',
+        implied: true,
+      },
+      tier: options.tier ?? 'fast',
+      zone: 'product',
+    },
+    ['read'],
+    (ctx): IVerdict => {
       const graph = workspaceDeps(
         (path) => ctx.files.tryRead(path),
         (path) => (ctx.files.exists(path) ? ctx.files.list(path) : []),
@@ -163,5 +169,5 @@ export function buildOrderFollowsDeps(options: IBuildOrderOptions): ICheck {
             findings: [{ severity: 'info', message: `✓ every ${options.scopePrefix}* build follows its dependencies` }],
           };
     },
-  };
+  );
 }

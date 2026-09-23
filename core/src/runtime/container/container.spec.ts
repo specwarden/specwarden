@@ -8,6 +8,8 @@ import {
   CheckRegistry,
   DuplicateCheckError,
   type IEngineAdapters,
+  UnknownTierError,
+  UnnamedCheckError,
   buildContext,
 } from './index';
 
@@ -124,5 +126,34 @@ describe('CheckRegistry — validated at registration', () => {
     reg.register(check({ id: 'c', tier: 'fast' }));
     expect(reg.all().map((c) => c.id)).toEqual(['a', 'b', 'c']);
     expect(reg.forTier('fast').map((c) => c.id)).toEqual(['a', 'c']);
+  });
+});
+
+describe('CheckRegistry — the repository’s tier vocabulary, and a check nothing named', () => {
+  it('refuses a tier outside the vocabulary, naming the check, its file and the valid tiers', () => {
+    // `tier: 'fastt'` loaded, ran under --all, and was in no schedule: every --tier skipped it.
+    const reg = new CheckRegistry({ tiers: ['fast', 'heavy'], originOf: () => '.specwarden/checks/x.check.mjs' });
+    expect(() => reg.register(check({ id: 'x', tier: 'fastt' }))).toThrow(UnknownTierError);
+    expect(() => reg.register(check({ id: 'x', tier: 'fastt' }))).toThrow(
+      'check \'x\' (.specwarden/checks/x.check.mjs) declares tier "fastt" — expected one of: fast, heavy. ' +
+        'A tier outside the vocabulary is in no schedule, so no `--tier` would ever run it.',
+    );
+    reg.register(check({ id: 'y', tier: 'heavy' }));
+    expect(reg.all().map((c) => c.id)).toEqual(['y']);
+  });
+
+  it('names no file when it does not know one, and accepts any tier when no vocabulary is given', () => {
+    expect(() => new CheckRegistry({ tiers: ['pr'] }).register(check({ id: 'x', tier: 'fast' }))).toThrow(
+      'check \'x\' declares tier "fast" — expected one of: pr.',
+    );
+    expect(() => new CheckRegistry().register(check({ id: 'x', tier: 'anything' }))).not.toThrow();
+  });
+
+  it('refuses a check with no id — only its file could have named it', () => {
+    const reg = new CheckRegistry();
+    expect(() => reg.register(check({ id: '<unnamed>', title: '<unnamed>' }))).toThrow(UnnamedCheckError);
+    expect(() => reg.register(check({ id: '<unnamed>', title: 'no TODO' }))).toThrow(
+      "a check with no `id` was registered ('no TODO'). Give it one — or export it alone from its own *.check.mjs file under checks/, where it takes the file’s name.",
+    );
   });
 });

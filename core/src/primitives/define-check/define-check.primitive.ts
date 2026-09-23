@@ -1,15 +1,17 @@
 import {
   type ICheck,
   type ICheckContext,
-  type ICheckIdentity,
+  type ICheckDeclaration,
   type IFinding,
   type IFixOutcome,
   type IVerdict,
   type TCapability,
+  type TSeverity,
   type TTier,
+  SEVERITIES,
   satisfiesRatchet,
 } from '../../domain';
-import { type TWhen, buildCheck, frameTolerated, resolveWhen } from '../_shared';
+import { type TWhen, buildCheck, checkOptions, frameTolerated, resolveWhen } from '../_shared';
 
 /**
  * The way to write a check that is not one of the declarative primitives.
@@ -77,9 +79,15 @@ export interface ICheckOutcome {
    *     ceiling.
    */
   readonly measured?: number;
+  /**
+   * This run could not look, and why — what the check examines is not on this machine.
+   * With no error finding, the check is reported as skipped (`cannot-tell`): not a pass,
+   * not a failure, and the corpus floor is not applied, since nothing was there to count.
+   */
+  readonly skipped?: string;
 }
 
-export interface IDefineCheckOptions extends Omit<ICheckIdentity, 'tier'> {
+export interface IDefineCheckOptions extends ICheckDeclaration {
   /** Which tier this runs in. Optional, defaulting to the cheapest — a check with no
    * stated schedule should run OFTEN rather than rarely. */
   readonly tier?: TTier;
@@ -123,16 +131,50 @@ export interface IDefineCheckOptions extends Omit<ICheckIdentity, 'tier'> {
   readonly run: (ctx: ICheckContext) => TCheckOutcome | Promise<TCheckOutcome>;
 }
 
-const normalise = (outcome: TCheckOutcome): ICheckOutcome =>
-  Array.isArray(outcome) ? { findings: outcome } : (outcome as ICheckOutcome);
+/**
+ * What the body returned, in the one shape the rest reads — or why it is not a shape
+ * this can read. A body returning `undefined` (an arrow with braces and no `return`)
+ * crashed the check with "reading 'unit'", which said nothing about the body.
+ */
+const normalise = (outcome: unknown): ICheckOutcome | string => {
+  if (Array.isArray(outcome)) return { findings: outcome as IFinding[] };
+  if (typeof outcome === 'object' && outcome !== null) return outcome as ICheckOutcome;
+  return (
+    `the body returned ${outcome === undefined ? 'nothing' : typeof outcome} — ` +
+    'return an array of findings, or `{ findings, examined }`.'
+  );
+};
 
-/** Every finding carries the rule it proves. Stamped here rather than typed out per
- * finding, which is where it was forgotten or spelled differently. */
+const SEVERITY = new Set<string>(SEVERITIES);
+
+/**
+ * Every finding carries the rule it proves, and a severity the verdict can count.
+ *
+ * The rule is stamped here rather than typed out per finding, which is where it was
+ * forgotten or spelled differently. A severity that is missing — or not one of the three
+ * — is read as `error`: a finding with none was printed and ignored by the verdict, so a
+ * body reporting a defect was green beside it.
+ */
 const attribute = (findings: readonly IFinding[], ruleId: string): IFinding[] =>
-  findings.map((f) => (f.ruleId === undefined ? { ...f, ruleId } : f));
+  findings.map((f) => {
+    const severity: TSeverity = SEVERITY.has(f.severity) ? f.severity : 'error';
+    return { ...f, severity, ruleId: f.ruleId ?? ruleId };
+  });
+
+const failure = (ruleId: string, message: string, measured: number): IVerdict => ({
+  ok: false,
+  findings: [{ severity: 'error', ruleId, message }],
+  ratchet: { value: measured },
+});
 
 export function defineCheck(options: IDefineCheckOptions): ICheck {
-  const ruleId = options.ruleId ?? options.id;
+  checkOptions('defineCheck', options, {
+    run: { kind: 'function', required: true },
+    capabilities: { kind: 'array' },
+    ruleId: { kind: 'string' },
+    corpus: { kind: 'object' },
+    fix: { kind: 'function' },
+  });
   const direction = options.ratchetDirection ?? 'down';
   // A repair writes, so it declares `write` — added rather than demanded, because
   // forgetting it would hand the fix a writer that throws and turn a working repair
@@ -142,42 +184,58 @@ export function defineCheck(options: IDefineCheckOptions): ICheck {
     options.fix !== undefined && !declared.includes('write') ? [...declared, 'write'] : declared;
 
   const check = buildCheck(
-    { ...options, tier: options.tier ?? 'fast' },
+    options,
     capabilities,
-    async (ctx: ICheckContext): Promise<IVerdict> => {
+    async (ctx: ICheckContext, self: ICheck): Promise<IVerdict> => {
+      const ruleId = options.ruleId ?? self.id;
       const outcome = normalise(await options.run(ctx));
+      if (typeof outcome === 'string') return failure(ruleId, `${self.id}: ${outcome}`, 0);
       const unit = outcome.unit ?? 'items';
       const findings = attribute(outcome.findings ?? [], ruleId);
+      const errorCount = findings.filter((f) => f.severity === 'error').length;
+
+      // A body that says it could not look is taken at its word — unless it also found a
+      // defect, in which case it did look, and the verdict below decides.
+      if (typeof outcome.skipped === 'string' && outcome.skipped.trim() !== '' && errorCount === 0) {
+        const notes = (outcome.notes ?? []).map((message): IFinding => ({ severity: 'info', message }));
+        return { ok: true, findings: [...notes, ...findings], skipped: outcome.skipped };
+      }
 
       // Before anything else: did this check look at anything? A verdict over an
       // empty corpus is not a pass, it is an absence of evidence, and the two are
       // indistinguishable once printed.
-      if (options.corpus !== undefined && outcome.examined !== undefined && outcome.examined < options.corpus.atLeast) {
-        return {
-          ok: false,
-          findings: [
-            {
-              severity: 'error',
-              ruleId,
-              message:
-                `examined ${outcome.examined} ${unit}, below the declared floor of ${options.corpus.atLeast}. ` +
-                (options.corpus.why ??
-                  'A check that examined nothing cannot fail, so it reports success — this is that state, caught. ' +
-                    'Something upstream matched nothing: a path that moved, a pattern that stopped matching, a filter that selects no subject.'),
-            },
-          ],
-          ratchet: { value: outcome.measured ?? findings.filter((f) => f.severity === 'error').length },
-        };
+      if (options.corpus !== undefined) {
+        // A floor the body never reports against is no floor: a declared `corpus` over a
+        // body returning a bare array passed over zero files, because there was no count
+        // to hold it to.
+        if (outcome.examined === undefined) {
+          return failure(
+            ruleId,
+            `${self.id} declares \`corpus: { atLeast: ${options.corpus.atLeast} }\`, and its body reported no \`examined\` ` +
+              'count, so the floor has nothing to hold. Return `{ findings, examined }` — how many units this run looked at.',
+            outcome.measured ?? errorCount,
+          );
+        }
+        if (outcome.examined < options.corpus.atLeast) {
+          return failure(
+            ruleId,
+            `examined ${outcome.examined} ${unit}, below the declared floor of ${options.corpus.atLeast}. ` +
+              (options.corpus.why ??
+                'A check that examined nothing cannot fail, so it reports success — this is that state, caught. ' +
+                  'Something upstream matched nothing: a path that moved, a pattern that stopped matching, a filter that selects no subject.'),
+            outcome.measured ?? errorCount,
+          );
+        }
       }
 
-      const errors = findings.filter((f) => f.severity === 'error').length;
-      const measured = outcome.measured ?? errors;
+      const measured = outcome.measured ?? errorCount;
       const threshold = ctx.ratchet ?? options.ratchet ?? 0;
       // A body that states its own measurement has said the findings are not the debt,
       // so an error finding fails regardless of where the measurement sits. See
       // `measured` for why collapsing these two would let a floor breach ride under a
       // debt ceiling that happened to hold.
-      const ok = satisfiesRatchet(measured, threshold, direction) && (outcome.measured === undefined || errors === 0);
+      const ok =
+        satisfiesRatchet(measured, threshold, direction) && (outcome.measured === undefined || errorCount === 0);
 
       const notes = (outcome.notes ?? []).map((message): IFinding => ({ severity: 'info', message }));
       // A pass with nothing to show prints as a blank line that reads as "did not
@@ -185,12 +243,12 @@ export function defineCheck(options: IDefineCheckOptions): ICheck {
       // offer, and it is the line that makes an empty corpus visible to a reader even
       // where no floor was declared.
       const clean: IFinding[] =
-        ok && errors === 0
+        ok && errorCount === 0
           ? [
               {
                 severity: 'info',
                 message:
-                  `✓ ${options.id} — ${outcome.examined === undefined ? 'clean' : `${outcome.examined} ${unit} examined, clean`}` +
+                  `✓ ${self.id} — ${outcome.examined === undefined ? 'clean' : `${outcome.examined} ${unit} examined, clean`}` +
                   (outcome.measured === undefined ? '' : ` (measured ${measured}, ratchet ${threshold})`),
               },
             ]

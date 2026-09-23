@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { BUILT_IN_SECRET_PATTERNS, secretScan } from '@specwarden/security';
-import { errorsOf, runCheck, uncoveredFactories } from 'specwarden';
+import { errorsOf, publishedFactories, runCheck, uncoveredFactories } from 'specwarden';
 
 /**
  * Everything this package publishes, wired the way a consumer wires it.
@@ -49,7 +49,11 @@ describe('@specwarden/security', () => {
     // fails here rather than shipping untested.
     const mod = (await import('@specwarden/security')) as Record<string, unknown>;
 
-    expect(uncoveredFactories(mod, { covered: ['secretScan'], probe: { ...ID, allowlist: [] } })).toEqual([]);
+    const probe = { ...ID, allowlist: [] };
+    expect(uncoveredFactories(mod, { covered: ['secretScan'], probe })).toEqual([]);
+    // And the probe is one the factory accepts: it refuses an option it does not have, so a
+    // probe it refused would read it as a helper and the line above would pass over nothing.
+    expect(publishedFactories(mod, probe)).toEqual(['secretScan']);
   });
 
   it('ships a pattern library, and it is not empty', () => {
@@ -87,5 +91,20 @@ describe('@specwarden/security', () => {
 
     const second = { ...LEAKED, 'src/other.ts': `export const k = '${`ASIA${'ZYXWVUTSRQ987654'}`}';\n` };
     expect((await runCheck(armed, { tree: second, tracked: Object.keys(second) })).ok).toBe(false);
+  });
+});
+
+// Wired with no `rule`, a module's check was an orphan the moment a register existed —
+// and a preset's checks had nowhere to put one. The module knows what its check enforces.
+describe('@specwarden/security — every check names the rule it enforces', () => {
+  it('carries an implied rule owned by the package, and a rule the consumer writes wins', () => {
+    const built = [secretScan({ id: 'secret-scan' })];
+    for (const check of built) {
+      expect(check.rule, check.id).toEqual(
+        expect.objectContaining({ statement: expect.any(String), owner: '@specwarden/security', implied: true }),
+      );
+      expect(check.title, check.id).not.toBe(check.id);
+    }
+    expect(secretScan({ id: 'secret-scan', rule: 'ours' }).rule).toEqual({ statement: 'ours' });
   });
 });

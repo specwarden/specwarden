@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { CheckRegistry } from '../../container/check-registry/check-registry.service';
 import { CheckRunner, RunnerUsageError } from './check-runner.service';
 import { adapters, check, recordingReporter, registryOf } from './check-runner.service.spec-helpers';
 
@@ -226,5 +227,69 @@ describe('CheckRunner passes the shard through to checks', () => {
       { ci: false },
     );
     expect(seen).toBe('1/3');
+  });
+});
+
+describe('CheckRunner selection — an unknown id that is a file name', () => {
+  // `--id <file name>` found nothing when the file declared another id, with no clue why.
+  it('names the file and the id it declares', async () => {
+    const declared = check({ id: 'no-todos' });
+    const reg = new CheckRegistry({
+      originOf: (c) => (c === declared ? '.specwarden/checks/hygiene/no-todo.check.mjs' : undefined),
+    });
+    reg.register(declared);
+    const run = new CheckRunner(reg, adapters([]), recordingReporter().reporter).run(
+      { ids: ['no-todo'] },
+      { ci: false },
+    );
+    await expect(run).rejects.toThrow(
+      "unknown check id 'no-todo' — .specwarden/checks/hygiene/no-todo.check.mjs declares 'no-todos'",
+    );
+  });
+
+  it('says only that the id is unknown when no file carries the name', async () => {
+    const run = new CheckRunner(registryOf([check({ id: 'a' })]), adapters([]), recordingReporter().reporter).run(
+      { ids: ['nope'] },
+      { ci: false },
+    );
+    await expect(run).rejects.toThrow(/^unknown check id 'nope'$/);
+  });
+});
+
+describe('CheckRunner — a check that could not look', () => {
+  const blind = (over = {}) =>
+    check({
+      id: 'blind',
+      verdict: { ok: true, findings: [], skipped: 'the env files are not on this machine', ...over },
+    });
+
+  // It was a pass: a green tick beside a note that read SKIPPED.
+  it('is reported as skipped, cannot-tell, and fails nothing', async () => {
+    const { exitCode, results } = await new CheckRunner(
+      registryOf([blind()]),
+      adapters([]),
+      recordingReporter().reporter,
+    ).run({ all: true }, { ci: false });
+    expect(exitCode).toBe(0);
+    expect(results[0].skipped).toBe('cannot-tell');
+  });
+
+  it('is judged on its findings when it found a defect — it did look', async () => {
+    const found = blind({ ok: false, findings: [{ severity: 'error', message: 'x' }] });
+    const { exitCode, results } = await new CheckRunner(
+      registryOf([found]),
+      adapters([]),
+      recordingReporter().reporter,
+    ).run({ all: true }, { ci: false });
+    expect([exitCode, results[0].skipped]).toEqual([1, undefined]);
+  });
+
+  it('a blank reason is no reason', async () => {
+    const { results } = await new CheckRunner(
+      registryOf([blind({ skipped: '  ' })]),
+      adapters([]),
+      recordingReporter().reporter,
+    ).run({ all: true }, { ci: false });
+    expect(results[0].skipped).toBeUndefined();
   });
 });

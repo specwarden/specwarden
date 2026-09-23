@@ -1,4 +1,5 @@
-import { CHECK_CONTRACT_VERSION, type ICheck, type IVerdict, type TTier } from 'specwarden';
+import { type ICheck, type IVerdict, buildCheck, checkOptions } from 'specwarden';
+import type { IOpsCheckIdentity } from '../_shared/identity/identity.model';
 
 /**
  * A reverse proxy points at a name that RESOLVES from where the proxy actually runs.
@@ -29,20 +30,19 @@ export interface IUpstream {
   readonly line: number;
 }
 
-export interface IUpstreamsResolveOptions {
-  readonly id: string;
-  readonly title: string;
-  readonly tier?: TTier;
-  readonly hint?: string;
+export interface IUpstreamsResolveOptions extends IOpsCheckIdentity {
   /** The modes to check, and how each one's file is named: `(mode) => path`. */
   readonly modes: readonly string[];
   readonly fileFor: (mode: string) => string;
   /** Modes where the proxy runs on the HOST, beside the services rather than among them. */
   readonly hostModes: readonly string[];
-  /** Addresses that mean "this machine" — a loopback name only a host mode may use. */
-  readonly loopbackHosts: readonly string[];
-  readonly when: (changed: readonly string[]) => boolean;
+  /** Addresses that mean "this machine" — a loopback name only a host mode may use.
+   * Default: `DEFAULT_LOOPBACK_HOSTS`. */
+  readonly loopbackHosts?: readonly string[];
 }
+
+/** The names every machine gives itself. A host with another alias for itself adds it. */
+export const DEFAULT_LOOPBACK_HOSTS: readonly string[] = ['localhost', '127.0.0.1', '[::1]'];
 
 /** `reverse_proxy <upstream>` occurrences, with line numbers, comments skipped. */
 export function parseUpstreams(source: string): IUpstream[] {
@@ -118,16 +118,27 @@ export function violationsFor(
 }
 
 export function upstreamsResolve(options: IUpstreamsResolveOptions): ICheck {
-  return {
-    id: options.id,
-    title: options.title,
-    tier: options.tier ?? 'fast',
-    zone: 'product',
-    capabilities: ['read'],
-    contractVersion: CHECK_CONTRACT_VERSION,
-    hint: options.hint,
-    when: options.when,
-    run: (ctx): IVerdict => {
+  checkOptions('upstreamsResolve', options, {
+    modes: { kind: 'array', required: true },
+    fileFor: { kind: 'function', required: true },
+    hostModes: { kind: 'array', required: true },
+    loopbackHosts: { kind: 'array' },
+  });
+  const resolved = { ...options, loopbackHosts: options.loopbackHosts ?? DEFAULT_LOOPBACK_HOSTS };
+
+  return buildCheck(
+    {
+      ...options,
+      rule: options.rule ?? {
+        statement: 'every upstream a proxy names is a service that exists in that mode',
+        owner: '@specwarden/ops',
+        implied: true,
+      },
+      tier: options.tier ?? 'fast',
+      zone: 'product',
+    },
+    ['read'],
+    (ctx): IVerdict => {
       const failures: string[] = [];
       const notes: string[] = [];
 
@@ -148,7 +159,17 @@ export function upstreamsResolve(options: IUpstreamsResolveOptions): ICheck {
           continue;
         }
 
-        failures.push(...violationsFor(mode, upstreams, options));
+        failures.push(...violationsFor(mode, upstreams, resolved));
+      }
+
+      // EVERY file absent is not a repository without a proxy — it is `fileFor` pointed at
+      // the wrong place, and it was a green run: one SKIPPED line per mode and exit 0. A
+      // mode whose file is absent while another's is read stays a SKIPPED note.
+      if (notes.length === options.modes.length) {
+        failures.push(
+          `none of the proxy configs \`fileFor\` names exists (${options.modes.map((m) => options.fileFor(m)).join(', ')}) — ` +
+            'this check examined nothing, and a check that examined nothing cannot fail. Point `fileFor` at where they are.',
+        );
       }
 
       const findings = [
@@ -162,5 +183,5 @@ export function upstreamsResolve(options: IUpstreamsResolveOptions): ICheck {
 
       return { ok: failures.length === 0, findings };
     },
-  };
+  );
 }

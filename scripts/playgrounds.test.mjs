@@ -102,6 +102,19 @@ describe('the environment every spawned run gets', () => {
     expect(env.FORCE_COLOR).toBe('0');
   });
 
+  it('drops NODE_PATH, so a scratch repository resolves only what it installed', () => {
+    // pnpm's bin shim exports NODE_PATH at the workspace's node_modules, and a scratch
+    // repository that installed only the engine then resolved every workspace package.
+    const saved = process.env.NODE_PATH;
+    process.env.NODE_PATH = join(tmpdir(), 'workspace-node-modules');
+    try {
+      expect(Object.keys(playgroundEnv())).not.toContain('NODE_PATH');
+    } finally {
+      if (saved === undefined) delete process.env.NODE_PATH;
+      else process.env.NODE_PATH = saved;
+    }
+  });
+
   it('leaves the PATH exactly as it found it — the shell is the engine’s to resolve', () => {
     // It used to put Git's bash first on Windows, because a bare `bash` there is often
     // WSL's. The engine resolves Git's own bash itself now, and a playground run from

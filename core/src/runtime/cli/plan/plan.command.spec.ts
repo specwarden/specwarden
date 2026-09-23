@@ -184,3 +184,91 @@ describe('plan refuses what it cannot act on, with exit 2 and a usage line', () 
     expect(await planStatus(['plan', 'status', 'nope.md'], dir, cap.io)).toBe(2);
   });
 });
+
+describe('plan status says what it saw', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'spw-plan-said-'));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  const write = (name: string, lines: string[]) => writeFileSync(join(dir, name), lines.join('\n'));
+  const failing = (stdout: string, stderr = '', extra = {}): IProcessRunner => ({
+    run: () => ({ status: 1, stdout, stderr, ...extra }),
+  });
+
+  it('prints an undeclared status as undeclared, never as "draft"', async () => {
+    write('p.md', ['# p', '', '## Phase 1 — a', '**Acceptance.** true']);
+    const cap = captureIo();
+    await planStatus(['plan', 'status', 'p.md'], dir, cap.io, noSpawn);
+    expect(cap.out()).toContain('plan: p.md  (status undeclared)\n');
+  });
+
+  it('prints `done` as done', async () => {
+    write('p.md', ['**Status:** done', '', '## Phase 1 — a', '**Acceptance.** true']);
+    const cap = captureIo();
+    expect(await planStatus(['plan', 'status', 'p.md'], dir, cap.io, noSpawn)).toBe(0);
+    expect(cap.out()).toContain('(status done)');
+  });
+
+  it('--verify prints a failing acceptance’s own output under it — it printed one line and no reason', async () => {
+    write('p.md', ['**Status:** active', '', '## Phase 1 — a', '```bash', 'pnpm test', '```']);
+    const cap = captureIo();
+    expect(
+      await planStatus(['plan', 'status', 'p.md', '--verify'], dir, cap.io, failing('1 failed\n', 'expected 2\n')),
+    ).toBe(1);
+    expect(cap.out()).toContain('  ❌ a — pnpm test\n      1 failed\n      expected 2\n');
+  });
+
+  it('--verify keeps only the last forty lines of a long failure, and says how many it left out', async () => {
+    write('p.md', ['**Status:** active', '', '## Phase 1 — a', '**Acceptance.** big']);
+    const lines = Array.from({ length: 45 }, (_, i) => `line ${i + 1}`).join('\n');
+    const cap = captureIo();
+    await planStatus(['plan', 'status', 'p.md', '--verify'], dir, cap.io, failing(lines));
+    expect(cap.out()).toContain('      … 5 earlier line(s)\n      line 6\n');
+    expect(cap.out()).toContain('      line 45\n');
+    expect(cap.out()).not.toContain('line 5\n');
+  });
+
+  it('--verify says what a silent failure did — its exit, or a shell that never started', async () => {
+    write('p.md', ['**Status:** active', '', '## Phase 1 — a', '**Acceptance.** quiet']);
+    const quiet = captureIo();
+    await planStatus(['plan', 'status', 'p.md', '--verify'], dir, quiet.io, failing(''));
+    expect(quiet.out()).toContain('      exit 1, and no output\n');
+    const unstarted = captureIo();
+    await planStatus(['plan', 'status', 'p.md', '--verify'], dir, unstarted.io, {
+      run: () => ({ status: null, stdout: '', stderr: '', spawnError: 'ENOENT bash' }),
+    });
+    expect(unstarted.out()).toContain('      the shell did not start: ENOENT bash\n');
+  });
+
+  it('--verify runs an inline acceptance without the backticks markdown wrote around it', async () => {
+    write('p.md', ['**Status:** active', '', '## Phase 1 — a', '**Acceptance.** `true`']);
+    const calls: string[] = [];
+    const proc: IProcessRunner = {
+      run: (_c, args) => {
+        calls.push(args[args.length - 1]);
+        return { status: 0, stdout: '', stderr: '' };
+      },
+    };
+    expect(await planStatus(['plan', 'status', 'p.md', '--verify'], dir, captureIo().io, proc)).toBe(0);
+    expect(calls).toEqual(['true']);
+  });
+});
+
+describe('plan status --verify, a process stopped by a signal', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'spw-plan-signal-'));
+    writeFileSync(join(dir, 'p.md'), ['**Status:** active', '', '## Phase 1 — a', '**Acceptance.** hang'].join('\n'));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('says it was stopped, when it printed nothing', async () => {
+    const cap = captureIo();
+    await planStatus(['plan', 'status', 'p.md', '--verify'], dir, cap.io, {
+      run: () => ({ status: null, stdout: '', stderr: '' }),
+    });
+    expect(cap.out()).toContain('      exit by signal, and no output\n');
+  });
+});

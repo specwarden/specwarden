@@ -18,17 +18,31 @@ the present tense, and the next reader cannot tell which parts already happened.
 
 ## Wiring
 
+All three, in one file under `.specwarden/checks/`:
+
+```js
+import { planChecks } from '@specwarden/plans';
+
+export const checks = planChecks({ plansDir: 'docs/_plans', archiveDir: 'docs/_plans-archive' });
+```
+
+Both folders are the defaults; name them when the repository keeps plans elsewhere. A
+plan declares itself with `**Status:** draft | active | done` and, once work has started,
+`**Branch:** <name>`; every phase ends with a command or an `**Acceptance.**` line. One
+check alone takes the same defaults:
+
 ```js
 import { planShape } from '@specwarden/plans';
 
 export const check = planShape({
   id: 'plan-shape',
   title: 'a plan names real gate ids and every phase has an acceptance command',
-  tier: 'fast',
-  plans: 'docs/_plans/*.md',
-  statuses: ['draft', 'in-progress', 'done'],
+  plansDir: 'docs/_plans',
 });
 ```
+
+A plans folder that does not exist is a failure naming it — point `plansDir` at the real
+one, never delete the check. A folder with no plan in it passes as "nothing in flight".
 
 ## What a plan must carry, and why each one
 

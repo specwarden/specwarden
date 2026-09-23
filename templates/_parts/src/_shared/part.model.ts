@@ -3,24 +3,19 @@ import type { IRule, ITemplateFile } from 'specwarden';
 /**
  * A PART — one check, the file that configures it, and the rule it enforces.
  *
- * WHY THIS EXISTS. A template emits files, and five templates emitted the same
- * credential scan four times, the same doc-path check five times, and the same pair of
- * script wrappers twice. Copy-paste in generated prose is worse than copy-paste in
- * code: nothing typechecks it, and the day a module option is renamed, four of the five
- * copies get fixed and the fifth writes a tree that throws on its first run.
+ * The reusable piece a template is assembled from, so a template is a LIST OF DECISIONS:
+ * which parts a repository of its kind wants on day one, and what to say about each. A
+ * part emits strings nothing typechecks, which is why one copy of each lives here.
  *
- * So the reusable piece is a part, and a template is a LIST OF DECISIONS again — which
- * parts a repository of this kind wants on day one, and what to say about each. The
- * prose stays overridable per template, because "why this check matters here" is
- * genuinely different in a handbook and in a backend.
- *
- * A part carries its RULE with it. A check registered without a rule is an orphan, and
- * `orphan-check` fails the tier for one — so a shared emitter that wrote the file and
- * left the rule to the caller would hand every template the same trap.
- *
- * AN `.example` PART DECLARES NO RULE. Its file is not loaded until someone renames it,
- * and a rule naming a check nobody registered fails `enforcement-resolves` on a tree
- * the scaffold just wrote — the harness reporting its own scaffold as a defect.
+ * WHERE THE RULE GOES. A live check declares its own rule (`rule: '…'`), owned by the
+ * check file, so the check and the rule cannot drift apart. `rules` holds only what the
+ * register must: a rule whose enforcers are not checks (the perimeter's), and the rule
+ * of an `.example`. `init` writes an example's rule COMMENTED OUT in `rules.mjs`, beside
+ * the others: live, it would name a check nobody registered and fail
+ * `enforcement-resolves` on the tree just written; absent, the repository's statement of
+ * the rule lives nowhere it can read. An example therefore names its `id` where a live
+ * check leaves it to the file name: the rule names the check by it, and the pair must stay
+ * linked whatever the renamed file ends up called.
  */
 export interface IPart {
   readonly files: readonly ITemplateFile[];
@@ -35,12 +30,11 @@ export interface IPart {
 /** Options every part accepts: the prose is the template's to phrase. */
 export interface IPartOptions {
   /**
-   * The first paragraph of the generated file's header, replacing the default.
+   * The sentence saying why the check earns its place HERE, replacing the default.
    *
-   * Not decoration. The reason a check earns its place is different per repository —
-   * a dead documentation path is an inconvenience in a library and a wrong action taken
-   * confidently in a repository agents work in — and the generated file is where that
-   * reason has to be, because it is the file somebody reads six months later.
+   * A dead documentation path is an inconvenience in a library and a wrong action taken
+   * confidently in a repository agents work in; the generated file is where that reason
+   * has to be, because it is the file somebody reads when deciding whether to delete it.
    */
   readonly header?: string;
 }

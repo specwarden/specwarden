@@ -1,18 +1,9 @@
-/**
- * `migrations-backwards-compatible` — a migration the OLD code can survive.
- *
- * Ships as `.example` because it depends on a fact about your PIPELINE, not about
- * NestJS: if the deploy runs migrations BEFORE the container swap, then for a moment
- * the old code meets the new schema, and `DROP COLUMN`, `RENAME COLUMN` and a
- * tightened `NOT NULL` all break it. If your deploy swaps first, this check is wrong
- * for you — delete it rather than adapting it.
- *
- * Rename to `.check.mjs` when the first is true. The expand-contract alternative it
- * pushes you toward is two deploys, and that is the point.
- */
+// `migrations-backwards-compatible` — no migration breaks the code still running during the deploy.
+// OFF because it is right only where the deploy runs migrations BEFORE the container swap; if
+// yours swaps first, delete this file. The old code cannot survive the three statements below.
+// Switch it on: rename to migrations-backwards-compatible.check.mjs AND uncomment its rule in rules.mjs.
 import { fromResult } from 'specwarden';
 
-/** The three statements the old code cannot survive, each with what to do instead. */
 const UNSAFE = [
   { pattern: /\bDROP\s+COLUMN\b/i, why: 'the old code still selects it — drop it in a later deploy' },
   { pattern: /\bRENAME\s+COLUMN\b/i, why: 'add the new column, backfill, then remove the old one' },
@@ -21,9 +12,7 @@ const UNSAFE = [
 
 export const check = fromResult({
   id: 'migrations-backwards-compatible',
-  title: 'no migration breaks the code still running during the deploy',
-  tier: 'fast',
-  when: (changed) => changed.some((f) => f.startsWith('migrations/')),
+  corpus: { atLeast: 1, why: 'no .sql file under migrations/ — point the pathspec at where they are' },
   hint: 'Use expand-contract across two deploys. The rule is in docs/architecture.md.',
   run: (ctx) => {
     const files = ctx.vcs.trackedFiles('migrations/**/*.sql');
@@ -34,8 +23,6 @@ export const check = fromResult({
         if (pattern.test(sql)) failures.push({ file, message: `${pattern.source} — ${why}` });
       }
     }
-    // An empty corpus is reported, never passed over: a glob matching nothing is the
-    // commonest way a check stops checking without anybody noticing.
-    return { failures, notes: [`${files.length} migration file(s) read`] };
+    return { failures, examined: files.length, unit: 'migration files' };
   },
 });

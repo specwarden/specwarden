@@ -31,6 +31,13 @@ it inside somebody else's repository is
 5. **The finding says ROTATE first.** Deleting the line leaves the credential in the
    history and in whatever already read it. The message order is not stylistic.
 
+6. **Every option is checked by name — the nested ones too.** The GUIDE's `patterns.add`
+   for `patterns.extra` was ignored, the pattern it carried was never scanned for, and a
+   planted key of exactly that shape stayed green. `checkOptions` covers the top level;
+   `checkNested` covers the three `patterns` verbs and the keys of an allowlist entry
+   (`file`, `patternId`, `why`). A new nested key goes into both the type and the list in
+   the same edit.
+
 ## The fixture trap, twice over
 
 A fixture for this check necessarily contains something credential-shaped — so it would

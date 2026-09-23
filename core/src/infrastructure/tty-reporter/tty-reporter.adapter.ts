@@ -1,5 +1,6 @@
-import type { ICheckMeta, ICheckResult, IReporter } from '../../domain';
+import type { ICheckMeta, ICheckResult, IFinding, IReporter } from '../../domain';
 import { type TWriteSink, stdoutSink } from '../reporter-sink/reporter-sink.model';
+import { tallyRun } from '../run-tally/run-tally.util';
 
 export interface ITtyReporterOptions {
   /**
@@ -19,6 +20,24 @@ export interface ITtyReporterOptions {
    * the gate worth sharding and short enough that nobody scrolls past it.
    */
   readonly slowest?: number;
+}
+
+/**
+ * A finding as a terminal line: `file:line` first, where the finding carries them.
+ *
+ * The location was on every finding and printed by the annotation reporter only, so the
+ * terminal said "forbidden pattern in src/util.ts: TODO" and left the reader to find the
+ * line. Leading with `path:line` is what makes it clickable in every terminal and editor.
+ * A message that already opens with its file gains the line there instead of the file
+ * twice; a finding about no file is its message, unchanged.
+ */
+export function located(finding: IFinding): string {
+  const { file, line, message } = finding;
+  if (file === undefined || file === '') return message;
+  const at = line === undefined ? file : `${file}:${line}`;
+  const opensWithFile = message.startsWith(file) && !/^[\w./-]/.test(message.slice(file.length));
+  if (!opensWithFile) return `${at} ${message}`;
+  return message.startsWith(at) ? message : `${at}${message.slice(file.length)}`;
 }
 
 /**
@@ -46,12 +65,19 @@ export class TtyReporter implements IReporter {
   }
 
   checkFinished(result: ICheckResult): void {
+    // A check that RAN and could not look is shown whatever the flags say: it started (its
+    // ▶ line is above), and what it could not see is the thing a reader must know.
+    if (result.skipped === 'cannot-tell') {
+      for (const finding of result.verdict.findings) this.write(`${located(finding)}\n`);
+      this.write(`⏭  ${result.meta.id} — could not look here: ${result.verdict.skipped}\n`);
+      return;
+    }
     if (result.skipped) {
       if (this.options.showSkipped) this.write(`⏭  ${result.meta.id} — skipped (${result.skipped})\n`);
       return;
     }
     for (const finding of result.verdict.findings) {
-      this.write(`${finding.message}\n`);
+      this.write(`${located(finding)}\n`);
     }
     const secs = `${(result.durationMs / 1000).toFixed(1)}s`;
     if (result.verdict.ok) {
@@ -66,9 +92,9 @@ export class TtyReporter implements IReporter {
 
   runFinished(results: readonly ICheckResult[], totalMs: number): void {
     const active = results.filter((r) => !r.skipped);
-    const passed = active.filter((r) => r.verdict.ok && !r.meta.advisory).length;
-    const failed = active.filter((r) => !r.verdict.ok && !r.meta.advisory).length;
-    const warned = active.filter((r) => !r.verdict.ok && r.meta.advisory).length;
+    const tally = tallyRun(results);
+    const { passed, warned } = tally;
+    const failed = tally.failed.length;
     const skippedResults = results.filter((r) => r.skipped);
     const secs = `${(totalMs / 1000).toFixed(1)}s`;
     const aside = [
@@ -85,6 +111,10 @@ export class TtyReporter implements IReporter {
     // not. When anything failed, the line is a red ❌ that names both counts.
     if (failed > 0) {
       this.write(`\n❌ ${failed} gate(s) FAILED, ${passed} passed${suffix} in ${secs}\n`);
+    } else if (active.length === 0 && skippedResults.length > 0) {
+      // Every selected check was skipped. "✅ 0 gate(s) passed" is a green tick over
+      // nothing — the one line this product exists to never print.
+      this.write(`\n⏭  nothing ran — ${skippedResults.length} skipped, 0 checked, in ${secs}\n`);
     } else {
       this.write(`\n✅ ${passed} gate(s) passed${suffix} in ${secs}\n`);
     }

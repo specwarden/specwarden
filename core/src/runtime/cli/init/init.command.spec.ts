@@ -45,14 +45,14 @@ describe('init writes the TREE, not a list', () => {
       ) ?? '';
     expect(config).not.toContain('checks:');
     expect(config).not.toContain('secretScan');
-    expect(config).toContain('reads `checks/` by convention');
+    expect(config).toContain('every *.check.mjs under checks/ is found without being named here');
   });
 
   it('a declared module becomes a check FILE in its family folder', async () => {
     const h = await harness({ 'package.json': manifestWith('@specwarden/security') });
     const file = h.written.get('.specwarden/checks/security/secret-scan.check.mjs') ?? '';
     expect(file).toContain("import { secretScan } from '@specwarden/security';");
-    expect(file).toContain("id: 'secret-scan'");
+    expect(file).toContain("rule: 'A credential never enters the repository, not even a revoked one.'");
     expect(file).toContain('export const check =');
     // ...and the module it did not declare yields no file
     expect([...h.written.keys()].some((k) => k.includes('/docs/'))).toBe(false);
@@ -76,16 +76,11 @@ describe('init writes the TREE, not a list', () => {
     expect(docs).toContain("docs: '**/*.md'");
   });
 
-  it('the check file name and the id inside it are the same word — the convention the engine discovers by', async () => {
+  it('names no id inside a check file — the file name is the id, the convention the engine discovers by', async () => {
     const h = await harness({ 'package.json': manifestWith('@specwarden/security', '@specwarden/docs') });
-    for (const [path, body] of h.written) {
-      if (!path.endsWith('.check.mjs')) continue;
-      const name = path
-        .split('/')
-        .pop()
-        ?.replace(/\.check\.mjs$/, '');
-      expect(body).toContain(`id: '${name}'`);
-    }
+    const checks = [...h.written].filter(([path]) => path.endsWith('.check.mjs'));
+    expect(checks.length).toBe(2);
+    for (const [path, body] of checks) expect(body, path).not.toMatch(/^\s+id: '/m);
   });
 });
 
@@ -99,10 +94,16 @@ describe('init refuses to overwrite', () => {
 });
 
 describe('what it tells the reader', () => {
-  it('lists the check files it wrote, and the next command', async () => {
+  it('lists the check files it wrote under checks/, and the next command', async () => {
     const h = await harness({ 'package.json': manifestWith('@specwarden/security') });
-    expect(h.out()).toContain('checks/security/secret-scan.check.mjs');
+    expect(h.out()).toMatch(/ {2}checks\/ +one file per check[^\n]*\n {4}security\/secret-scan\.check\.mjs\n/);
     expect(h.out()).toContain('specwarden check --all');
+  });
+
+  it('recommends suggest without a template — there is a tree to grow, and nothing chosen yet', async () => {
+    expect((await harness({ 'package.json': manifestWith('@specwarden/security') })).out()).toContain(
+      'specwarden suggest',
+    );
   });
 
   it('says what it detected, including when it detected nothing', async () => {
@@ -146,33 +147,24 @@ describe('the generated files are usable as written', () => {
     expect(readme).toContain('RED');
   });
 
-  it('the README explains every path it created and the ones a run will create', async () => {
+  it('the README explains every path it created, and none it did not', async () => {
+    // It listed perimeter.mjs, relevance.mjs, ratchets/ and baseline/ in trees holding none.
     const readme = (await harness()).written.get('.specwarden/README.md') ?? '';
-    for (const path of ['warden.config.mjs', 'rules.mjs', 'checks/', 'ratchets/', 'perimeter.mjs'])
-      expect(readme).toContain(path);
+    for (const path of ['warden.config.mjs', 'rules.mjs', 'checks/']) expect(readme).toContain(path);
+    for (const path of ['perimeter.mjs', 'relevance.mjs', 'ratchets/', 'baseline/']) expect(readme).not.toContain(path);
   });
 });
 
 describe('a fresh tree has no orphans and no missing enforcer', () => {
-  it('every generated check is named by a generated rule, and every rule names a generated check', async () => {
+  it('every generated check states the rule it enforces, so no register entry can drift from it', async () => {
     // The first run of a freshly initialised repository was red on orphan-check: the
-    // scaffold wrote two checks and an empty rule list, so the harness's own audit
-    // reported the checks it had just been handed. A check arrives with its rule now.
+    // scaffold wrote two checks and an empty rule list. The check carries its rule now —
+    // owned by its own file, which exists by construction — and the register stays empty.
     const h = await harness({ 'package.json': manifestWith('@specwarden/security', '@specwarden/docs') });
-    const rules = h.written.get('.specwarden/rules.mjs') ?? '';
-    const checkIds = [...h.written.keys()]
-      .filter((k) => k.endsWith('.check.mjs'))
-      .map((k) =>
-        k
-          .split('/')
-          .pop()
-          ?.replace(/\.check\.mjs$/, ''),
-      );
-    expect(checkIds.length).toBe(2);
-    for (const id of checkIds) expect(rules).toContain(`checkIds: ['${id}']`);
-    // the owner is a file init itself writes, so rule-owner-resolves cannot fail on it
-    expect(rules).toContain("owner: '.specwarden/README.md'");
-    expect(h.written.has('.specwarden/README.md')).toBe(true);
+    const checks = [...h.written].filter(([path]) => path.endsWith('.check.mjs'));
+    expect(checks.length).toBe(2);
+    for (const [path, body] of checks) expect(body, path).toMatch(/^\s+rule: '/m);
+    expect(h.written.get('.specwarden/rules.mjs')).not.toContain("checkIds: ['");
   });
 
   it('with no module installed, the rule list is declared and empty — audits on, nothing to audit', async () => {

@@ -1,46 +1,42 @@
 import type { ITemplateContext } from 'specwarden';
 
 import type { IPart, IPartOptions } from '../_shared/part.model';
+import { header, literal, tierOption } from '../_shared/render.util';
 
-const DEFAULT_HEADER = `every repository-relative path named in documentation resolves.
- *
- * A file moves, the prose does not, and a reader — or an agent — follows the old path,
- * finds nothing, and invents the rest.
- *
- * More from the same module when you want them: \`docSymbols\` (a renamed class leaves
- * its old name in prose), \`docCounts\` ("seven services" in a document describing nine),
- * \`docHygiene\`, \`docPlacement\`.`;
+const WHY = 'A file moves, the prose does not, and a reader follows the old path to nothing.';
 
-/**
- * The documentation-path check.
- *
- * Documentation rots through paths before it rots through anything else: a rule stays
- * true for years while the file it names moves in a week.
- */
-export const docPathsPart = (ctx: ITemplateContext, o: IPartOptions = {}): IPart => ({
-  files: [
-    {
-      path: 'checks/docs/doc-paths.check.mjs',
-      body: `/**
- * \`doc-paths\` — ${o.header ?? DEFAULT_HEADER}
- */
+/** Where the documentation is, when a template knows better than the directory init found. */
+export interface IDocPathsOptions extends IPartOptions {
+  /**
+   * The corpus, replacing the detected one. `**\/*.md` wherever a root document — a
+   * README, a router file an agent reads first — is part of what a reader follows: a
+   * docs-directory glob leaves exactly those unread.
+   */
+  readonly docs?: string;
+  /** Trees whose paths are history — an archive of finished plans names files as they were. */
+  readonly skipDirs?: readonly string[];
+}
+
+/** The documentation-path check: documentation rots through paths before anything else. */
+export const docPathsPart = (ctx: ITemplateContext, o: IDocPathsOptions = {}): IPart => {
+  const skip = o.skipDirs?.length ? `  skipDirs: [${o.skipDirs.map(literal).join(', ')}],\n` : '';
+  return {
+    files: [
+      {
+        path: 'checks/docs/doc-paths.check.mjs',
+        body: `${header(
+          '`doc-paths` — every repository-relative path named in documentation resolves.',
+          `${o.header ?? WHY}\n\`docs\` is what is read; \`skipDirs\` leaves out a tree whose paths are history.`,
+        )}
 import { docPaths } from '@specwarden/docs';
 
 export const check = docPaths({
-  id: 'doc-paths',
-  title: 'paths named in documentation exist',
-  tier: '${ctx.tier}',
-  docs: '${ctx.docs}',
+${tierOption(ctx)}  docs: ${literal(o.docs ?? ctx.docs)},
+${skip}  rule: 'Every repository-relative path named in documentation exists.',
 });
 `,
-    },
-  ],
-  rules: [
-    {
-      id: 'paths-in-documentation-resolve',
-      statement: 'Every repository-relative path named in documentation exists.',
-      owner: '',
-      enforcement: { checkIds: ['doc-paths'] },
-    },
-  ],
-});
+      },
+    ],
+    rules: [],
+  };
+};

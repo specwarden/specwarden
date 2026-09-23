@@ -1,5 +1,14 @@
 import type { IRule, ITemplate, ITemplateContext, ITemplateFile } from 'specwarden';
-import { compose, envFilesExamplePart, scriptWrappersPart, secretScanPart } from '@specwarden/scaffold-parts';
+import {
+  compose,
+  envFilesExamplePart,
+  exampleRule,
+  header,
+  scriptWrappersPart,
+  secretScanPart,
+  switchOn,
+  tierOption,
+} from '@specwarden/scaffold-parts';
 
 /**
  * A starting tree for a NestJS backend.
@@ -18,12 +27,8 @@ import { compose, envFilesExamplePart, scriptWrappersPart, secretScanPart } from
 const shared = (ctx: ITemplateContext) =>
   compose(
     secretScanPart(ctx, {
-      header: `a credential-shaped string anywhere in the tracked tree.
- *
- * A backend is where connection strings, signing keys and provider tokens live, so this
- * is the one check worth having before any other. The built-in vendor library is a
- * PRESET: add your own formats with \`patterns.extra\`, and switch one off with
- * \`patterns.disable\` — which requires a reason, and reports it.`,
+      header:
+        'A backend is where connection strings, signing keys and provider tokens live.\nA match means rotate first, delete second.',
     }),
     scriptWrappersPart(ctx),
     envFilesExamplePart(ctx),
@@ -44,53 +49,35 @@ export const nestjsTemplate: ITemplate = {
   files: (ctx: ITemplateContext): readonly ITemplateFile[] => [
     {
       path: 'checks/backend/nestjs-conventions.check.mjs',
-      body: `/**
- * The NestJS conventions, from the plugin.
- *
- * A plugin declares WHAT to check; the engine owns the ports. This file supplies the
- * two facts the plugin cannot know — where the modules are, and which package is the
- * ORM — and exports the checks it produced. Exported as \`checks\` (plural) because one
- * plugin yields several.
- *
- * \`ratchet\` is the count of violations that already exist and are tolerated. Set it to
- * what \`--tighten\` measures; it only turns DOWN, so it holds today and fails on the
- * next one. Point \`ruleDocument\` at where the convention is written down — a rule
- * whose rationale lives nowhere is a rule nobody can argue with.
- */
+      body: `${header(
+        'The NestJS conventions, from the plugin: a module reaches the database only through a repository.',
+        '`modulesRoot` and `ormPackage` are the facts the plugin cannot know. `ratchet` tolerates the imports\nthat already exist and only turns down; `ruleDocument` is where the convention is written.',
+      )}
 import { nestjs } from '@specwarden/plugin-nestjs';
 
 const plugin = nestjs({
   modulesRoot: 'src/modules',
   ormPackage: 'typeorm',
-  // Where the ORM IS the point: the repository that queries, the entity whose decorators
-  // map the table, and a spec. An entity cannot be written without importing \`typeorm\`,
-  // so leaving it out made the first run red on every TypeORM service there is.
-  allowedFrom: ['**/repositories/**', '**/*.entity.ts', '**/*.spec.ts'],
   ratchetId: 'nestjs-db-access',
   ratchet: 0,
   ruleDocument: 'docs/architecture.md',
+  rule: 'A module never imports the ORM directly; persistence goes through a repository.',
 });
 
+// Plural: one plugin yields several checks.
 export const checks = plugin.checks;
 `,
     },
     {
       path: 'checks/backend/migrations-backwards-compatible.check.mjs.example',
-      body: `/**
- * \`migrations-backwards-compatible\` — a migration the OLD code can survive.
- *
- * Ships as \`.example\` because it depends on a fact about your PIPELINE, not about
- * NestJS: if the deploy runs migrations BEFORE the container swap, then for a moment
- * the old code meets the new schema, and \`DROP COLUMN\`, \`RENAME COLUMN\` and a
- * tightened \`NOT NULL\` all break it. If your deploy swaps first, this check is wrong
- * for you — delete it rather than adapting it.
- *
- * Rename to \`.check.mjs\` when the first is true. The expand-contract alternative it
- * pushes you toward is two deploys, and that is the point.
- */
+      body: `${header(
+        '`migrations-backwards-compatible` — no migration breaks the code still running during the deploy.',
+        `OFF because it is right only where the deploy runs migrations BEFORE the container swap; if
+yours swaps first, delete this file. The old code cannot survive the three statements below.
+${switchOn('migrations-backwards-compatible')}`,
+      )}
 import { fromResult } from 'specwarden';
 
-/** The three statements the old code cannot survive, each with what to do instead. */
 const UNSAFE = [
   { pattern: /\\bDROP\\s+COLUMN\\b/i, why: 'the old code still selects it — drop it in a later deploy' },
   { pattern: /\\bRENAME\\s+COLUMN\\b/i, why: 'add the new column, backfill, then remove the old one' },
@@ -99,9 +86,7 @@ const UNSAFE = [
 
 export const check = fromResult({
   id: 'migrations-backwards-compatible',
-  title: 'no migration breaks the code still running during the deploy',
-  tier: '${ctx.tier}',
-  when: (changed) => changed.some((f) => f.startsWith('migrations/')),
+${tierOption(ctx)}  corpus: { atLeast: 1, why: 'no .sql file under migrations/ — point the pathspec at where they are' },
   hint: 'Use expand-contract across two deploys. The rule is in docs/architecture.md.',
   run: (ctx) => {
     const files = ctx.vcs.trackedFiles('migrations/**/*.sql');
@@ -112,9 +97,7 @@ export const check = fromResult({
         if (pattern.test(sql)) failures.push({ file, message: \`\${pattern.source} — \${why}\` });
       }
     }
-    // An empty corpus is reported, never passed over: a glob matching nothing is the
-    // commonest way a check stops checking without anybody noticing.
-    return { failures, notes: [\`\${files.length} migration file(s) read\`] };
+    return { failures, examined: files.length, unit: 'migration files' };
   },
 });
 `,
@@ -123,12 +106,10 @@ export const check = fromResult({
   ],
 
   rules: (ctx: ITemplateContext): readonly IRule[] => [
-    {
-      id: 'a-module-reaches-the-database-through-a-repository',
-      statement: 'A module never imports the ORM directly; persistence goes through a repository.',
-      owner: '',
-      enforcement: { checkIds: ['nestjs/db-access-through-repositories'] },
-    },
+    exampleRule(
+      'migrations-backwards-compatible',
+      'A migration never breaks the code still running during the deploy.',
+    ),
     ...shared(ctx).rules,
   ],
 };

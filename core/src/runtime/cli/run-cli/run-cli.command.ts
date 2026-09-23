@@ -1,12 +1,20 @@
 import { readFileSync } from 'node:fs';
+import { relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { TIERS } from '../../../domain';
 import { ChildProcessRunner, GitVcs, NodeFileSource, NodeFileWriter } from '../../../infrastructure';
 import { CONFIG_VERSION } from '../../../contracts/version/version.constant';
-import { CheckRegistry } from '../../container';
+import {
+  CheckContractVersionError,
+  CheckRegistry,
+  DuplicateCheckError,
+  UnknownTierError,
+  UnnamedCheckError,
+} from '../../container';
 import { PluginContractError } from '../../plugin-loader';
 import { CheckDiscoveryError, loadConsumerTree } from '../../consumer-tree';
+import { describeError } from '../../consumer-tree/discover-checks/discover-checks.util';
 import type { IWardenConfig } from '../../config/config.model';
 import { adopt } from '../adopt/adopt.command';
 import { check } from '../check/check.command';
@@ -22,6 +30,50 @@ import { CONFIG_DIR, CONFIG_FILE, findConfig } from '../_shared/find-config/find
 import { parseArgs } from '../_shared/parse-args/parse-args.util';
 
 const COMMANDS_NEEDING_CONFIG = ['check', 'doctor', 'migrate', 'sync-invariants'];
+const COMMANDS = ['adopt', 'suggest', 'init', 'new', 'perimeter', 'plan', ...COMMANDS_NEEDING_CONFIG];
+
+/** The oldest config version there has ever been. Anything below it was never a version. */
+const FIRST_CONFIG_VERSION = 1;
+
+/** Errors that mean "this roster cannot be assembled" — a load error, exit 2, never a
+ * stack: the run did not start, so no gate failed. */
+const LOAD_ERRORS = [
+  PluginContractError,
+  CheckDiscoveryError,
+  CheckContractVersionError,
+  DuplicateCheckError,
+  UnknownTierError,
+  UnnamedCheckError,
+];
+
+export const USAGE =
+  'usage: specwarden <command>\n\n' +
+  '  starting out\n' +
+  '    adopt                            report what this repository already is\n' +
+  '    suggest                          propose rules it already follows, armed at reality\n' +
+  '    init   [--template <name>]       write the starting tree\n\n' +
+  '  every day\n' +
+  '    check  [--tier <name>] [--id <id>] [--base <ref>] [--shard i/N] [--jobs N]\n' +
+  '           [--all] [--if-relevant] [--relevance] [--list] [--fix] [--tighten]\n' +
+  '           [--reporter tty|json|github] [--json] [--show-skipped]\n' +
+  '    new    <check-id> [--family <folder>]   scaffold a check and its test\n' +
+  '    doctor                           the roster, capabilities, ownership, rule coverage\n\n' +
+  '  occasionally\n' +
+  '    plan   status <file> [--verify]  the phases, and each acceptance run with --verify\n' +
+  '    plan   archive <file>            refuse until the harvest is declared and resolves\n' +
+  '    sync-invariants                  reconcile requirements against deposited invariants\n' +
+  '    migrate                          move the config to this engine’s version\n' +
+  '    perimeter                        evaluate one action on stdin (agent hook entry)\n\n' +
+  '  exit\n' +
+  '    0 every gate held, or the question was answered   1 a gate failed\n' +
+  '    2 the line, the config or a check file could not be used\n\n' +
+  '  environment\n' +
+  '    CI, GITHUB_ACTIONS   a CI run: no base means a full run, SPECWARDEN_SKIP is ignored;\n' +
+  '                         under GITHUB_ACTIONS the reporter defaults to github\n' +
+  '    SPECWARDEN_BASE      the ref a change is measured from, as --base\n' +
+  '    SPECWARDEN_ALL=1     ignore relevance, as --all\n' +
+  '    SPECWARDEN_SKIP      ids to skip, comma-separated, or `all` — honoured locally only\n' +
+  '    SPECWARDEN_SHELL     the shell a command check and a plan acceptance run under\n';
 
 /**
  * The dispatcher, and nothing else.
@@ -36,6 +88,11 @@ const COMMANDS_NEEDING_CONFIG = ['check', 'doctor', 'migrate', 'sync-invariants'
  * Keeping the dispatch here and the work in the command folders is what stops this
  * file growing back: a new command is a new folder plus one line, never a new branch
  * in a function that already does six things.
+ *
+ * EXIT CODES. 0 every gate held (or the question was answered); 1 a gate failed; 2 the
+ * line, the config or the roster could not be used — a usage error or a load error.
+ * Nothing is reported as 1 that is not a gate's verdict, which is why a config that does
+ * not parse and a check file that throws are caught here rather than left to crash.
  */
 export async function main(
   argv: readonly string[],
@@ -44,6 +101,18 @@ export async function main(
   io: ICliIo = defaultIo,
 ): Promise<number> {
   const args = parseArgs(argv);
+
+  // Asking for help is not an error: the usage goes to stdout, where `| less` finds it.
+  if (args.help) {
+    io.out(USAGE);
+    return 0;
+  }
+  // `plan` reads its own flags (`--verify`); every other command refuses a line the
+  // grammar does not know, by name, before anything runs.
+  if (args.command !== 'plan' && args.problems.length > 0) {
+    io.err(`${args.problems.join('; ')}.\n\n${USAGE}`);
+    return 2;
+  }
 
   // init writes; adopt and suggest only read. All three run on a repository that has
   // no config yet, which is why they are reached before one is looked for.
@@ -73,25 +142,10 @@ export async function main(
   if (args.command === 'perimeter') return perimeter(cwd, () => readFileSync(0, 'utf8'), io);
   if (args.command === 'plan') return planStatus(argv, cwd, io);
 
-  if (args.command === undefined || !COMMANDS_NEEDING_CONFIG.includes(args.command)) {
-    io.err(
-      'usage: specwarden <command>\n\n' +
-        '  starting out\n' +
-        '    adopt                            report what this repository already is\n' +
-        '    suggest                          propose rules it already follows, armed at reality\n' +
-        '    init   [--template <name>]       write the starting tree\n\n' +
-        '  every day\n' +
-        '    check  [--tier <name>] [--id <id>] [--base <ref>] [--shard i/N] [--jobs N]\n' +
-        '           [--all] [--if-relevant] [--relevance] [--list] [--fix] [--tighten]\n' +
-        '           [--reporter tty|json|github] [--json] [--show-skipped]\n' +
-        '    new    <check-id> [--family <folder>]   scaffold a check and its test\n' +
-        '    doctor                           the roster, capabilities, ownership, rule coverage\n\n' +
-        '  occasionally\n' +
-        '    plan                             the plan lifecycle\n' +
-        '    sync-invariants                  reconcile requirements against deposited invariants\n' +
-        '    migrate                          move the config to this engine’s version\n' +
-        '    perimeter                        evaluate one action on stdin (agent hook entry)\n',
-    );
+  if (args.command === undefined || !COMMANDS.includes(args.command)) {
+    // The command that was not understood, named: the reader should not have to diff
+    // what they typed against the list below.
+    io.err(`${args.command === undefined ? '' : `unknown command "${args.command}"\n\n`}${USAGE}`);
     return 2;
   }
   const found = findConfig(cwd);
@@ -99,8 +153,19 @@ export async function main(
     io.err(`no ${CONFIG_DIR}/${CONFIG_FILE} found from ${cwd} upward — nothing to run.\n`);
     return 2;
   }
+  const configName = relative(found.root, found.configPath).replace(/\\/g, '/');
 
-  const loaded = (await import(pathToFileURL(found.configPath).href)) as { default?: IWardenConfig };
+  // A config that does not parse, or imports a package that is not installed, is a load
+  // error — exit 2 with the file named. It crashed with a node stack and exit 1, the code
+  // a red gate uses, so a CI reading the exit could not tell a broken config from a
+  // failed check.
+  let loaded: { default?: IWardenConfig };
+  try {
+    loaded = (await import(pathToFileURL(found.configPath).href)) as { default?: IWardenConfig };
+  } catch (err) {
+    io.err(`${configName} failed to load: ${describeError(err)}\n`);
+    return 2;
+  }
   const config = loaded.default;
   if (!config || typeof config !== 'object') {
     io.err(
@@ -131,7 +196,15 @@ export async function main(
       );
       return 2;
     }
-    // configVersion < CONFIG_VERSION: no migrations are defined yet (only v1 exists).
+    // A version below the first one was never a version, so there is nothing to migrate
+    // FROM — and a zero exit over a migration that did not happen reads as done.
+    if (configVersion < FIRST_CONFIG_VERSION) {
+      io.err(
+        `config declares version ${configVersion}, which no engine ever spoke — the first config version is ` +
+          `${FIRST_CONFIG_VERSION}. Set \`version: ${CONFIG_VERSION}\`, or remove the key.\n`,
+      );
+      return 2;
+    }
     io.out(`config is at version ${configVersion}; no migration to v${CONFIG_VERSION} is defined yet.\n`);
     return 0;
   }
@@ -147,25 +220,34 @@ export async function main(
   // them with the invariants already in the corpus. Prepares and prints; writes
   // nothing. Placed AFTER the version guard so a config newer than this engine is
   // refused here on the same terms as check/doctor/list, not silently operated on.
-  if (args.command === 'sync-invariants') return syncInvariants(config, new NodeFileSource(found.root), io);
+  if (args.command === 'sync-invariants') {
+    return syncInvariants(config, new NodeFileSource(found.root), io, new GitVcs(new ChildProcessRunner(), found.root));
+  }
 
   // The roster comes from the TREE, by convention: checks discovered under
   // `<consumer>/checks/`, then the config's own, then plugins, then the harness's
   // self-checks assembled from defaults. The config names only what the tree cannot.
-  const registry = new CheckRegistry();
   // The ASSEMBLED register, not `config.rules`: a rule may be declared on the check
   // that enforces it, and the audits read the assembled set. `doctor` read the config's
   // list directly and reported the three checks carrying their own rule as orphans —
   // a diagnostic saying the harness was broken in exactly the way it was not.
   let rules = config.rules;
+  let registry: CheckRegistry;
   try {
     const tree = await loadConsumerTree(new NodeFileSource(found.root), CONFIG_DIR, config);
+    // A tier is held to the vocabulary HERE, where the vocabulary is known: a factory
+    // cannot know a repository's custom tiers.
+    registry = new CheckRegistry({ tiers, originOf: (c) => tree.origins.get(c) });
     registry.registerAll(tree.checks);
-    rules = config.rules === undefined ? undefined : tree.rules;
-    if (!args.json) for (const note of tree.notes) io.err(`ℹ ${note}\n`);
+    rules = tree.rulesDeclared ? tree.rules : undefined;
+    // What the loader decided answers a question ABOUT the roster — `doctor`, `check
+    // --list` — and is not news on every run: two `ℹ` lines on each hook and each CI
+    // step, green or red, taught everyone to read past stderr, where a load error goes.
+    const aboutTheRoster = args.command === 'doctor' || args.list;
+    if (aboutTheRoster && !args.json) for (const note of tree.notes) io.err(`ℹ ${note}\n`);
   } catch (err) {
-    if (err instanceof PluginContractError || err instanceof CheckDiscoveryError) {
-      io.err(`${err.message}\n`);
+    if (LOAD_ERRORS.some((kind) => err instanceof kind)) {
+      io.err(`${(err as Error).message}\n`);
       return 2;
     }
     throw err;

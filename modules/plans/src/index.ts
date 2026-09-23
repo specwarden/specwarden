@@ -14,9 +14,18 @@ export {
   DEFAULT_BRANCH_DECLARATION,
   DEFAULT_STATUS_DECLARATION,
   DEFAULT_ACTIVE_STATUSES,
+  DEFAULT_DONE_STATUSES,
   DEFAULT_ARCHIVE_HEADER,
 } from './plan-staleness/plan-staleness.check';
 export { planShape } from './plan-shape/plan-shape.check';
 export type { IPlanShapeOptions } from './plan-shape/plan-shape.check';
 export { decisionLogShape } from './decision-log-shape/decision-log-shape.check';
 export type { IDecisionLogShapeOptions } from './decision-log-shape/decision-log-shape.check';
+export {
+  DEFAULT_COMMAND,
+  DEFAULT_PHASE_HEADING,
+  DEFAULT_PLAN_NAME,
+  DEFAULT_SIZING,
+} from './plan-shape/plan-shape.check';
+export { planChecks } from './plan-checks/plan-checks.check';
+export type { IPlanChecksOptions, TPlansOverride } from './plan-checks/plan-checks.check';

@@ -13,7 +13,8 @@ _playgrounds/                 EVERY package, composed — the only one at the ro
 ├── playground.spec.ts        in-process: one config, the registry and the runner
 ├── cli.spec.ts               the same config as FILES, discovered and run by the CLI
 ├── consumer/                 that config — a consumer's `.specwarden/`, as they write it
-└── repository.ts             the clean and broken trees both specs run over
+├── repository.ts             the clean and broken trees both specs run over
+└── journeys/                 a consumer's first weeks, scene by scene — the regression suite
 
 <package>/_playground/        ONE package, as a consumer wires it
 templates/<name>/_playground/ ONE template, over a repository of its kind
@@ -63,6 +64,33 @@ with no workspace of its own, `pnpm install` walked upwards until it found one.
 Every run is the real CLI over a scratch git repository. A check reads tracked files, so a
 run in place would answer differently before and after somebody's `git add`.
 
+## The journeys: what a consumer meets, kept as a regression suite
+
+`journeys/` is five suites, one per way somebody meets the product for the first time:
+
+- **A — day one, no template**: `adopt`, `suggest`, `init`, `new`, a primitive, a ratchet, a
+  fix, and the mistakes a newcomer makes;
+- **B — authoring**: one file per primitive, written minimally, pointed at nothing,
+  misconfigured the way a first-time author does, tested with `runCheck`;
+- **C — modules**: each module wired the way its GUIDE, its shipped skill or a template's
+  `.example` says to wire it;
+- **D — templates and agents**: whether what `init` wrote is TRUE of the repository it
+  landed in, the next obvious edit, and whether the shipped skills describe the product;
+- **E — the command line**: every command, flag, reporter, exit code and environment
+  variable, from a shell and from a CI job.
+
+Every scene is the real CLI over a scratch git repository with the packages linked the way
+an install links them. The suites were written against the engine as it stood, to find
+where it went wrong; the fixes landed against them, and they stay so that nothing found
+once is found twice.
+
+**The prefixes are the ledger.** A scene named `[bug]` reproduces a defect; `[friction]`
+asserts behaviour a consumer should not meet, with a comment saying what it should be.
+Either passes against today's engine — so the day the behaviour changes, the scene goes
+red and is rewritten, never kept green by accident. A fixed scene drops its prefix,
+asserts the corrected behaviour, and says in a comment what it used to do. A scene still
+carrying a prefix is a decision on record, not an oversight.
+
 ## Changing one
 
 - **A template's output** — change the template, then
@@ -78,7 +106,7 @@ run in place would answer differently before and after somebody's `git add`.
 ## Running them
 
 ```bash
-pnpm --filter @specwarden-playgrounds/workspace test   # this one
+pnpm --filter @specwarden-playgrounds/workspace test   # this one, journeys included
 pnpm --filter @specwarden/template-agentic test        # one template, unit suite and playground
 node scripts/playgrounds.mjs                            # every template's .specwarden/ is current
 ```

@@ -1,3 +1,5 @@
+import { CheckOptionsError } from '../../primitives/_shared/check-options/check-options.util';
+
 /**
  * Which check factories a package publishes, and which of them nothing exercises.
  *
@@ -16,7 +18,15 @@
  * carrying an `id` and a `run`. Nothing else in a barrel does.
  *
  * A helper handed that object throws, or returns something else. Both are the answer
- * "not a factory", and both are taken as such.
+ * "not a factory", and both are taken as such — with one exception, below.
+ *
+ * A FACTORY THAT REFUSES THE PROBE IS STILL A FACTORY. Factories check their options by
+ * name now, so a probe carrying the union of a package's options is refused by every one
+ * of them with a `CheckOptionsError`. Read as "threw, so a helper", that made every
+ * factory a helper, the audit found nothing, and it reported nothing uncovered — a green
+ * run over a package it never read. A refusal that speaks the option checker's language is
+ * the most certain sign there is that the export builds checks. So is returning an array
+ * of checks, or a plugin carrying `checks`.
  */
 
 /** What a factory is probed with: one object carrying every option any of them needs. */
@@ -47,15 +57,33 @@ export function publishedFactories(module: Readonly<Record<string, unknown>>, pr
     let produced: unknown;
     try {
       produced = (value as (options: TFactoryProbe) => unknown)(probe);
-    } catch {
+    } catch (error) {
+      if (error instanceof CheckOptionsError) found.push(name);
       continue;
     }
 
-    const check = produced as { id?: unknown; run?: unknown } | null;
-    if (typeof check?.id === 'string' && typeof check?.run === 'function') found.push(name);
+    if (producesChecks(produced)) found.push(name);
   }
 
   return found.sort();
+}
+
+const isCheck = (value: unknown): boolean => {
+  const check = value as { id?: unknown; run?: unknown } | null;
+  return typeof check?.id === 'string' && typeof check?.run === 'function';
+};
+
+/** A check, a non-empty array of checks, or a plugin whose `checks` are checks. */
+function producesChecks(produced: unknown): boolean {
+  if (isCheck(produced)) return true;
+  if (Array.isArray(produced)) return produced.length > 0 && produced.every(isCheck);
+  const checks = (produced as { checks?: unknown } | null)?.checks;
+  return Array.isArray(checks) && checks.length > 0 && checks.every(isCheck);
+}
+
+/** Thrown when an audit recognised none of the factories the caller says it covers. */
+export class FactoryAuditError extends Error {
+  override readonly name = 'FactoryAuditError';
 }
 
 /**
@@ -69,5 +97,14 @@ export function uncoveredFactories(
   options: IPublishedFactoriesOptions,
 ): string[] {
   const covered = new Set(options.covered);
-  return publishedFactories(module, options.probe).filter((name) => !covered.has(name));
+  const published = publishedFactories(module, options.probe);
+  // The audit's own silent green: a claim naming factories, none of which the probe could
+  // recognise, means the probe stopped working — not that the package became complete.
+  if (options.covered.length > 0 && !published.some((name) => covered.has(name))) {
+    throw new FactoryAuditError(
+      `none of the ${options.covered.length} factories this claim covers (${options.covered.join(', ')}) was recognised as a factory. ` +
+        'The probe no longer reaches them, so the audit would have examined nothing and passed.',
+    );
+  }
+  return published.filter((name) => !covered.has(name));
 }

@@ -37,7 +37,7 @@ export default defineConfig({
       // report themselves as covered and lift the number that gates real code.
       exclude: ['src/**/*.spec.ts', 'src/**/*.spec-helpers.ts'],
       reporter: ['text-summary', 'json-summary'],
-      thresholds: { statements: 98, branches: 96, functions: 97, lines: 98 },
+      thresholds: { statements: 99, branches: 97, functions: 98, lines: 99 },
     },
   },
 });

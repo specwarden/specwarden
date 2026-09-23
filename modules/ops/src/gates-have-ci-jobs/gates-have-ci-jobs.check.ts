@@ -1,4 +1,5 @@
-import { CHECK_CONTRACT_VERSION, type ICheck, type IFinding, type IVerdict, type TTier } from 'specwarden';
+import { type ICheck, type IFinding, type IVerdict, buildCheck, checkOptions } from 'specwarden';
+import type { IOpsCheckIdentity } from '../_shared/identity/identity.model';
 
 /**
  * Every gate that only CI runs is named by a CI job, every job that runs gates reaches the
@@ -42,32 +43,56 @@ export interface IGateEntry {
   readonly tier: string;
 }
 
-export interface IGatesHaveCiJobsOptions {
-  readonly id: string;
-  readonly title: string;
-  readonly tier?: TTier;
-  readonly hint?: string;
+export interface IGatesHaveCiJobsOptions extends IOpsCheckIdentity {
   /** The workflow CI runs, repo-relative. */
   readonly workflow: string;
   /** The job whose result branch protection reads. */
   readonly arbiterJob: string;
   /** The tier this workflow owns — a gate of another tier named here runs on the wrong
-   * schedule, or twice. */
-  readonly ciTier: string;
-  /** The cheap tier some job must run, because a client-side hook can be skipped. */
-  readonly cheapTier: string;
-  /** Source pattern (not a RegExp — it is embedded) matching a gate-running invocation. */
-  readonly runnerPattern: string;
+   * schedule, or twice. Default: `heavy`. */
+  readonly ciTier?: string;
+  /** The cheap tier some job must run, because a client-side hook can be skipped.
+   * Default: `fast`. */
+  readonly cheapTier?: string;
+  /** Source pattern (not a RegExp — it is embedded) matching a gate-running invocation.
+   * Default: `DEFAULT_RUNNER_PATTERN`, the engine's own command. */
+  readonly runnerPattern?: string;
   /** The gates to reconcile CI against, read at run time. Default: the run's own roster
    * from the context — the list the engine is actually running. A consumer that built
    * this list by hand could forget a check, and the forgotten check would be invisible
    * to the one audit meant to notice it. */
   readonly gates?: () => readonly IGateEntry[];
-  readonly when: (changed: readonly string[]) => boolean;
+}
+
+/**
+ * The engine's own command, however it is reached: the bin by either name, or the script
+ * itself — `npx specwarden check`, `pnpm exec spw check`, `node …/bin/warden.mjs check`.
+ */
+export const DEFAULT_RUNNER_PATTERN = String.raw`(?:\bspecwarden|\bspw|\bwarden\.mjs)\s+check\b`;
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Whether a job runs the cheap tier: the engine's invocation — or the host's
+ * `runnerPattern` — followed, anywhere later on its line, by `--tier <cheap>`.
+ *
+ * It was `runnerPattern` with `\s+--tier\s+<cheap>` appended, which only works for a
+ * pattern that ends where the tier flag begins. The scaffolded pattern ends in
+ * `--id (\S+)`, so the appended flag could never match: a workflow running exactly
+ * `specwarden check --tier fast` was red for not running the fast tier.
+ */
+function cheapTierRe(runnerPattern: string, cheapTier: string): RegExp {
+  return new RegExp(
+    `(?:${DEFAULT_RUNNER_PATTERN}|${runnerPattern})[^\\n]*?--tier(?:=|\\s+)${escapeRegExp(cheapTier)}(?![\\w-])`,
+  );
 }
 
 /** The jobs of a workflow, each with the gate ids it names and whether it runs gates. */
-export function parseWorkflowJobs(source: string, runnerPattern: string, cheapTier: string): IWorkflowJob[] {
+export function parseWorkflowJobs(
+  source: string,
+  runnerPattern: string = DEFAULT_RUNNER_PATTERN,
+  cheapTier = 'fast',
+): IWorkflowJob[] {
   const lines = source.split('\n').map((line) => line.replace(/\r$/, ''));
   const start = lines.findIndex((line) => /^jobs:\s*$/.test(line));
   if (start === -1) return [];
@@ -102,7 +127,7 @@ export function parseWorkflowJobs(source: string, runnerPattern: string, cheapTi
       id,
       gateIds: [...gateIds],
       runsGates: new RegExp(runnerPattern).test(text),
-      runsCheapTier: new RegExp(`${runnerPattern}\\s+--tier\\s+${cheapTier}`).test(text),
+      runsCheapTier: cheapTierRe(runnerPattern, cheapTier).test(text),
       needs: list
         ? (list[1] as string)
             .split(',')
@@ -116,16 +141,31 @@ export function parseWorkflowJobs(source: string, runnerPattern: string, cheapTi
 }
 
 export function gatesHaveCiJobs(options: IGatesHaveCiJobsOptions): ICheck {
-  return {
-    id: options.id,
-    title: options.title,
-    tier: options.tier ?? 'fast',
-    zone: 'product',
-    capabilities: ['read'],
-    contractVersion: CHECK_CONTRACT_VERSION,
-    hint: options.hint,
-    when: options.when,
-    run: (ctx): IVerdict => {
+  checkOptions('gatesHaveCiJobs', options, {
+    workflow: { kind: 'string', required: true },
+    arbiterJob: { kind: 'string', required: true },
+    ciTier: { kind: 'string' },
+    cheapTier: { kind: 'string' },
+    runnerPattern: { kind: 'string' },
+    gates: { kind: 'function' },
+  });
+  const ciTier = options.ciTier ?? 'heavy';
+  const cheapTier = options.cheapTier ?? 'fast';
+  const runnerPattern = options.runnerPattern ?? DEFAULT_RUNNER_PATTERN;
+
+  return buildCheck(
+    {
+      ...options,
+      rule: options.rule ?? {
+        statement: 'every gate has a CI job that runs it',
+        owner: '@specwarden/ops',
+        implied: true,
+      },
+      tier: options.tier ?? 'fast',
+      zone: 'product',
+    },
+    ['read'],
+    (ctx): IVerdict => {
       const findings: IFinding[] = [];
       const fail = (message: string): void => {
         findings.push({ severity: 'error', message, ruleId: options.id });
@@ -137,7 +177,7 @@ export function gatesHaveCiJobs(options: IGatesHaveCiJobsOptions): ICheck {
         return { ok: false, findings };
       }
 
-      const jobs = parseWorkflowJobs(source, options.runnerPattern, options.cheapTier);
+      const jobs = parseWorkflowJobs(source, runnerPattern, cheapTier);
       if (jobs.length === 0) {
         fail(
           `${options.workflow} yielded no jobs. Either the workflow moved or this scanner no longer ` +
@@ -160,10 +200,10 @@ export function gatesHaveCiJobs(options: IGatesHaveCiJobsOptions): ICheck {
       const gates = options.gates ? options.gates() : ctx.roster();
       const byId = new Map(gates.map((gate) => [gate.id, gate]));
 
-      for (const gate of gates.filter((g) => g.tier === options.ciTier)) {
+      for (const gate of gates.filter((g) => g.tier === ciTier)) {
         if (named.has(gate.id)) continue;
         fail(
-          `${options.ciTier} gate \`${gate.id}\`${gate.title ? ` (${gate.title})` : ''} has no job in ` +
+          `${ciTier} gate \`${gate.id}\`${gate.title ? ` (${gate.title})` : ''} has no job in ` +
             `${options.workflow}. Add it to the matrix of the job that offers what it needs, or move it ` +
             'to another tier on purpose.',
         );
@@ -179,10 +219,10 @@ export function gatesHaveCiJobs(options: IGatesHaveCiJobsOptions): ICheck {
           );
           continue;
         }
-        if (gate.tier !== options.ciTier) {
+        if (gate.tier !== ciTier) {
           fail(
             `job \`${jobId}\` runs \`${gateId}\`, which is tier \`${gate.tier}\`. ${options.workflow} carries ` +
-              `the ${options.ciTier} tier, so naming another tier's gate here runs it twice or on the ` +
+              `the ${ciTier} tier, so naming another tier's gate here runs it twice or on the ` +
               'wrong schedule.',
           );
         }
@@ -208,7 +248,7 @@ export function gatesHaveCiJobs(options: IGatesHaveCiJobsOptions): ICheck {
 
       if (!jobs.some((job) => job.runsCheapTier)) {
         fail(
-          `no job in ${options.workflow} runs the ${options.cheapTier} tier. A client-side hook can be ` +
+          `no job in ${options.workflow} runs the ${cheapTier} tier. A client-side hook can be ` +
             'skipped, so without this that tier has no enforcement.',
         );
       }
@@ -225,5 +265,5 @@ export function gatesHaveCiJobs(options: IGatesHaveCiJobsOptions): ICheck {
             ],
           };
     },
-  };
+  );
 }

@@ -227,4 +227,38 @@ describe('runCheck', () => {
     expect(verdict.findings.length).toBeGreaterThan(0);
     expect(errorsOf(verdict)).toEqual([]);
   });
+
+  /**
+   * The gate the runner applies. It did not apply here, so a body that shelled out
+   * without declaring `exec` was green in its test and red in the CLI — the test and the
+   * run disagreeing about one check.
+   */
+  it('denies a port the check did not declare, as the runner does, with the runner’s words', async () => {
+    const shellsOut = defineCheck({ id: 'shells-out', run: (ctx) => (ctx.proc.run('git', ['--version']), []) });
+    const verdict = await runCheck(shellsOut, { exec: () => ({ status: 0, stdout: 'git version 2', stderr: '' }) });
+
+    expect(verdict.ok).toBe(false);
+    expect(errorsOf(verdict)[0]).toContain(
+      "check 'shells-out' used a 'exec' capability it did not declare (called run).",
+    );
+  });
+
+  it('grants a port the check did declare', async () => {
+    const declared = defineCheck({
+      id: 'declared',
+      capabilities: ['exec'],
+      run: (ctx) => (ctx.proc.run('git', ['--version']), []),
+    });
+    expect((await runCheck(declared, { exec: () => ({ status: 0, stdout: '', stderr: '' }) })).ok).toBe(true);
+  });
+
+  it('lets any other throw through — a test wants the stack of a body that broke', async () => {
+    const broken = {
+      ...defineCheck({ id: 'b', run: () => [] }),
+      run: () => {
+        throw new Error('broke');
+      },
+    };
+    await expect(runCheck(broken)).rejects.toThrow('broke');
+  });
 });

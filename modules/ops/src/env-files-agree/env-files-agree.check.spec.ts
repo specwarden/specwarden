@@ -220,7 +220,11 @@ describe('envFilesAgree — a file it cannot see is not a verdict', () => {
     });
 
     expect(verdict.ok).toBe(true);
-    expect(notes(verdict)).toEqual(['prod: checked 2 env files — .env.prod, jobs/.env.prod']);
+    // …and says what it could not compare, rather than letting the pass imply it did.
+    expect(notes(verdict)).toEqual([
+      'prod: checked 2 env files — .env.prod, jobs/.env.prod',
+      'prod: api/.env.prod (read by api) is not here — what the verifier holds could not be compared.',
+    ]);
   });
 });
 
@@ -278,6 +282,14 @@ describe('envFilesAgree — what it could see', () => {
     expect(notes(verdict)).toEqual([
       "prod: SKIPPED — 0 of the mode's env files exist here (they are gitignored; this rule can only run where they live).",
     ]);
+    // Every mode absent is a verdict that says it could not look, so the run reports the
+    // check as skipped. It was `ok: true` and nothing else — counted as a pass.
+    expect(verdict.skipped).toBe("no mode's env files are here (prod) — run it where they live");
+  });
+
+  it('is judged, not skipped, when at least one mode was compared', async () => {
+    const verdict = await runOver({ '.env.prod': 'EDGE_SECRET=s\n', 'api/.env.prod': 'EDGE_SECRET=s\n' });
+    expect(verdict.skipped).toBeUndefined();
   });
 
   it('skips a mode with only ONE of its files — there is nothing to compare it with', async () => {

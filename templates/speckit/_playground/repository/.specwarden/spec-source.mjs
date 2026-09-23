@@ -1,15 +1,6 @@
-/**
- * The spec source — Spec Kit.
- *
- * Requirements and tasks both come from `specs/<feature>/` — `spec.md` for the
- * `**FR-001**: the system MUST …` lines, `tasks.md` for the checkboxes. Ids keep
- * their upstream spelling, prefixed by the feature: two features may both number from
- * FR-001, and a collision would silently merge two different requirements into one.
- *
- * Every path is an OPTION. A tool that reorganises its layout in a minor release is the
- * normal case, and a memorised layout turns that into a source that finds nothing while
- * reporting success.
- */
+// The spec source — Spec Kit: requirements from each feature's spec.md (`**FR-001**: …`),
+// tasks from its tasks.md, each id prefixed by its feature so two FR-001s stay two. Every
+// path is an option, because a memorised layout finds nothing the day the tool moves it.
 import { speckit } from '@specwarden/speckit';
 
 export const source = speckit({

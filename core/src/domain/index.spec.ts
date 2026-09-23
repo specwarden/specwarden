@@ -24,7 +24,7 @@ describe('domain barrel value exports', () => {
     expect(TIERS).toEqual(['fast', 'heavy', 'nightly']);
     expect(CAPABILITIES).toEqual(['read', 'exec', 'write', 'net']);
     expect(SEVERITIES).toEqual(['error', 'warning', 'info']);
-    expect(PLAN_STATUSES).toEqual(['draft', 'active']);
+    expect(PLAN_STATUSES).toEqual(['draft', 'active', 'done']);
     expect(typeof assertZoneMatchesLocation).toBe('function');
     expect(typeof FileNotFoundError).toBe('function');
     expect(typeof SpecwardenZoneError).toBe('function');

@@ -67,3 +67,22 @@ describe('decisionLogShape', () => {
     expect(errorsOf(v)[0]).toContain('no document matched `docs/_plans/*.md`');
   });
 });
+
+describe('decisionLogShape — its defaults and options', () => {
+  it('reads the plans in `docs/_plans` in the fast tier when nothing is said', async () => {
+    const check = decisionLogShape({ id: 'decision-log-shape', title: 't' });
+    const tree = {
+      'docs/_plans/a.md': '### Decision: x\n- Rejected: y\n',
+      'docs/other.md': '### Decision: z\n- Rejected: w\n',
+    };
+
+    expect(check.tier).toBe('fast');
+    expect(errorsOf(await runCheck(check, { tree }))).toEqual([
+      'docs/_plans/a.md:1 — decision "x" rejects "y" with no reason. State why: a rejection without a reason is the fact that gets lost.',
+    ]);
+  });
+
+  it('refuses an option it does not have, by name', () => {
+    expect(() => decisionLogShape({ ...ID, doc: 'x' } as never)).toThrow('`doc` is not an option of decisionLogShape');
+  });
+});

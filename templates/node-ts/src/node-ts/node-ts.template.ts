@@ -19,8 +19,8 @@ import {
  *
  * WHAT IT LEAVES OUT, deliberately. No count check — its vocabulary is English. No plan
  * or decision checks — those assume a way of working. The symbol check ships as an
- * `.example`, since it must be told what a symbol looks like here and an empty suffix
- * list makes it inert. A template that turned everything on would be red on the first
+ * `.example`, since it must be told what a symbol looks like here and a guessed suffix
+ * list finds the wrong names. A template that turned everything on would be red on the first
  * run, and the first run is what decides whether the tool is kept.
  *
  * The parts it composes are shared with every other template; what is local here is the

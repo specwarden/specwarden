@@ -109,14 +109,52 @@ describe('init --template', () => {
     });
   });
 
-  it('fills an empty rule owner with the README init itself writes, and keeps an owner the template named', async () => {
-    // A template cannot know where this repository's README is; left empty, the owner
-    // would fail rule-owner-resolves on the very first run.
+  it('fills an empty rule owner with the file that holds its reasoning, and keeps an owner the template named', async () => {
+    // A template cannot know where this repository keeps it; left empty, the owner would
+    // fail rule-owner-resolves. The README it used to get never mentioned the rule.
     manifest({ name: 'host' });
     install('demo', STANDARD);
     const rules = (await run('demo')).written.get('.specwarden/rules.mjs') ?? '';
-    expect(rules).toContain("id: 'unowned',\n    statement: 's',\n    owner: '.specwarden/README.md',");
+    expect(rules).toContain(
+      "id: 'unowned',\n    statement: 's',\n    owner: '.specwarden/checks/meta/context.check.mjs',",
+    );
     expect(rules).toContain("id: 'owned',\n    statement: 's',\n    owner: 'CONTRIBUTING.md',");
+  });
+
+  it('owns a rule enforced by something other than a check by the file declaring that enforcer', async () => {
+    manifest({ name: 'host' });
+    install(
+      'demo',
+      `requires: [],
+      files: () => [{ path: 'perimeter.mjs', body: "export const rules = [{ id: 'no-force-push' }];" }],
+      rules: () => [
+        { id: 'guarded', statement: 's', owner: '', enforcement: { checkIds: ['no-force-push'] } },
+        { id: 'loose', statement: 's', owner: '', enforcement: { notMechanizable: 'a person decides' } },
+      ],`,
+    );
+    const rules = (await run('demo')).written.get('.specwarden/rules.mjs') ?? '';
+    expect(rules).toContain("id: 'guarded',\n    statement: 's',\n    owner: '.specwarden/perimeter.mjs',");
+    // Nothing written enforces it, so the README init writes is the one file that exists.
+    expect(rules).toContain("id: 'loose',\n    statement: 's',\n    owner: '.specwarden/README.md',");
+  });
+
+  it("writes an example's rule COMMENTED OUT, owned by the file the example becomes", async () => {
+    manifest({ name: 'host' });
+    install(
+      'demo',
+      `requires: [],
+      files: () => [{ path: 'checks/ops/compose.check.mjs.example', body: '// needs a fact only you have' }],
+      rules: () => [{ id: 'compose', statement: 's', owner: '', enforcement: { checkIds: ['compose'] } }],`,
+    );
+    const r = await run('demo');
+    const rules = r.written.get('.specwarden/rules.mjs') ?? '';
+    expect(rules).toContain(
+      "  // { id: 'compose', statement: 's', owner: '.specwarden/checks/ops/compose.check.mjs', enforcement: { checkIds: ['compose'] } },",
+    );
+    expect(rules).not.toMatch(/^ {4}id: 'compose'/m);
+    // …and the console names both steps.
+    expect(r.out).toContain('rename it to .check.mjs, AND uncomment its rule');
+    expect(r.out).toContain("    checks/ops/compose.check.mjs.example → rule 'compose'\n");
   });
 
   it('names every file it switched off, so a skipped check is a decision rather than a discovery', async () => {
@@ -139,11 +177,45 @@ describe('init --template', () => {
     expect(config).toContain('  tiers: extra,');
   });
 
-  it('credits the template in the checks README rather than listing modules it did not use', async () => {
+  it('lists the families the template wrote in the checks README, not modules it did not use', async () => {
+    // It printed one placeholder row, "the folders beside this README", for every template.
     manifest({ name: 'host', devDependencies: { '@specwarden/docs': '1' } });
     install('demo', STANDARD);
     const readme = (await run('demo')).written.get('.specwarden/checks/README.md') ?? '';
-    expect(readme).toContain('from the `demo` template');
+    expect(readme).toContain('| `meta/` | context |');
+    expect(readme).toContain('| `ops/` | compose (example, off) |');
     expect(readme).not.toContain('`docs/`');
+  });
+
+  it('lists a file written beside checks/ at its real path, not indented under checks/', async () => {
+    // The listing read as checks/perimeter.mjs, a path that does not exist.
+    manifest({ name: 'host' });
+    install(
+      'demo',
+      `requires: [],
+      files: () => [
+        { path: 'checks/meta/context.check.mjs', body: '' },
+        { path: 'perimeter.mjs', body: '' },
+        { path: 'spec-source.mjs', body: '' },
+        { path: 'relevance.mjs', body: '' },
+      ],
+      rules: () => [],`,
+    );
+    const out = (await run('demo')).out;
+    expect(out).toMatch(/^ {2}perimeter\.mjs +what an assistant may not do here/m);
+    expect(out).toMatch(/^ {2}spec-source\.mjs +where requirements and tasks come from/m);
+    // A file init has no line for is still listed where it is, and credited to the template.
+    expect(out).toMatch(/^ {2}relevance\.mjs +written by the template$/m);
+    expect(out).toMatch(/^ {2}checks\/ +one file per check[^\n]*\n {4}meta\/context\.check\.mjs\n\n/m);
+  });
+
+  it('ends with the steps the tree left undone: the perimeter hook, and no suggest it has nothing for', async () => {
+    manifest({ name: 'host' });
+    install('demo', `requires: [], files: () => [{ path: 'perimeter.mjs', body: '' }], rules: () => [],`);
+    const out = (await run('demo')).out;
+    expect(out).toContain('wire the perimeter — until a hook runs it, .specwarden/perimeter.mjs enforces nothing.');
+    expect(out).toContain('hooks.PreToolUse');
+    expect(out).toContain('node "$CLAUDE_PROJECT_DIR/node_modules/specwarden/bin/warden.mjs" perimeter');
+    expect(out).not.toContain('specwarden suggest');
   });
 });

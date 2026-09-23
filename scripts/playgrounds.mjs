@@ -107,7 +107,13 @@ export function treeOf(dir, { skip = [] } = {}) {
  * would prove only that the harness had arranged it.
  */
 export function playgroundEnv() {
-  return { ...process.env, SPECWARDEN_ALL: '1', NO_COLOR: '1', FORCE_COLOR: '0' };
+  // NODE_PATH is dropped. pnpm's bin shim exports it pointing at the workspace's own
+  // `node_modules`, and module resolution through `createRequire` honours it — so a scratch
+  // repository that installed only the engine found every package in the workspace, and a
+  // scene about "a consumer without the module" was a scene about nothing.
+  const env = { ...process.env, SPECWARDEN_ALL: '1', NO_COLOR: '1', FORCE_COLOR: '0' };
+  delete env.NODE_PATH;
+  return env;
 }
 
 const git = (dir, args) =>

@@ -148,3 +148,9 @@ describe('task numbering', () => {
     ]);
   });
 });
+
+describe('speckit — its options', () => {
+  it('refuses an option it does not have, by name, when the config loads', () => {
+    expect(() => speckit({ task: 'tasks.md' } as never)).toThrow('`task` is not an option of speckit');
+  });
+});

@@ -81,18 +81,51 @@ const importGenerated = async (name: string, body: string): Promise<Record<strin
 };
 
 describe('everything a part writes actually loads', () => {
-  it('every live check imports, exports a check, and names the id its file promises', async () => {
+  it('every live check imports, exports a check, and states the rule it enforces', async () => {
     for (const [part, { files }] of Object.entries(everyPart())) {
       for (const file of files.filter((f) => f.path.endsWith('.check.mjs'))) {
         const mod = await importGenerated(`${part}-${file.path.replace(/\//g, '-')}`, file.body);
-        const found = mod.check ? [mod.check] : ((mod.checks as unknown[]) ?? []);
-        expect(found.length, `${part}: ${file.path} exports no check`).toBeGreaterThan(0);
-        const expected = file.path
-          .split('/')
-          .pop()
-          ?.replace(/\.check\.mjs$/, '');
-        if (mod.check)
-          expect((mod.check as { id: string }).id, `${part}: id does not match its filename`).toBe(expected);
+        const check = mod.check as { rule?: { statement: string }; title: string } | undefined;
+        expect(check, `${part}: ${file.path} exports no check`).toBeDefined();
+        // The rule is ON the check, so the two cannot drift; the title defaults to it.
+        expect(check?.rule?.statement, `${part}: ${file.path} states no rule`).toBeTruthy();
+        expect(check?.title).toBe(check?.rule?.statement);
+      }
+    }
+  });
+
+  it('names no id, no title and no default tier — the file name, the rule and the engine supply them', () => {
+    // Each was a line a newcomer read, and a value that could disagree with what the
+    // engine derives: an id differing from its file name, a title restating the rule.
+    for (const [part, { files }] of Object.entries(everyPart())) {
+      for (const file of files.filter((f) => /\.check\.mjs(\.example)?$/.test(f.path))) {
+        expect(file.body, `${part}: ${file.path}`).not.toMatch(/^\s+title: '/m);
+        expect(file.body, `${part}: ${file.path}`).not.toContain("tier: 'fast'");
+        if (file.path.endsWith('.check.mjs')) expect(file.body, `${part}: ${file.path}`).not.toMatch(/^\s+id: '/m);
+      }
+    }
+  });
+
+  it('an example names the id its commented rule names — the pair stays linked whatever the file is saved as', () => {
+    for (const [part, { files, rules }] of Object.entries(everyPart())) {
+      for (const file of files.filter((f) => f.path.endsWith('.check.mjs.example'))) {
+        const id = /^ {2}id: '([^']+)',$/m.exec(file.body)?.[1];
+        expect(id, `${part}: ${file.path} names no id`).toBeDefined();
+        expect(rules.map((r) => r.id)).toContain(id);
+      }
+    }
+  });
+
+  it("carries a header of a few lines, then the options — the reasoning is the module GUIDE's", () => {
+    for (const [part, { files }] of Object.entries(everyPart())) {
+      for (const file of files.filter((f) => /\.check\.mjs(\.example)?$/.test(f.path))) {
+        const header = file.body
+          .slice(0, file.body.indexOf('import '))
+          .split('\n')
+          .filter((l) => l.startsWith('// '));
+        expect(header.length, `${part}: ${file.path} has no header`).toBeGreaterThan(1);
+        // The title and at most four lines: what it catches, why, what to change, how to switch it on.
+        expect(header.length, `${part}: ${file.path} header`).toBeLessThanOrEqual(5);
       }
     }
   });
@@ -136,20 +169,20 @@ describe('a rule is carried by the part that needs it', () => {
     for (const [name, part] of Object.entries(everyPart())) {
       const written = new Set(
         part.files
-          .filter((f) => f.path.endsWith('.check.mjs'))
+          .filter((f) => /\.check\.mjs(\.example)?$/.test(f.path))
           .map(
             (f) =>
               f.path
                 .split('/')
                 .pop()
-                ?.replace(/\.check\.mjs$/, '') as string,
+                ?.replace(/\.check\.mjs(\.example)?$/, '') as string,
           ),
       );
       for (const rule of part.rules) {
         const ids = (rule.enforcement as { checkIds?: readonly string[] }).checkIds ?? [];
         for (const id of ids) {
           // The perimeter's enforcers are its own rule ids, evaluated by a hook rather
-          // than by a run — it declares them through configExtras instead.
+          // than by a run — the engine reads them from perimeter.mjs itself.
           if (name === 'perimeter') continue;
           expect(written.has(id), `${name}: rule ${rule.id} names ${id}, which it does not write`).toBe(true);
         }
@@ -157,9 +190,35 @@ describe('a rule is carried by the part that needs it', () => {
     }
   });
 
-  it('an example declares NO rule — its file is not loaded until somebody renames it', () => {
+  it('an example declares its rule, naming its own check — init writes it commented out beside the others', () => {
+    // Declared nowhere, the rule an example enforces lived nowhere the repository could read.
     for (const name of ['doc-counts', 'doc-symbols', 'doc-placement', 'env-files', 'upstreams', 'ci-coverage']) {
-      expect(everyPart()[name].rules, `${name} declares a rule for a check that is not registered`).toEqual([]);
+      const { files, rules } = everyPart()[name];
+      const id = files[0].path
+        .split('/')
+        .pop()
+        ?.replace(/\.check\.mjs\.example$/, '');
+      expect(
+        rules.map((r) => [r.id, r.enforcement]),
+        name,
+      ).toEqual([[id, { checkIds: [id] }]]);
+      expect(files[0].body, `${name} does not say how to switch it on`).toContain(
+        `rename to ${id}.check.mjs AND uncomment its rule in rules.mjs`,
+      );
+    }
+  });
+
+  it('a live check puts nothing in the register — its rule is on the check', () => {
+    for (const name of [
+      'secret-scan',
+      'doc-paths',
+      'doc-hygiene',
+      'script-wrappers',
+      'shell-scope',
+      'plan-lifecycle',
+      'agent-roles',
+    ]) {
+      expect(everyPart()[name].rules, name).toEqual([]);
     }
   });
 
@@ -192,9 +251,10 @@ describe('a part written blind is a red first run, so each one asks first', () =
     ]);
   });
 
-  it('and the rule shrinks with the files, never naming a check nobody wrote', () => {
-    const rules = scriptWrappersPart(ctx({ scripts: ['test'] })).rules;
-    expect((rules[0].enforcement as { checkIds: readonly string[] }).checkIds).toEqual(['unit']);
+  it('and each wrapper carries its own rule, so no rule can name a check nobody wrote', () => {
+    const { files, rules } = scriptWrappersPart(ctx({ scripts: ['test'] }));
+    expect(rules).toEqual([]);
+    expect(files.map((f) => f.body.includes("rule: 'Nothing merges while the test suite is red.'"))).toEqual([true]);
   });
 });
 
@@ -203,8 +263,20 @@ describe('what the caller decides, the part reads', () => {
     expect(docPathsPart(ctx({ docs: 'handbook/**/*.md' })).files[0].body).toContain("docs: 'handbook/**/*.md'");
   });
 
-  it('uses the tier it was given', () => {
-    expect(secretScanPart(ctx({ tier: 'pre-commit' })).files[0].body).toContain("tier: 'pre-commit'");
+  it('reads every document, and skips a tree of history, where the template says so', () => {
+    const body = docPathsPart(ctx(), { docs: '**/*.md', skipDirs: ['docs/_plans-archive/'] }).files[0].body;
+    expect(body).toContain("docs: '**/*.md'");
+    expect(body).toContain("skipDirs: ['docs/_plans-archive/']");
+    expect(docPathsPart(ctx()).files[0].body).not.toContain('skipDirs:');
+  });
+
+  it('uses the tier it was given, and writes none where it is the default', () => {
+    for (const part of Object.values(everyPart(ctx({ tier: 'pre-commit' })))) {
+      for (const f of part.files.filter((x) => /\.check\.mjs(\.example)?$/.test(x.path))) {
+        // The wrappers state `heavy` themselves; every other check takes the tier it is handed.
+        if (!f.body.includes("tier: 'heavy'")) expect(f.body, f.path).toContain("tier: 'pre-commit'");
+      }
+    }
   });
 
   it('invokes the package manager it detected, and falls back rather than guessing wrong', () => {
@@ -232,20 +304,76 @@ describe('what the caller decides, the part reads', () => {
   });
 });
 
+describe('an example points at what init found, and says plainly what to replace where it found nothing', () => {
+  const load = async (name: string, body: string) => (await importGenerated(name, body)).check;
+
+  it('gate-coverage reads the workflow that was detected', async () => {
+    const found = ciCoveragePart({ ...ctx(), workflows: ['.github/workflows/deploy.yml'] }).files[0].body;
+    expect(found).toContain("workflow: '.github/workflows/deploy.yml'");
+    expect(found).not.toContain('REPLACE: the workflow');
+    const guessed = ciCoveragePart(ctx()).files[0].body;
+    expect(guessed).toContain('REPLACE: the workflow file CI runs.');
+    expect(await load('gate-guessed.check.mjs', guessed)).toBeDefined();
+  });
+
+  it('upstreams-resolve reads the proxy config that was detected, and says when it cannot read it', async () => {
+    const caddy = upstreamsExamplePart({ ...ctx(), proxyConfigs: ['deploy/Caddyfile'] }).files[0].body;
+    expect(caddy).toContain("fileFor: () => 'deploy/Caddyfile'");
+    expect(caddy).not.toContain('not nginx');
+    const nginx = upstreamsExamplePart({ ...ctx(), proxyConfigs: ['deploy/nginx/upstreams.conf'] }).files[0].body;
+    expect(nginx).toContain("fileFor: () => 'deploy/nginx/upstreams.conf'");
+    expect(nginx).toContain("not nginx's: over this file it finds no upstream and fails");
+    const none = upstreamsExamplePart(ctx()).files[0].body;
+    expect(none).toContain('REPLACE: each mode');
+    for (const [n, body] of [
+      ['caddy', caddy],
+      ['nginx', nginx],
+      ['none', none],
+    ])
+      expect(await load(`upstreams-${n}.check.mjs`, body)).toBeDefined();
+  });
+
+  it('env-files-agree reads the keys from a committed env sample, when there is one', async () => {
+    const sampled = envFilesExamplePart({ ...ctx(), envSamples: ['.env.example'] }).files[0].body;
+    expect(sampled).toContain("read('.env.example')");
+    const none = envFilesExamplePart(ctx()).files[0].body;
+    expect(none).toContain('REPLACE: read the keys');
+    expect(none).not.toContain('config/env.schema.json');
+    expect(await load('env-sampled.check.mjs', sampled)).toBeDefined();
+    expect(await load('env-none.check.mjs', none)).toBeDefined();
+  });
+
+  it('a list the engine refuses empty ships with a guess that constructs, marked REPLACE', () => {
+    // An empty `countableNouns` or `suffixes` is a load error: it matched everything, not
+    // nothing — the opposite of what the old examples said ("empty means inert").
+    for (const body of [docCountsExamplePart(ctx()).files[0].body, docSymbolsExamplePart(ctx()).files[0].body]) {
+      expect(body).toContain('REPLACE');
+      expect(body).not.toMatch(/(countableNouns|suffixes): \[\]/);
+      expect(body).not.toMatch(/inert|nothing to look for/i);
+    }
+  });
+});
+
 describe('compose', () => {
   it('merges files, rules and config source in order', () => {
-    const merged = compose(secretScanPart(ctx()), docPathsPart(ctx()), perimeterPart());
+    const merged = compose(
+      secretScanPart(ctx()),
+      docCountsExamplePart(ctx()),
+      perimeterPart(),
+      specSourcePart('speckit'),
+    );
     expect(merged.files.map((f) => f.path)).toEqual([
       'checks/security/secret-scan.check.mjs',
-      'checks/docs/doc-paths.check.mjs',
+      'checks/docs/doc-counts.check.mjs.example',
       'perimeter.mjs',
+      'spec-source.mjs',
     ]);
-    expect(merged.rules.map((r) => r.id)).toEqual([
-      'no-credentials-in-tree',
-      'paths-in-documentation-resolve',
-      'no-irreversible-action-without-a-person',
-    ]);
-    expect(merged.configExtras?.imports).toContain('perimeterRules');
+    expect(merged.rules.map((r) => r.id)).toEqual(['doc-counts', 'no-irreversible-action-without-a-person']);
+    expect(merged.configExtras?.imports).toContain('specSource');
+  });
+
+  it('the perimeter needs nothing in the config — the engine reads its rule ids as enforcers', () => {
+    expect(perimeterPart().configExtras).toBeUndefined();
   });
 
   it('has no config source at all when no part contributed one', () => {

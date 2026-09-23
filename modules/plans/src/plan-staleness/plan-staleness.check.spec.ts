@@ -32,12 +32,15 @@ const ARCHIVE_OK = ['# Done', '**Started:** 2026-01-01', '**Finished:** 2026-01-
   '\n',
 );
 
+/** The plans folder every scene has unless it says otherwise — an absent one is a failure. */
+const FOLDER = { 'docs/_plans/README.md': 'The contract.' };
+
 /** `branches: null` is a checkout with no refs at all — "cannot tell", not "gone". */
 const runWith = (
   tree: Record<string, string>,
   branches: readonly string[] | null,
   over: Partial<IPlanStalenessOptions> = {},
-): Promise<IVerdict> => runCheck(planStaleness({ ...OPTIONS, ...over }), { tree, branches });
+): Promise<IVerdict> => runCheck(planStaleness({ ...OPTIONS, ...over }), { tree: { ...FOLDER, ...tree }, branches });
 
 const messages = (verdict: IVerdict) => verdict.findings.map((f) => f.message).join('\n');
 
@@ -73,6 +76,17 @@ describe('planStaleness — the live folder', () => {
 
     expect(verdict.ok).toBe(false);
     expect(messages(verdict)).toMatch(/draft yet declares branch `work-branch`/);
+  });
+
+  // It was read as a draft, and failed as "a draft that declares a branch".
+  it('passes a done plan that keeps its branch, and says to harvest and move it', async () => {
+    const done = ['**Status:** done', '**Branch:** work-branch'].join('\n');
+    const verdict = await runWith({ 'docs/_plans/thing.md': done }, ['dev'], {
+      statusDeclaration: /^\*\*Status:\*\*\s*`?(draft|active|done)`?/im,
+    });
+
+    expect(verdict.ok).toBe(true);
+    expect(messages(verdict)).toContain('docs/_plans/thing.md: is done — harvest it, then move it to');
   });
 
   it('passes a draft with no branch — draft is a first-class state', async () => {
@@ -220,21 +234,64 @@ describe('planStaleness — the archive', () => {
 
   it('skips a tracked document the file source cannot read', async () => {
     const check = planStaleness(OPTIONS);
-    const verdict = await runCheck(check, { tree: { 'a.md': '# a' }, tracked: ['a.md', 'deleted.md'], branches: [] });
+    const verdict = await runCheck(check, {
+      tree: { ...FOLDER, 'a.md': '# a' },
+      tracked: ['a.md', 'deleted.md'],
+      branches: [],
+    });
 
     expect(verdict.ok).toBe(true);
   });
 });
 
 describe('planStaleness — what it examined', () => {
-  it('passes a repository with no plans at all, and says it counted none', async () => {
-    const verdict = await runWith({ 'README.md': '# repo' }, ['dev']);
+  it('fails over a plans folder that is not there, naming it and the option — it passed with a green tick', async () => {
+    const verdict = await runCheck(planStaleness(OPTIONS), { tree: { 'README.md': '# repo' }, branches: ['dev'] });
 
-    expect(verdict.ok).toBe(true);
-    expect(messages(verdict)).toContain('0 plan(s) without a status');
+    expect(verdict.ok).toBe(false);
+    expect(errorsOf(verdict)).toEqual([
+      'docs/_plans does not exist — this check examined nothing, and a check that examined nothing cannot fail. Point `plansDir` at the folder the plans live in, or create it.',
+    ]);
   });
 
-  it('treats a FILE where the plans folder should be as no folder, rather than crashing', async () => {
-    expect((await runWith({ 'docs/_plans': 'not a folder' }, ['dev'])).ok).toBe(true);
+  it('passes a folder that holds no plan yet — nothing is in flight, which is true', async () => {
+    const verdict = await runWith({}, ['dev']);
+
+    expect(verdict.ok).toBe(true);
+    expect(messages(verdict)).toBe('no plan in docs/_plans — nothing in flight');
+  });
+
+  it('fails a FILE where the plans folder should be, rather than crashing on the listing', async () => {
+    const verdict = await runCheck(planStaleness(OPTIONS), { tree: { 'docs/_plans': 'x' }, branches: ['dev'] });
+
+    expect(errorsOf(verdict)).toEqual([
+      'docs/_plans is a file, not a folder of plans. Point `plansDir` at the folder.',
+    ]);
+  });
+
+  it('does not require the archive to exist — a repository that has finished nothing has none', async () => {
+    expect((await runWith({ 'docs/_plans/a.md': ACTIVE }, ['work-branch'])).ok).toBe(true);
+  });
+});
+
+describe('planStaleness — its defaults and its options', () => {
+  it('reads `docs/_plans` and archives into `docs/_plans-archive` when neither is said', async () => {
+    const check = planStaleness({ id: 'plan-staleness', title: 't' });
+    const verdict = await runCheck(check, { tree: { 'docs/_plans/a.md': ACTIVE }, branches: ['dev'] });
+
+    expect(check.tier).toBe('fast');
+    expect(errorsOf(verdict)[0]).toContain('move it to docs/_plans-archive/.');
+  });
+
+  it('refuses an option it does not have, by name, when the file loads', () => {
+    expect(() => planStaleness({ ...OPTIONS, plans: 'docs/_plans' } as never)).toThrow(
+      "planStaleness 'plan-staleness': `plans` is not an option of planStaleness",
+    );
+  });
+
+  it('takes a `rule` like every other factory', () => {
+    const check = planStaleness({ ...OPTIONS, rule: { statement: 'no plan outlives its work', owner: 'README.md' } });
+
+    expect(check.rule).toMatchObject({ statement: 'no plan outlives its work' });
   });
 });

@@ -44,7 +44,9 @@ export const checks = [
     title: 'every repository path the hand-written documentation names resolves',
     tier: 'fast',
     docs: '**/*.md',
-    skipDirs: [...STRANGERS, 'node_modules/'],
+    // A changeset describes a CONSUMER's tree, and a plan may name what does not exist yet
+    // (`skills/plans/SKILL.md` §2) — neither is a claim about this repository.
+    skipDirs: [...STRANGERS, 'node_modules/', '.changeset/', '_plans/'],
     rule: {
       id: 'a-documented-path-resolves',
       statement: 'a path named in this repository’s documentation exists — an agent follows it as an instruction',

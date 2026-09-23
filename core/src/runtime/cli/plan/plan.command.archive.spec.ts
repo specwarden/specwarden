@@ -35,13 +35,23 @@ describe('plan archive', () => {
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
+  const HEADER = [
+    '**Started:** 2026-09-01',
+    '**Finished:** 2026-09-20',
+    '**Branch:** feat-x',
+    '**Harvested:** below',
+    '**Left open:** nothing',
+  ];
   const plan = (...lines: string[]) =>
-    writeFileSync(join(dir, 'plans', 'p.md'), ['**Status:** active', '', ...lines].join('\n'));
+    writeFileSync(join(dir, 'plans', 'p.md'), ['**Status:** done', ...HEADER, '', ...lines].join('\n'));
 
   it('reports ready, exits 0 and names the move, when every harvest destination resolves', async () => {
     plan('## Harvest', '- the retry decision → docs/ARCHITECTURE.md');
     expect(await planStatus(['plan', 'archive', 'plans/p.md'], dir, io, noSpawn)).toBe(0);
-    expect(out).toContain('✅ plans/p.md is ready to archive');
+    expect(out).toContain(
+      '✅ plans/p.md is ready to archive — harvest declared, every destination resolves, and the header carries ' +
+        '**Started:**, **Finished:**, **Branch:**, **Harvested:**, **Left open:**.',
+    );
     expect(out).toContain('git mv plans/p.md plans-archive/');
     expect(err).toBe('');
   });
@@ -51,6 +61,20 @@ describe('plan archive', () => {
     expect(await planStatus(['plan', 'archive', 'plans/p.md'], dir, io, noSpawn)).toBe(2);
     expect(err).toContain('❌ plans/p.md is not ready to archive:');
     expect(err).toContain('• no Harvest section');
+    expect(out).toBe('');
+  });
+
+  it('refuses a plan lacking the archive header, and names the fields to add', async () => {
+    // "Ready" over a plan with no header, and the archived entry was then refused by the
+    // plans module for exactly that: advice that, followed literally, turned the run red.
+    writeFileSync(
+      join(dir, 'plans', 'p.md'),
+      ['**Status:** done', '', '## Harvest', '- a → docs/ARCHITECTURE.md'].join('\n'),
+    );
+    expect(await planStatus(['plan', 'archive', 'plans/p.md'], dir, io, noSpawn)).toBe(2);
+    expect(err).toContain(
+      '• the archive header is missing **Started:**, **Finished:**, **Branch:**, **Harvested:**, **Left open:**',
+    );
     expect(out).toBe('');
   });
 

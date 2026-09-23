@@ -1,16 +1,19 @@
-import type { ICheck, ICheckIdentity, IFinding } from '../../domain';
+import type { ICheck, ICheckDeclaration, IFinding } from '../../domain';
 import {
   type ICorpusFloor,
   belowCorpusFloor,
   buildCheck,
-  withExaminedNote,
+  checkOptions,
+  emptyCorpusReason,
   lineOf,
   testStateless,
+  trackedCorpus,
   verdictFrom,
+  withExaminedNote,
 } from '../_shared';
 
-export interface IForbidPatternOptions extends ICheckIdentity {
-  /** Glob of files scanned. */
+export interface IForbidPatternOptions extends ICheckDeclaration {
+  /** Pathspec of the TRACKED files scanned. */
   readonly in: string;
   /** How many files `in` must match for a verdict to count. Defaults to one: a ban over
    * zero files bans nothing, and it passed in silence before this existed. */
@@ -19,7 +22,7 @@ export interface IForbidPatternOptions extends ICheckIdentity {
   readonly pattern: RegExp;
   /** Matches that ARE allowed (a lookalike that is not the real thing). */
   readonly allow?: RegExp;
-  /** Globs exempt from the scan. */
+  /** Pathspecs exempt from the scan. */
   readonly except?: readonly string[];
   /** Per-match message; the matched text is available as `{match}`. */
   readonly message?: string;
@@ -32,24 +35,34 @@ export interface IForbidPatternOptions extends ICheckIdentity {
  * with it.
  */
 export function forbidPattern(options: IForbidPatternOptions): ICheck {
+  checkOptions('forbidPattern', options, {
+    in: { kind: 'string', required: true },
+    pattern: { kind: 'regexp', required: true },
+    allow: { kind: 'regexp' },
+    except: { kind: 'array' },
+    message: { kind: 'string' },
+    corpus: { kind: 'object' },
+  });
   const re = new RegExp(
     options.pattern.source,
     options.pattern.flags.includes('g') ? options.pattern.flags : `${options.pattern.flags}g`,
   );
-  return buildCheck(options, ['read'], (ctx) => {
-    const exempt = new Set((options.except ?? []).flatMap((g) => ctx.files.glob(g)));
-    const files = ctx.files.glob(options.in).filter((file) => !exempt.has(file));
+  return buildCheck(options, ['read'], (ctx, self) => {
+    const corpus = trackedCorpus(ctx.vcs, options.in, options.except);
     const short = belowCorpusFloor(
-      options.id,
-      files.length,
+      self.id,
+      corpus.files.length,
       options.corpus,
-      `\`${options.in}\` matched nothing to scan`,
+      emptyCorpusReason(options.in, corpus, 'scan'),
     );
     if (short) return short;
 
     const findings: IFinding[] = [];
-    for (const file of files) {
-      const content = ctx.files.read(file);
+    let examined = 0;
+    for (const file of corpus.files) {
+      const content = ctx.files.tryRead(file);
+      if (content === undefined) continue;
+      examined++;
       for (const m of content.matchAll(re)) {
         if (options.allow && testStateless(options.allow, m[0])) continue;
         findings.push({
@@ -57,10 +70,10 @@ export function forbidPattern(options: IForbidPatternOptions): ICheck {
           file,
           line: lineOf(content, m.index ?? 0),
           message: (options.message ?? `forbidden pattern in ${file}: {match}`).replace('{match}', m[0]),
-          ruleId: options.id,
+          ruleId: self.id,
         });
       }
     }
-    return verdictFrom(withExaminedNote(findings, options.id, files.length), ctx.ratchet ?? options.ratchet);
+    return verdictFrom(withExaminedNote(findings, self.id, examined), ctx.ratchet ?? options.ratchet);
   });
 }

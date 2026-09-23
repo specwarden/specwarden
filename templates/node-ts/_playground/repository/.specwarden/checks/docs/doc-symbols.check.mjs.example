@@ -1,34 +1,15 @@
-/**
- * `doc-symbols` — documentation does not name classes that no longer exist.
- *
- * Docs decay through NAMES before they decay through rules. A renamed class leaves the
- * old name in prose; a reader greps the dead name, finds nothing, and invents the rest
- * while the invariants they just read were right.
- *
- * WHY IT IS AN EXAMPLE. Three of its inputs are facts about THIS repository:
- *
- *   suffixes     the endings that make a word a symbol — 'Service', 'Repository', …
- *                EMPTY MEANS INERT: it matches nothing and reports green, every time.
- *   code         where the declarations live, as git pathspecs.
- *   external     symbols owned by frameworks. Documentation may legitimately name them
- *                and they will never be found in your own sources.
- *
- * For a language that is not TypeScript, pass `declaration` — a RegExp whose first
- * group is the declared name. DEFAULT_DECL_RE covers class/interface/type/enum/const.
- *
- * Fill the suffixes in, rename to `.check.mjs`, and it starts finding things.
- */
+// `doc-symbols` — documentation names no class that no longer exists.
+// OFF until `suffixes` are the endings that make a word a symbol HERE — the four below are a
+// guess — and `code` is where they are declared. Outside TypeScript, pass `declaration`.
+// Switch it on: rename to doc-symbols.check.mjs AND uncomment its rule in rules.mjs.
 import { docSymbols } from '@specwarden/docs';
 
 export const check = docSymbols({
   id: 'doc-symbols',
-  title: 'documentation names symbols that exist',
-  tier: 'fast',
   docs: '**/*.md',
-  // Where the declarations live.
   code: ['src/**/*.ts'],
-  // The endings that make a word a symbol here. EMPTY MEANS INERT.
-  suffixes: [],
-  // Framework-owned names documentation may reference. Keep it sorted, keep it boring.
+  // REPLACE: the endings of this repository's own class names.
+  suffixes: ['Service', 'Repository', 'Controller', 'Error'],
+  // Framework-owned names documentation may mention and your sources never declare.
   external: [],
 });

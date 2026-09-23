@@ -80,6 +80,30 @@ describe('ruleOwnerFindings — what counts as a document', () => {
     expect(findings).toEqual([]);
   });
 
+  // A module's check implies its rule, owned by the package that ships the reasoning.
+  it('does not look for a file when the owner is a scoped package the repository depends on', () => {
+    const owners = [
+      '@specwarden/docs',
+      '@specwarden/plugin-nestjs § Layering',
+      '@scope/pkg/GUIDE.md',
+      '@acme/policies',
+      '@docs/rules.md',
+    ];
+    const manifest = JSON.stringify({ devDependencies: { '@specwarden/docs': '1', '@specwarden/plugin-nestjs': '1' } });
+    const findings = ruleOwnerFindings(
+      owners.map((owner, i) => ({ id: `r${i}`, statement: 's', owner, enforcement: { checkIds: ['x'] } })),
+      new InMemoryFileSource({ 'package.json': manifest }),
+    );
+
+    // A scoped name nobody installed is still read as a path — it was, before, and any
+    // `@x/y` passing would let a typo'd owner through.
+    expect(findings.map((f) => f.message)).toEqual([
+      "rule 'r2' names owner '@scope/pkg/GUIDE.md', whose document @scope/pkg/GUIDE.md does not exist",
+      "rule 'r3' names owner '@acme/policies', whose document @acme/policies does not exist",
+      "rule 'r4' names owner '@docs/rules.md', whose document @docs/rules.md does not exist",
+    ]);
+  });
+
   it('checks an owner that is path-shaped by a slash alone, and names it', () => {
     const findings = ruleOwnerFindings(
       [{ id: 'r', statement: 's', owner: 'skills/gates/SKILL', enforcement: { checkIds: ['x'] } }],
@@ -101,5 +125,14 @@ describe('ruleOwnerFindings — what counts as a document', () => {
     );
 
     expect(findings[0].ruleId).toBe('owners');
+  });
+});
+
+describe('ruleOwnerFindings — a rule with no owner', () => {
+  it('reports it by name, instead of crashing the audit on "reading \'split\'"', () => {
+    const ownerless = { id: 'x', statement: 's', enforcement: { checkIds: ['x'] } } as unknown as IRule;
+    expect(ruleOwnerFindings([ownerless], new InMemoryFileSource({})).map((f) => f.message)).toEqual([
+      "rule 'x' names no owner — say which document holds its reasoning (`owner: 'docs/RULES.md'`).",
+    ]);
   });
 });

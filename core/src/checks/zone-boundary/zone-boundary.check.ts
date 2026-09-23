@@ -1,13 +1,16 @@
-import type { ICheck, ICheckIdentity, IFinding } from '../../domain';
+import type { ICheck, ICheckDeclaration, IFinding } from '../../domain';
 import {
   type ICorpusFloor,
   IMPORT_RE,
   belowCorpusFloor,
   buildCheck,
-  withExaminedNote,
+  checkOptions,
+  emptyCorpusReason,
   lineOf,
   matchesSpecifier,
+  trackedCorpus,
   verdictFrom,
+  withExaminedNote,
 } from '../../primitives/_shared';
 
 /** A host-repository token a product-zone source may never contain, with a human
@@ -18,7 +21,7 @@ export interface IForbiddenLiteral {
   readonly pattern: RegExp;
 }
 
-export interface IZoneBoundaryOptions extends ICheckIdentity {
+export interface IZoneBoundaryOptions extends ICheckDeclaration {
   /** Glob of the product-zone sources to sweep. */
   readonly productSources: string;
   /** Globs exempt from the sweep — a product's own tests legitimately name the
@@ -55,20 +58,33 @@ function firstMatch(content: string, pattern: RegExp): RegExpExecArray | null {
  * are the host — arrive as options, which is where consumer knowledge belongs.
  */
 export function zoneBoundary(options: IZoneBoundaryOptions): ICheck {
-  return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx) => {
-    const exempt = new Set((options.except ?? []).flatMap((g) => ctx.files.glob(g)));
-    const files = ctx.files.glob(options.productSources).filter((file) => !exempt.has(file));
+  checkOptions('zoneBoundary', options, {
+    productSources: { kind: 'string', required: true },
+    forbiddenLiterals: { kind: 'array', required: true },
+    except: { kind: 'array' },
+    consumerImport: { kind: ['string', 'regexp'] },
+    corpus: { kind: 'object' },
+  });
+  return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx, self) => {
+    const corpus = trackedCorpus(ctx.vcs, options.productSources, options.except);
+    const files = corpus.files;
     const short = belowCorpusFloor(
-      options.id,
+      self.id,
       files.length,
       options.corpus,
-      `\`${options.productSources}\` matched no product source to sweep`,
+      emptyCorpusReason(options.productSources, corpus, 'sweep').replace(
+        'matched nothing to sweep',
+        'matched no product source to sweep',
+      ),
     );
     if (short) return short;
 
     const findings: IFinding[] = [];
+    let examined = 0;
     for (const file of files) {
-      const content = ctx.files.read(file);
+      const content = ctx.files.tryRead(file);
+      if (content === undefined) continue;
+      examined++;
 
       if (options.consumerImport !== undefined) {
         for (const m of content.matchAll(IMPORT_RE)) {
@@ -78,7 +94,7 @@ export function zoneBoundary(options: IZoneBoundaryOptions): ICheck {
               file,
               line: lineOf(content, m.index ?? 0),
               message: `${file} imports \`${m[1]}\`, reaching into the consumer zone — the dependency is one-way, P never imports C.`,
-              ruleId: options.id,
+              ruleId: self.id,
             });
           }
         }
@@ -92,11 +108,11 @@ export function zoneBoundary(options: IZoneBoundaryOptions): ICheck {
             file,
             line: lineOf(content, hit.index),
             message: `${file} names the host literal ${literal.label} — a product-zone source must survive renaming the project. Move the repository fact into .specwarden/ config.`,
-            ruleId: options.id,
+            ruleId: self.id,
           });
         }
       }
     }
-    return verdictFrom(withExaminedNote(findings, options.id, files.length), ctx.ratchet ?? options.ratchet);
+    return verdictFrom(withExaminedNote(findings, self.id, examined), ctx.ratchet ?? options.ratchet);
   });
 }

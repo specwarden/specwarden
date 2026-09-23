@@ -54,6 +54,19 @@ describe('TtyReporter — one check', () => {
     expect(out()).toBe('✅ lint — 1.3s\n');
   });
 
+  // It printed ✅ beside a note reading SKIPPED: a pass nobody earned.
+  it('renders a check that could not look as skipped, with its notes, whatever --show-skipped says', () => {
+    const { reporter, out } = capture();
+    reporter.checkFinished(
+      result('env', {
+        skipped: 'cannot-tell',
+        verdict: { ok: true, findings: [{ severity: 'info', message: 'prod: absent' }], skipped: 'no env file here' },
+      }),
+    );
+
+    expect(out()).toBe('prod: absent\n⏭  env — could not look here: no env file here\n');
+  });
+
   it('prints each finding verbatim on its own line, above the frame line', () => {
     const { reporter, out } = capture();
     reporter.checkFinished(
@@ -124,8 +137,53 @@ describe('TtyReporter — one check', () => {
 
     const lines = out().trimEnd().split('\n');
     expect(lines[0]).toMatch(/^↑ 1 pre-existing violation\(s\) tolerated under ratchet 1/);
-    expect(lines[1]).toBe('forbidden pattern in a.ts: BANNED');
+    expect(lines[1]).toBe('a.ts:1 forbidden pattern in a.ts: BANNED');
     expect(lines[2]).toBe('✅ banned — 0.1s');
+  });
+
+  /**
+   * The location leads. It was on every finding and printed by the annotation reporter
+   * alone, so the terminal said "forbidden pattern in src/util.ts: TODO" and the reader
+   * went looking for the line the engine already knew.
+   */
+  it.each([
+    [
+      'a file and a line, the message not naming it',
+      { file: 'src/a.ts', line: 3, message: 'banned' },
+      'src/a.ts:3 banned',
+    ],
+    [
+      'a message opening with its file gains the line there',
+      { file: 'src/a.ts', line: 3, message: 'src/a.ts imports x.' },
+      'src/a.ts:3 imports x.',
+    ],
+    [
+      'a message opening with file:line is left alone',
+      { file: 'src/a.ts', line: 3, message: 'src/a.ts:3 said so' },
+      'src/a.ts:3 said so',
+    ],
+    [
+      'a message opening with file and a colon keeps it',
+      { file: 'src/a.ts', line: 1, message: 'src/a.ts: TODO' },
+      'src/a.ts:1: TODO',
+    ],
+    ['a file and no line', { file: 'src/a.ts', message: 'is missing' }, 'src/a.ts is missing'],
+    [
+      'a message opening with its file, no line, unchanged',
+      { file: 'src/a.ts', message: 'src/a.ts is missing' },
+      'src/a.ts is missing',
+    ],
+    [
+      'a longer path that merely starts with the file is not the file',
+      { file: 'src/a.ts', message: 'src/a.tsx differs' },
+      'src/a.ts src/a.tsx differs',
+    ],
+    ['no file: the message, unchanged', { message: '3 rules unowned' }, '3 rules unowned'],
+  ])('%s', (_name, finding, line) => {
+    const { reporter, out } = capture();
+    reporter.checkFinished(result('x', { verdict: failed([{ severity: 'error', ...finding }]) }));
+
+    expect(out().split('\n')[0]).toBe(line);
   });
 
   it('says nothing for a skipped check unless asked — a filtered tier would bury what ran', () => {
@@ -149,6 +207,21 @@ describe('TtyReporter — the run summary', () => {
     reporter.runFinished([result('a'), result('b')], 2000);
 
     expect(out()).toBe('\n✅ 2 gate(s) passed in 2.0s\n');
+  });
+
+  it('counts a passing advisory check as passed — "4 gate(s) passed" was printed for five', () => {
+    const { reporter, out } = capture();
+    reporter.runFinished([result('a'), result('advice', {}, { advisory: true })], 1000);
+
+    expect(out()).toBe('\n✅ 2 gate(s) passed in 1.0s\n');
+  });
+
+  it('says nothing ran when every check was skipped — "✅ 0 gate(s) passed" was a tick over nothing', () => {
+    const { reporter, out } = capture();
+    reporter.runFinished([result('a', { skipped: 'by-request' })], 100);
+
+    expect(out()).toContain('\n⏭  nothing ran — 1 skipped, 0 checked, in 0.1s\n');
+    expect(out()).not.toContain('✅');
   });
 
   it('is red over a run with any failure, however many passed', () => {

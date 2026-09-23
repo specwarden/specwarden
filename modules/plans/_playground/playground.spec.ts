@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { decisionLogShape, planShape, planStaleness } from '@specwarden/plans';
-import { CHECK_CONTRACT_VERSION, type ICheckMeta, errorsOf, runCheck, uncoveredFactories } from 'specwarden';
+import { decisionLogShape, planChecks, planShape, planStaleness } from '@specwarden/plans';
+import { CHECK_CONTRACT_VERSION, CheckOptionsError, type ICheckMeta, errorsOf, runCheck } from 'specwarden';
 
-import { BRANCHES, BROKEN, CLEAN, COVERED, KNOWN_GATE_IDS, PLAN_SHAPE_CONVENTION, PROBE } from './repository';
+import { BRANCHES, BROKEN, CLEAN, COVERED, KNOWN_GATE_IDS, PLAN_SHAPE_CONVENTION } from './repository';
 
 /**
  * Everything this package publishes, wired the way a consumer wires it.
@@ -19,11 +19,58 @@ import { BRANCHES, BROKEN, CLEAN, COVERED, KNOWN_GATE_IDS, PLAN_SHAPE_CONVENTION
 
 const ID = { title: 'playground', tier: 'fast' as const };
 
+const isCheck = (value: unknown): boolean =>
+  typeof (value as { id?: unknown } | null)?.id === 'string' &&
+  typeof (value as { run?: unknown } | null)?.run === 'function';
+
+/**
+ * Every export that builds checks, told from a helper by what it DOES with an options
+ * object it cannot honour: it returns checks, or it refuses the options by name. One probe
+ * carrying every factory's options read every factory as a helper once each began refusing
+ * the options it does not have — an audit that passed over none of them.
+ */
+function factoriesOf(mod: Readonly<Record<string, unknown>>): string[] {
+  return Object.entries(mod)
+    .filter(([name, value]) => typeof value === 'function' && /^[a-z]/.test(name))
+    .filter(([, value]) => {
+      try {
+        const made = (value as (options: unknown) => unknown)({ id: 'probe', unknownOption: true });
+        return isCheck(made) || (Array.isArray(made) && made.length > 0 && made.every(isCheck));
+      } catch (error) {
+        return error instanceof CheckOptionsError;
+      }
+    })
+    .map(([name]) => name)
+    .sort();
+}
+
 describe('@specwarden/plans', () => {
   it('exercises every check factory the package publishes', async () => {
     const mod = (await import('@specwarden/plans')) as Record<string, unknown>;
 
-    expect(uncoveredFactories(mod, { covered: COVERED, probe: PROBE })).toEqual([]);
+    expect(factoriesOf(mod)).toEqual([...COVERED].sort());
+  });
+
+  it('planChecks: the whole module in one call, green over the clean folder and red over the broken one', async () => {
+    const checks = planChecks({
+      plansDir: 'docs/_plans',
+      archiveDir: 'docs/_archive',
+      shape: { nameRe: PLAN_SHAPE_CONVENTION.nameRe, knownGateIds: KNOWN_GATE_IDS },
+    });
+
+    expect(checks.map((c) => c.id)).toEqual(['plan-staleness', 'plan-shape', 'decision-log-shape']);
+    for (const check of checks) {
+      expect(errorsOf(await runCheck(check, { tree: CLEAN, branches: BRANCHES })), check.id).toEqual([]);
+      expect((await runCheck(check, { tree: BROKEN, branches: BRANCHES })).ok, check.id).toBe(false);
+    }
+  });
+
+  it('a plans folder that is not there is a failure naming it, in every check that reads the folder', async () => {
+    for (const check of planChecks({ plansDir: 'planning', decisions: false })) {
+      expect(errorsOf(await runCheck(check, { tree: CLEAN, branches: BRANCHES }))[0], check.id).toContain(
+        'planning does not exist',
+      );
+    }
   });
 
   it('planStaleness: an active plan names a branch that still resolves', async () => {
@@ -113,5 +160,20 @@ describe('@specwarden/plans', () => {
     const verdict = await runCheck(check, { tree: CLEAN });
     expect(verdict.ok).toBe(false);
     expect(errorsOf(verdict)[0]).toContain('examined nothing');
+  });
+});
+
+// Wired with no `rule`, a module's check was an orphan the moment a register existed —
+// and a preset's checks had nowhere to put one. The module knows what its check enforces.
+describe('@specwarden/plans — every check names the rule it enforces', () => {
+  it('carries an implied rule owned by the package, and a rule the consumer writes wins', () => {
+    const built = planChecks({});
+    for (const check of built) {
+      expect(check.rule, check.id).toEqual(
+        expect.objectContaining({ statement: expect.any(String), owner: '@specwarden/plans', implied: true }),
+      );
+      expect(check.title, check.id).not.toBe(check.id);
+    }
+    expect(planShape({ id: 'plan-shape', rule: 'ours' }).rule).toEqual({ statement: 'ours' });
   });
 });

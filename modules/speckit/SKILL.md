@@ -37,6 +37,11 @@ stay in step.
 
 5. **SpecWarden never writes here.**
 
+6. **The documented marker carries the FULL id — `001-invites#FR-001`.** The GUIDE's
+   `idPattern` once captured `INV-…`, which can never equal a feature-prefixed id, so "in
+   sync" was unreachable by following the documentation. The journey spec runs the GUIDE's
+   config as written over a deposit; change the convention and that scene changes too.
+
 ## Changing the adapter
 
 - Change this, `@specwarden/openspec` and the engine's native source together whenever

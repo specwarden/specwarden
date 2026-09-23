@@ -27,11 +27,18 @@ it inside somebody else's repository is
    in that codebase's own checks.
 
 4. **The exemptions are what make a rule livable.** The repository layer is where the
-   query belongs, and the tests that exercise it necessarily reach the same package. A
-   rule with no exemptions is a rule that gets a blanket ratchet and stops meaning
+   query belongs, an entity IS the ORM's schema, and the tests that exercise them
+   necessarily reach the same package. The entities were missing from
+   `DEFAULT_ALLOWED_FROM`, and every real service was red on its entity file on the first
+   run. A rule with no exemptions is a rule that gets a blanket ratchet and stops meaning
    anything.
 
-5. **The barrel is the only import path a consumer depends on.** A second rule is a
+5. **The options are checked by name, and the check carries the host's `rule`.** A
+   misspelled `allowedFrom` was dropped and the defaults applied in silence; `checkOptions`
+   refuses it at load. Without `rule` the check was an orphan in every host that keeps a
+   register, with no way to fix it short of re-declaring the check.
+
+6. **The barrel is the only import path a consumer depends on.** A second rule is a
    sibling folder under `src/`, exported from the barrel — not a longer index file and
    not a deeper import.
 

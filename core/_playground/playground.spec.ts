@@ -180,12 +180,14 @@ describe('specwarden — the engine, assembled', () => {
     // one line and reported the real count on the verdict, in a field nothing read.
     // Counting printed findings instead gave zero, so a command whose whole purpose is
     // to record the truth would have recorded a fiction and failed the next ordinary run.
+    // The summary is an `info` line: beside `measured`, an ERROR finding fails the verdict,
+    // and `--tighten` records nothing from a failing one.
     const check = defineCheck({
       id: 'summarises',
       title: 'summarises',
       ratchetId: 'summarises',
       run: () => ({
-        findings: [{ severity: 'error' as const, message: '17 violations across the tree' }],
+        findings: [{ severity: 'info' as const, message: '17 violations across the tree' }],
         measured: 17,
       }),
     });

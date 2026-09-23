@@ -97,6 +97,17 @@ describe('JsonReporter', () => {
     expect(JSON.parse(chunks[0])).toEqual({ totalMs: 0, results: [] });
   });
 
+  // A dashboard reading the document could not tell a filtered run from a fail-safe one.
+  it('carries why relevance did not filter the run, and nothing when it did', () => {
+    const full = capture();
+    full.reporter.runFinished([], 0, { fullRunReason: 'CI with no base' });
+    expect(JSON.parse(full.chunks[0])).toEqual({ totalMs: 0, fullRunReason: 'CI with no base', results: [] });
+
+    const filtered = capture();
+    filtered.reporter.runFinished([], 0, {});
+    expect(Object.keys(JSON.parse(filtered.chunks[0]))).toEqual(['totalMs', 'results']);
+  });
+
   describe('its default sink', () => {
     afterEach(() => {
       vi.restoreAllMocks();

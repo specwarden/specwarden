@@ -67,6 +67,16 @@ export interface ITemplateContext {
    * correctly, and on a fresh scaffold that is a red first run caused by the scaffold.
    */
   readonly hasShellScripts?: boolean;
+  /**
+   * Workflow files, repository-relative, in the order found. An example's path comes from
+   * what was found: a path the repository does not have is the first thing its reader has
+   * to discover is wrong. Absent from a caller that does not detect them.
+   */
+  readonly workflows?: readonly string[];
+  /** Reverse-proxy configs — a `Caddyfile`, an nginx `.conf` — in the order found. */
+  readonly proxyConfigs?: readonly string[];
+  /** Env-file samples a repository commits beside its compose file — `.env.example`. */
+  readonly envSamples?: readonly string[];
 }
 
 export interface ITemplate {

@@ -18,7 +18,11 @@ export function doctor(config: IWardenConfig, registry: CheckRegistry, io: ICliI
   for (const c of registry.all()) {
     const caps = c.capabilities.length ? c.capabilities.join(',') : '—';
     const blocked = c.capabilities.some((cap) => denied.has(cap)) ? ' DENIED' : '';
-    io.out(`${c.id}\t${c.tier}\t${c.zone}\t[${caps}]${blocked}\t${c.title}\n`);
+    // The three things a reader asks doctor about one check, beyond its id: does it block,
+    // does it need the machine to itself, and which file do I open to change it.
+    const flags = `${c.advisory ? ' advisory' : ''}${c.exclusive ? ' exclusive' : ''}`;
+    const origin = registry.originOf(c);
+    io.out(`${c.id}\t${c.tier}\t${c.zone}\t[${caps}]${blocked}${flags}\t${c.title}${origin ? `\t${origin}` : ''}\n`);
   }
   if (denied.size) io.out(`\ndenyCapabilities: ${[...denied].join(', ')}\n`);
 

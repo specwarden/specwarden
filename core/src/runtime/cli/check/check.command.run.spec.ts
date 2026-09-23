@@ -3,78 +3,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { CHECK_CONTRACT_VERSION, type ICheck, type IFixable, type IReporter, type IVcs } from '../../../domain';
+import type { ICheck, IFixable, IReporter, IVcs } from '../../../domain';
 import { testContext } from '../../../testing';
 import { CheckRegistry } from '../../container';
-import type { IWardenConfig } from '../../config/config.model';
 import type { IParsedArgs } from '../_shared/parse-args/parse-args.util';
 import { check } from './check.command';
+import { aCheck, args, setup, tracer } from './check.command.spec-helpers';
 
 /**
  * The run path of `check`: what it refuses before anything executes, and what it
  * forwards from argv and the environment to the runner. Every port is a fake from the
  * engine's own testing kit, so nothing here reads the real disk or spawns git.
  */
-
-const args = (over: Partial<IParsedArgs> = {}): IParsedArgs => ({
-  command: 'check',
-  ids: [],
-  positionals: [],
-  all: false,
-  list: false,
-  json: false,
-  fix: false,
-  tighten: false,
-  ifRelevant: false,
-  relevance: false,
-  showSkipped: false,
-  ...over,
-});
-
-const aCheck = (id: string, over: Partial<ICheck> = {}): ICheck => ({
-  id,
-  title: `${id} title`,
-  tier: 'fast',
-  zone: 'consumer',
-  capabilities: [],
-  contractVersion: CHECK_CONTRACT_VERSION,
-  when: () => true,
-  run: () => ({ ok: true, findings: [] }),
-  ...over,
-});
-
-function setup(checks: readonly ICheck[], config: IWardenConfig = {}, vcs: IVcs = testContext({ changed: [] }).vcs) {
-  const registry = new CheckRegistry();
-  registry.registerAll(checks);
-  const t = testContext();
-  const full: IWardenConfig = {
-    adapters: () => ({ vcs, files: t.files, clock: t.clock, proc: t.proc }),
-    ...config,
-  };
-  let out = '';
-  let err = '';
-  const io = { out: (s: string) => (out += s), err: (s: string) => (err += s) };
-  return {
-    run: (a: Partial<IParsedArgs> = {}, env: NodeJS.ProcessEnv = {}) =>
-      check(args(a), full, registry, '/repo', env, io),
-    out: () => out,
-    err: () => err,
-  };
-}
-
-/** A check that records that it ran, so "refused before anything ran" is observable. */
-function tracer() {
-  const ran: string[] = [];
-  const make = (id: string, over: Partial<ICheck> = {}) =>
-    aCheck(id, {
-      run: () => {
-        ran.push(id);
-        return { ok: true, findings: [] };
-      },
-      ...over,
-    });
-  return { ran, make };
-}
 
 describe('refused before anything runs', () => {
   it.each([
@@ -147,6 +87,7 @@ describe('what the environment means', () => {
     const base = testContext({ changed: [] }).vcs;
     const vcs: IVcs = {
       ...base,
+      refExists: (ref) => ref === 'origin/main',
       changedFiles: (b) => {
         bases.push(b);
         return [];

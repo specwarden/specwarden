@@ -1,4 +1,5 @@
 import type { IFileSource, ISpecRequirement, ISpecSource, ISpecSourceResult, ISpecTask } from 'specwarden';
+import { checkOptions } from 'specwarden';
 
 export interface ISpeckitOptions {
   /** Where feature folders live. Spec Kit puts them in `specs/`; a repository that
@@ -35,6 +36,13 @@ const REQUIREMENT_LINE = /^\s*[-*]\s*\*{0,2}([A-Z]{2,}-\d+)\*{0,2}\s*[:.]?\s*(.+
  * relationship; writing to it is what the ownership map forbids.
  */
 export function speckit(options: ISpeckitOptions = {}): ISpecSource {
+  // Every path is an option because layouts move — and a misspelled one was dropped in
+  // silence, leaving a source that found nothing where the author pointed it.
+  checkOptions('speckit', options, {
+    root: { kind: 'string' },
+    specFile: { kind: 'string' },
+    tasksFile: { kind: 'string' },
+  });
   const root = options.root ?? 'specs';
   const specFile = options.specFile ?? 'spec.md';
   const tasksFile = options.tasksFile ?? 'tasks.md';

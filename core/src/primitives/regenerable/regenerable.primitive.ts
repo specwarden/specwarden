@@ -2,16 +2,16 @@ import {
   shellArgv,
   type ICheck,
   type ICheckContext,
-  type ICheckIdentity,
+  type ICheckDeclaration,
   type IFinding,
   type IFixOutcome,
   type IProcessResult,
   type IShell,
 } from '../../domain';
 import { platformShell } from '../../infrastructure';
-import { buildCheck, verdictFrom } from '../_shared';
+import { buildCheck, checkOptions, verdictFrom, withExaminedNote } from '../_shared';
 
-export interface IRegenerableOptions extends ICheckIdentity {
+export interface IRegenerableOptions extends ICheckDeclaration {
   /** The generated artifact, repository-relative. */
   readonly artifact: string;
   /** A command that PRINTS the regenerated artifact to stdout (it must not write in
@@ -53,11 +53,20 @@ export interface IRegenerableOptions extends ICheckIdentity {
  * not already wrong about.
  */
 export function regenerable(options: IRegenerableOptions): ICheck {
+  checkOptions('regenerable', options, {
+    artifact: { kind: 'string', required: true },
+    by: { kind: 'string', required: true },
+    shell: { kind: 'object' },
+    fixable: { kind: 'boolean' },
+  });
   const shell = options.shell ?? platformShell();
   const generate = (ctx: ICheckContext): IProcessResult =>
     ctx.proc.run(shell.command, shellArgv(shell, options.by), { timeoutSec: options.timeoutSec });
 
-  const check = buildCheck(options, options.fixable ? ['read', 'exec', 'write'] : ['read', 'exec'], (ctx) => {
+  const check = buildCheck(options, options.fixable ? ['read', 'exec', 'write'] : ['read', 'exec'], (ctx, self) => {
+    // The tolerance a stored ratchet supplies wins over the inline one — the same order
+    // every other primitive reads. It was accepted on the identity and never read.
+    const ratchet = ctx.ratchet ?? options.ratchet;
     const findings: IFinding[] = [];
     const committed = ctx.files.tryRead(options.artifact);
     if (committed === undefined) {
@@ -65,9 +74,9 @@ export function regenerable(options: IRegenerableOptions): ICheck {
         severity: 'error',
         file: options.artifact,
         message: `${options.artifact} does not exist to compare against.`,
-        ruleId: options.id,
+        ruleId: self.id,
       });
-      return verdictFrom(findings);
+      return verdictFrom(findings, ratchet);
     }
     const result = generate(ctx);
     if (result.status !== 0) {
@@ -75,9 +84,9 @@ export function regenerable(options: IRegenerableOptions): ICheck {
         severity: 'error',
         file: options.artifact,
         message: `the generator \`${options.by}\` failed (exit ${result.status ?? 'signal'}).`,
-        ruleId: options.id,
+        ruleId: self.id,
       });
-      return verdictFrom(findings);
+      return verdictFrom(findings, ratchet);
     }
     if (result.stdout !== committed) {
       findings.push({
@@ -86,10 +95,10 @@ export function regenerable(options: IRegenerableOptions): ICheck {
         message:
           `${options.artifact} does not match what \`${options.by}\` produces — it is generated; regenerate it rather than editing by hand.` +
           (options.fixable ? ' `specwarden check --fix` writes it for you.' : ''),
-        ruleId: options.id,
+        ruleId: self.id,
       });
     }
-    return verdictFrom(findings);
+    return verdictFrom(withExaminedNote(findings, self.id, 1, 'artifact'), ratchet);
   });
 
   if (!options.fixable) return check;

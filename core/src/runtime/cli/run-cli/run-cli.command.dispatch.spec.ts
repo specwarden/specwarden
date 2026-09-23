@@ -53,7 +53,7 @@ describe('dispatch on a repository with no config', () => {
   it('new scaffolds the check and its test under the consumer folder, in the named family', async () => {
     const cap = captureIo();
     expect(await main(['new', 'doc-links', '--family', 'docs'], {}, dir, cap.io)).toBe(0);
-    const unit = join(dir, '.specwarden', 'checks', 'docs', 'doc-links');
+    const unit = join(dir, '.specwarden', 'checks', 'docs');
     expect(existsSync(join(unit, 'doc-links.check.mjs'))).toBe(true);
     expect(existsSync(join(unit, 'doc-links.check.test.mjs'))).toBe(true);
     expect(cap.out()).toContain('specwarden check --id doc-links');

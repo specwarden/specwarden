@@ -1,4 +1,5 @@
 import type { IFileSource, ISpecRequirement, ISpecSource, ISpecSourceResult, ISpecTask } from 'specwarden';
+import { checkOptions } from 'specwarden';
 
 export interface IOpenspecOptions {
   /** The OpenSpec root; its layout is configured, not memorized, so a version that
@@ -37,6 +38,13 @@ const slug = (text: string): string =>
  * relationship; writing to it is the boundary the ownership map forbids.
  */
 export function openspec(options: IOpenspecOptions = {}): ISpecSource {
+  // Every path is an option because layouts move — and a misspelled one (`specsFile`) was
+  // dropped in silence, leaving a source that found nothing where the author pointed it.
+  checkOptions('openspec', options, {
+    root: { kind: 'string' },
+    specFile: { kind: 'string' },
+    requirementHeading: { kind: 'regexp' },
+  });
   const root = options.root ?? 'openspec';
   const specFile = options.specFile ?? 'spec.md';
   // Without `g` or `y`: `exec` on such a regex resumes from `lastIndex`, which survives from

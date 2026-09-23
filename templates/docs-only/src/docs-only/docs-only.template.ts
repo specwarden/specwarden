@@ -22,19 +22,22 @@ import {
  * is the difference between a handbook and a maze, and structural decay — a dead section
  * pointer, a table cell that quietly became a paragraph — is how a corpus stops being
  * read long before anybody says so.
- */
-const assembled = (ctx: ITemplateContext) =>
-  compose(
-    docPathsPart(ctx, {
-      header: `every repository-relative path named in a document resolves.
  *
- * In a repository that IS documentation this is the load-bearing check: a path that
- * stops resolving is the difference between a handbook and a maze.`,
+ * THE CORPUS IS EVERY TRACKED DOCUMENT, whatever directory `init` found. The root README
+ * is the handbook's index and promises that a moved runbook breaks the build; a
+ * docs-directory glob left it unread, and a dead path in it passed.
+ */
+const assembled = (detected: ITemplateContext) => {
+  const ctx = { ...detected, docs: '**/*.md' };
+  return compose(
+    docPathsPart(ctx, {
+      header: 'In a repository that IS documentation, a dead path is the difference between a handbook and a maze.',
     }),
     docHygienePart(ctx),
     docCountsExamplePart(ctx),
     docPlacementExamplePart(ctx),
   );
+};
 
 export const docsOnly: ITemplate = {
   name: 'docs-only',

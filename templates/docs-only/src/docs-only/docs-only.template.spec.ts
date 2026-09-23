@@ -17,6 +17,7 @@ const ctx = (over: Partial<ITemplateContext> = {}): ITemplateContext => ({
 });
 
 const paths = (c = ctx()) => docsOnly.files(c).map((f) => f.path);
+const bodyOf = (fragment: string, c = ctx()) => docsOnly.files(c).find((f) => f.path.includes(fragment))?.body ?? '';
 
 describe('a documentation repository gets a smaller tree, on purpose', () => {
   it('enables the two checks that need no code to compare against', () => {
@@ -41,26 +42,26 @@ describe('the count check ships disabled, and says why', () => {
   });
 
   it('the example names the four grammars a non-English repository must replace', () => {
-    const body = docsOnly.files(ctx()).find((f) => f.path.endsWith('.example'))?.body ?? '';
+    const body = bodyOf('doc-counts');
     for (const option of ['hedge', 'ordinalLead', 'numberPattern', 'dated']) expect(body).toContain(option);
-    expect(body).toContain('ENGLISH');
+    expect(body).toContain('English');
   });
 
-  it('and ships with an empty noun list rather than a guessed one', () => {
-    const body = docsOnly.files(ctx()).find((f) => f.path.endsWith('.example'))?.body ?? '';
-    expect(body).toContain('countableNouns: []');
+  it('ships a guessed noun list that constructs, marked REPLACE — an empty one is refused at load', () => {
+    // An empty list matched every number, not none; it is a configuration error now, so
+    // the example that shipped `countableNouns: []` did not even load once renamed.
+    const body = bodyOf('doc-counts');
+    expect(body).not.toContain('countableNouns: []');
+    expect(body).toMatch(/REPLACE[^\n]*\n\s+countableNouns: \['/);
   });
 });
 
 describe('the tree it emits is the convention', () => {
-  it('every real check file names the id its file name promises', () => {
-    for (const f of docsOnly.files(ctx()).filter((f) => f.path.endsWith('.check.mjs'))) {
-      const id = f.path
-        .split('/')
-        .pop()
-        ?.replace(/\.check\.mjs$/, '');
-      expect(f.body).toContain(`id: '${id}'`);
-    }
+  it('no live check names an id — its file name is its id; an example names the one its rule names', () => {
+    for (const f of docsOnly.files(ctx()).filter((x) => x.path.endsWith('.check.mjs')))
+      expect(f.body, f.path).not.toMatch(/^\s+id: '/m);
+    for (const f of docsOnly.files(ctx()).filter((x) => x.path.endsWith('.example')))
+      expect(f.body, f.path).toMatch(/^ {2}id: 'doc-(counts|placement)',$/m);
   });
 
   it('imports only from the package it declares it requires', () => {
@@ -70,49 +71,37 @@ describe('the tree it emits is the convention', () => {
     }
   });
 
-  it('defaults to the whole tree, since documentation IS the product here', () => {
-    expect(docsOnly.files(ctx()).find((f) => f.path.includes('doc-paths'))?.body).toContain("docs: '**/*.md'");
+  it('reads every tracked document whatever directory init found — the root README is the index', () => {
+    // A docs-directory glob left the handbook's own README unread, and a dead path in the
+    // page that promises "a moved runbook breaks the build" passed.
+    for (const f of docsOnly.files(ctx({ docs: 'docs/**/*.md' }))) expect(f.body, f.path).toContain("docs: '**/*.md'");
   });
 });
 
-describe('every generated check is named by a rule', () => {
-  it('so a fresh tree has no orphan, and no rule points at a file it did not write', () => {
-    const ids = new Set(
-      paths()
-        .filter((p) => p.endsWith('.check.mjs'))
-        .map((p) =>
-          p
-            .split('/')
-            .pop()
-            ?.replace(/\.check\.mjs$/, ''),
-        ),
-    );
-    const named = new Set(
-      docsOnly.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
-    );
-    expect([...named].sort()).toEqual([...ids].sort());
+describe('every rule lives where it can be read', () => {
+  it('each live check states its own rule, so a fresh tree has no orphan', () => {
+    for (const f of docsOnly.files(ctx()).filter((x) => x.path.endsWith('.check.mjs')))
+      expect(f.body, `${f.path} states no rule`).toMatch(/^\s+rule: '/m);
+  });
+
+  it("each example's rule is declared, naming the example, for init to write commented out", () => {
+    // Declared nowhere, the rule an example enforces lived nowhere the repository could read.
+    expect(docsOnly.rules(ctx()).map((r) => [r.id, r.enforcement])).toEqual([
+      ['doc-counts', { checkIds: ['doc-counts'] }],
+      ['doc-placement', { checkIds: ['doc-placement'] }],
+    ]);
   });
 });
 
 describe('placement ships as an example, and the reason is not caution', () => {
   it('writes it, so the reader meets the check and its caveat together', () => {
-    expect(docsOnly.files(ctx()).map((f) => f.path)).toContain('checks/docs/doc-placement.check.mjs.example');
+    expect(paths()).toContain('checks/docs/doc-placement.check.mjs.example');
   });
 
   it('names the failure DIRECTION, because this one fails loudly rather than silently', () => {
-    // An empty contract matches nothing, so every document is a finding. That is the
-    // right way round for a check waiting on a decision — but a reader who runs it
-    // unedited must know why their whole corpus lit up.
-    const body = docsOnly.files(ctx()).find((f) => f.path.includes('doc-placement'))?.body ?? '';
-    expect(body).toMatch(/EMPTY list matches nothing/i);
-  });
-
-  it('declares no rule for either example — nothing loads them until they are renamed', () => {
-    const named = new Set(
-      docsOnly.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
-    );
-    expect(named.has('doc-placement')).toBe(false);
-    expect(named.has('doc-counts')).toBe(false);
+    // A document no row describes is a finding. That is the right way round for a check
+    // waiting on a decision — but a reader who runs it unedited must know why.
+    expect(bodyOf('doc-placement')).toMatch(/A document\s+(\/\/ )?no row matches is a finding/);
   });
 });
 
@@ -130,20 +119,15 @@ const scratch = mkdtempSync(
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe('the generated tree actually loads', () => {
-  it('every live check and every example, renamed, imports and exports the id its file promises', async () => {
+  it('every live check and every example, renamed, imports and constructs a check', async () => {
     const files = docsOnly.files(ctx()).filter((f) => /\.check\.mjs(\.example)?$/.test(f.path));
     expect(files.length).toBeGreaterThan(0);
 
     for (const file of files) {
       const abs = join(scratch, file.path.replace(/\//g, '-').replace(/\.example$/, ''));
       writeFileSync(abs, file.body);
-      const mod = (await import(pathToFileURL(abs).href)) as { check?: { id: string } };
-      expect(mod.check?.id, `${file.path} does not load as a check`).toBe(
-        file.path
-          .split('/')
-          .pop()
-          ?.replace(/\.check\.mjs(\.example)?$/, ''),
-      );
+      const mod = (await import(pathToFileURL(abs).href)) as { check?: { run: unknown } };
+      expect(typeof mod.check?.run, `${file.path} does not load as a check`).toBe('function');
     }
   });
 });

@@ -118,6 +118,18 @@ function attributed(verdict: IVerdict, checkId: string): IVerdict {
   };
 }
 
+/** A verdict that holds and says it could not look. One that found a defect did look. */
+const couldNotLook = (verdict: IVerdict): boolean =>
+  verdict.ok && typeof verdict.skipped === 'string' && verdict.skipped.trim() !== '';
+
+/** A check's result — skipped as `cannot-tell` when its verdict says it could not look, so
+ * no reporter counts it as a pass. */
+function resultOf(check: ICheck, verdict: IVerdict, durationMs: number): ICheckResult {
+  return couldNotLook(verdict)
+    ? { meta: check, verdict, durationMs, skipped: 'cannot-tell' }
+    : { meta: check, verdict, durationMs };
+}
+
 /** How a run ended: the exit code plus the results, so a caller (and a test) can
  * inspect what happened without parsing printed output. */
 export interface IRunOutcome {
@@ -131,6 +143,56 @@ export interface IRunOutcome {
    * from a tier that was never filtered.
    */
   readonly fullRunReason?: string;
+}
+
+/**
+ * When an unknown id is a check FILE's name, the id that file declares. A file's id may
+ * differ from its name, and `--id <file name>` then found nothing, with no clue why.
+ */
+function declaredInstead(registry: CheckRegistry, id: string): string {
+  const stem = (origin: string): string => origin.slice(origin.lastIndexOf('/') + 1).replace(/\.check\.mjs$/, '');
+  const named = registry.all().filter((check) => {
+    const origin = registry.originOf(check);
+    return origin !== undefined && stem(origin) === id;
+  });
+  if (named.length === 0) return '';
+  return ` — ${registry.originOf(named[0])} declares ${named.map((check) => `'${check.id}'`).join(', ')}`;
+}
+
+/**
+ * The checks a line selects — the one derivation `check` and `check --list` share.
+ *
+ * `--tier` and `--id` TOGETHER select the named checks of that tier, and an id outside
+ * it is refused: `--tier heavy --id no-todo` ran the fast `no-todo`, so a CI job
+ * named for one tier ran a check from another and nobody could tell from the line.
+ *
+ * A tier holding NO check is refused for a run (`forRun`): it passed, "0 gate(s)
+ * passed", a job green over nothing — the founding failure, reached by a typo in a
+ * workflow or a tier whose last check moved. `--list` answers the question instead.
+ */
+export function selectChecks(
+  registry: CheckRegistry,
+  options: Pick<ICheckRunnerOptions, 'ids' | 'tier'>,
+  forRun = false,
+): readonly ICheck[] {
+  if (options.ids?.length) {
+    return options.ids.map((id) => {
+      const check = registry.byId(id);
+      if (!check) throw new RunnerUsageError(`unknown check id '${id}'${declaredInstead(registry, id)}`);
+      if (options.tier !== undefined && check.tier !== options.tier) {
+        throw new RunnerUsageError(
+          `'${id}' is in tier ${check.tier}, not ${options.tier} — with --tier, --id names checks of that tier`,
+        );
+      }
+      return check;
+    });
+  }
+  if (options.tier === undefined) return registry.all();
+  const inTier = registry.forTier(options.tier);
+  if (forRun && inTier.length === 0) {
+    throw new RunnerUsageError(`tier '${options.tier}' holds no check — a run over it would pass having run nothing`);
+  }
+  return inTier;
 }
 
 /**
@@ -159,7 +221,7 @@ export class CheckRunner {
     // `undefined` changed set means "cannot tell" → run everything, never nothing.
     const changed = full ? undefined : this.adapters.vcs.changedFiles(base);
 
-    const candidates = this.candidates(options);
+    const candidates = selectChecks(this.registry, options, true);
     const skip = this.resolveSkip(env, candidates);
     const denied = new Set<TCapability>(options.denyCapabilities ?? []);
     // One derivation of "relevance does not apply here", shared with relevanceOf: a
@@ -186,7 +248,7 @@ export class CheckRunner {
         changed,
       });
       results.push(...outcome);
-      this.reporter.runFinished(results, this.adapters.clock.monotonicMs() - runStart);
+      this.reporter.runFinished(results, this.adapters.clock.monotonicMs() - runStart, { fullRunReason });
       const anyFailed = results.some((r) => !r.skipped && !r.verdict.ok && !r.meta.advisory);
       return { exitCode: anyFailed ? 1 : 0, results, fullRunReason };
     }
@@ -232,17 +294,29 @@ export class CheckRunner {
       let verdict = await this.execute(check, ctx);
       if (options.fix && !verdict.ok && isFixable(check)) {
         verdict = await this.applyFix(check, ctx, verdict);
+      } else if (options.fix && !verdict.ok) {
+        // `--fix` over a check that has none was silent, so a red run after it read as a
+        // repair that failed rather than one never attempted.
+        verdict = {
+          ...verdict,
+          findings: [
+            ...verdict.findings,
+            {
+              severity: 'info',
+              message: `${check.id} has no fix — --fix repairs only what a check can derive, and this one declares no repair.`,
+              ruleId: check.id,
+            },
+          ],
+        };
       }
-      if (options.tighten && check.ratchet) {
-        this.adapters.ratchets.tighten(check.ratchet.id, measurementOf(verdict), check.ratchet.direction);
-      }
+      if (options.tighten) this.tighten(check, verdict);
       const durationMs = this.adapters.clock.monotonicMs() - started;
-      const result: ICheckResult = { meta: check, verdict, durationMs };
+      const result = resultOf(check, verdict, durationMs);
       results.push(result);
       this.reporter.checkFinished(result);
     }
 
-    this.reporter.runFinished(results, this.adapters.clock.monotonicMs() - runStart);
+    this.reporter.runFinished(results, this.adapters.clock.monotonicMs() - runStart, { fullRunReason });
 
     const failed = results.some((r) => !r.skipped && !r.verdict.ok && !r.meta.advisory);
     return { exitCode: failed ? 1 : 0, results, fullRunReason };
@@ -268,6 +342,16 @@ export class CheckRunner {
   ): string | undefined {
     if (options.all === true || env.all === true) return 'requested explicitly (--all / SPECWARDEN_ALL)';
     if (changed === undefined) return 'the changed-file range could not be read — running everything is the fail-safe';
+    // With no base, the range is the commits not yet on a remote — the pre-push range.
+    // A CI checkout builds a commit that is ALREADY pushed, so that range is empty by
+    // construction, and "nothing new to push" was read as "nothing changed": a CI job at a
+    // pushed commit ran only the always-on checks and exited 0. The version-control answer
+    // is honest; it is this question it cannot answer. Under CI it is "cannot tell".
+    // `GITHUB_BASE_REF` is not read as a default base: it is one forge's variable, and a
+    // full run is correct on every forge — the narrower run is one `--base` away.
+    if (env.ci && base === undefined && changed.length === 0) {
+      return 'under CI with no --base, the unpushed range is empty and cannot tell what changed — pass --base <ref> for a filtered run';
+    }
 
     for (const input of options.sharedBuildInputs ?? []) {
       const prefix = typeof input === 'string' ? input : input.prefix;
@@ -298,13 +382,33 @@ export class CheckRunner {
     return undefined;
   }
 
+  /**
+   * Record what a ratcheted check measured, under `--tighten` — only from a PASSING
+   * verdict, and never past the ceiling the check declares.
+   *
+   * Both limits close the same hole from two sides. A failing verdict's count is the
+   * regression itself: recorded, a red run at 3 over a bar of 0 became the new threshold
+   * and the next run was green. And a stored value above the declared ceiling is exactly
+   * what the at-rest audit refuses — so the command whose only job is to lower a bar was
+   * the thing that raised it, and then the audit told the reader to run that command.
+   */
+  private tighten(check: ICheck, verdict: IVerdict): void {
+    // A run that could not look measured nothing, and zero is not what it saw.
+    if (check.ratchet === undefined || !verdict.ok || couldNotLook(verdict)) return;
+    const { id, direction = 'down', ceiling } = check.ratchet;
+    const measured = measurementOf(verdict);
+    const bounded =
+      ceiling === undefined ? measured : direction === 'up' ? Math.max(measured, ceiling) : Math.min(measured, ceiling);
+    this.adapters.ratchets.tighten(id, bounded, direction);
+  }
+
   /** Answer "would this check run against the current change?" — `'run'` or `'skip'`
    * — WITHOUT running it, so a CI job can skip an expensive setup (a database, a
    * migration) for a check the diff cannot affect. Same relevance rule the run loop
    * uses: unknown diff or a shared-input change means run. */
   relevanceOf(id: string, options: ICheckRunnerOptions, env: ICheckRunnerEnv): 'run' | 'skip' {
     const check = this.registry.byId(id);
-    if (!check) throw new RunnerUsageError(`unknown check id '${id}'`);
+    if (!check) throw new RunnerUsageError(`unknown check id '${id}'${declaredInstead(this.registry, id)}`);
     const full = Boolean(options.all) || Boolean(env.all);
     const base = options.base ?? env.base;
     const changed = full ? undefined : this.adapters.vcs.changedFiles(base);
@@ -312,17 +416,6 @@ export class CheckRunner {
     // an expensive setup for a gate the run would then have insisted on running.
     if (this.reasonToRunEverything(options, env, changed, base) !== undefined) return 'run';
     return check.when(changed ?? []) ? 'run' : 'skip';
-  }
-
-  private candidates(options: ICheckRunnerOptions): readonly ICheck[] {
-    if (options.ids?.length) {
-      return options.ids.map((id) => {
-        const check = this.registry.byId(id);
-        if (!check) throw new RunnerUsageError(`unknown check id '${id}'`);
-        return check;
-      });
-    }
-    return options.tier ? this.registry.forTier(options.tier) : this.registry.all();
   }
 
   /** A check's own error is a failure, not a crash of the run — it becomes a
@@ -581,6 +674,6 @@ export class CheckRunner {
     const context = buildContext(check, this.adapters, changed ?? [], options.shard, stored, () => this.registry.all());
     const startedAt = this.adapters.clock.monotonicMs();
     const verdict = await this.execute(check, context);
-    return { meta: check, verdict, durationMs: this.adapters.clock.monotonicMs() - startedAt };
+    return resultOf(check, verdict, this.adapters.clock.monotonicMs() - startedAt);
   }
 }

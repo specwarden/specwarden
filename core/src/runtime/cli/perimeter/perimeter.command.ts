@@ -4,6 +4,10 @@ import { pathToFileURL } from 'node:url';
 import type { IAgentRuntime, IPerimeterRule, IPerimeterVerdict } from '../../../domain';
 import { claudeAgentRuntime } from '../../../infrastructure';
 import { PerimeterEngine } from '../../perimeter';
+import {
+  type IPerimeterModule,
+  perimeterDeclaration,
+} from '../../perimeter/perimeter-declaration/perimeter-declaration.util';
 import type { ICliIo } from '../_shared/cli-io/cli-io.model';
 import { CONFIG_DIR } from '../_shared/find-config/find-config.util';
 import { resolveDeclaration } from '../_shared/resolve-declaration/resolve-declaration.util';
@@ -56,20 +60,9 @@ export async function perimeter(cwd: string, readStdin: () => string, io: ICliIo
   try {
     const file = findPerimeterFile(cwd);
     if (!file) return 0; // no rules declared → nothing to enforce
-    const mod = (await import(pathToFileURL(file).href)) as {
-      rules?: readonly IPerimeterRule[];
-      runtime?: IAgentRuntime;
-      default?: { rules?: readonly IPerimeterRule[]; runtime?: IAgentRuntime } | readonly IPerimeterRule[];
-    };
-    const fromDefault = Array.isArray(mod.default)
-      ? (mod.default as readonly IPerimeterRule[])
-      : (mod.default as { rules?: readonly IPerimeterRule[] } | undefined)?.rules;
-    const rules = mod.rules ?? fromDefault ?? [];
     // A consumer's perimeter.mjs may export `runtime` beside `rules`; the two live in
     // the same file because a rule set and the tool it guards are chosen together.
-    const runtime =
-      mod.runtime ??
-      (Array.isArray(mod.default) ? undefined : (mod.default as { runtime?: IAgentRuntime } | undefined)?.runtime);
+    const { rules, runtime } = perimeterDeclaration((await import(pathToFileURL(file).href)) as IPerimeterModule);
     const raw = readStdin().trim();
     const { code, message } = evaluatePayload(raw ? JSON.parse(raw) : {}, rules, runtime);
     if (message) io.err(message);

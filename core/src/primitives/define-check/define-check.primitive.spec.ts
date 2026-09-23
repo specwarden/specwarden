@@ -193,12 +193,22 @@ describe('defineCheck', () => {
     expect(verdict.ok).toBe(false);
   });
 
-  it('a body that reports no count is not judged against the floor', async () => {
-    // Nothing was claimed, so nothing is refuted. The alternative — treating an absent
-    // count as zero — would fail every check that does not opt in.
+  it('a declared floor over a body that reports no count FAILS, naming the missing count', async () => {
+    // It passed: a declared corpus with a body returning a bare array had no floor at all,
+    // because there was nothing to hold it to — green over zero files, the defect itself.
     const verdict = await runCheck(build(() => [], { corpus: { atLeast: 3 } }));
 
-    expect(verdict.ok).toBe(true);
+    expect(verdict.ok).toBe(false);
+    expect(errorsOf(verdict)).toEqual([
+      'x declares `corpus: { atLeast: 3 }`, and its body reported no `examined` count, so the floor has nothing to hold. ' +
+        'Return `{ findings, examined }` — how many units this run looked at.',
+    ]);
+  });
+
+  it('a body with no floor and no count is still judged on its findings alone', async () => {
+    // Nothing was claimed, so nothing is refuted: an absent count without a declared floor
+    // is not a failure — that would fail every check that does not opt in.
+    expect((await runCheck(build(() => []))).ok).toBe(true);
   });
 
   // ── relevance ──────────────────────────────────────────────────────────────────
@@ -265,5 +275,30 @@ describe('defineCheck — findings and a measurement, together', () => {
     });
 
     expect((await runCheck(debtOnly)).ok).toBe(true);
+  });
+});
+
+describe('defineCheck — a body that could not look', () => {
+  it('is a verdict that says so, with its notes, and no corpus floor applied', async () => {
+    const blind = defineCheck({
+      id: 'blind',
+      corpus: { atLeast: 1 },
+      run: () => ({ findings: [], examined: 0, skipped: 'the env files are gitignored', notes: ['prod: absent'] }),
+    });
+    const verdict = await runCheck(blind);
+    expect(verdict).toEqual({
+      ok: true,
+      skipped: 'the env files are gitignored',
+      findings: [{ severity: 'info', message: 'prod: absent' }],
+    });
+  });
+
+  it('is judged as usual when it also reports a defect', async () => {
+    const both = defineCheck({
+      id: 'both',
+      run: () => ({ findings: [{ severity: 'error', message: 'bad' }], skipped: 'partly absent' }),
+    });
+    const verdict = await runCheck(both);
+    expect([verdict.ok, verdict.skipped]).toEqual([false, undefined]);
   });
 });

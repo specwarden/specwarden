@@ -76,7 +76,7 @@ describe('fromResult — a result that names neither field', () => {
     const verdict = await runCheck(fromResult({ id: 'x', title: 'x', run: () => ({}) }));
 
     expect(verdict.ok).toBe(true);
-    expect(verdict.findings.map((f) => f.message)).toEqual(['✓ x clean']);
+    expect(verdict.findings.map((f) => f.message)).toEqual(['✓ x — clean']);
     expect(verdict.ratchet).toEqual({ value: 0 });
   });
 

@@ -111,3 +111,13 @@ describe('testStateless', () => {
     expect(testStateless(/banned/, 'fine')).toBe(false);
   });
 });
+
+describe('matchesSpecifier — a target written with its trailing slash', () => {
+  // `@db/` was compared as `@db//…`, which no specifier is: a ban that matched nothing.
+  it('is a prefix, and only that prefix', () => {
+    expect(matchesSpecifier('@db/core', '@db/')).toBe(true);
+    expect(matchesSpecifier('@db/core/x', '@db/')).toBe(true);
+    expect(matchesSpecifier('@db', '@db/')).toBe(false);
+    expect(matchesSpecifier('@dbx/core', '@db/')).toBe(false);
+  });
+});

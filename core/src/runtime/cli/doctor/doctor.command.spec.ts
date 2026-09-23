@@ -65,6 +65,21 @@ describe('the roster', () => {
   it('prints no deny line when nothing is denied', () => {
     expect(run({}, [aCheck('a')]).out).not.toContain('denyCapabilities');
   });
+
+  // It said neither which file to open nor whether a check blocks or needs the machine alone.
+  it('marks an advisory and an exclusive check, and names the file a check came from', () => {
+    const found = aCheck('found', { advisory: true, exclusive: true });
+    const registry = new CheckRegistry({
+      originOf: (c) => (c === found ? '.specwarden/checks/x/found.check.mjs' : undefined),
+    });
+    registry.registerAll([found, aCheck('declared')]);
+    let out = '';
+    doctor({}, registry, { out: (t) => (out += t), err: () => {} });
+    expect(out).toContain(
+      'found\tfast\tconsumer\t[—] advisory exclusive\tfound title\t.specwarden/checks/x/found.check.mjs\n',
+    );
+    expect(out).toContain('declared\tfast\tconsumer\t[—]\tdeclared title\n');
+  });
 });
 
 describe('ownership', () => {

@@ -38,20 +38,17 @@ const scratch = mkdtempSync(
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe('the generated tree actually loads', () => {
-  it('every .check.mjs imports, exports a check, and names the id its file promises', async () => {
+  it('every .check.mjs imports, exports a check, and states the rule it enforces', async () => {
     for (const file of live()) {
       const abs = join(scratch, file.path.replace(/\//g, '-'));
       mkdirSync(dirname(abs), { recursive: true });
       writeFileSync(abs, file.body);
 
-      const mod = (await import(pathToFileURL(abs).href)) as { check?: { id: string }; checks?: { id: string }[] };
-      const found = mod.check ? [mod.check] : (mod.checks ?? []);
-      expect(found.length, `${file.path} exports no check`).toBeGreaterThan(0);
-      const expected = file.path
-        .split('/')
-        .pop()
-        ?.replace(/\.check\.mjs$/, '');
-      if (mod.check) expect(mod.check.id).toBe(expected);
+      const mod = (await import(pathToFileURL(abs).href)) as { check?: { rule?: { statement: string } } };
+      expect(mod.check, `${file.path} exports no check`).toBeDefined();
+      // Named by its file — no `id:` to disagree with it — and owning its rule.
+      expect(file.body).not.toMatch(/^\s+id: '/m);
+      expect(mod.check?.rule?.statement, `${file.path} states no rule`).toBeTruthy();
     }
   });
 });
@@ -64,7 +61,7 @@ describe('every example loads the day somebody renames it', () => {
    * template literals once too often and emitted `\`` into the generated file, a syntax
    * error on the first line anybody would reach.
    */
-  it('each one, renamed to `.check.mjs`, imports and exports a check with the id its file promises', async () => {
+  it('each one, renamed to `.check.mjs`, imports and constructs a check', async () => {
     const examples = monorepo.files(ctx({ ci: 'github' })).filter((f) => f.path.endsWith('.check.mjs.example'));
     expect(examples.map((f) => f.path)).toEqual([
       'checks/workspace/build-order.check.mjs.example',
@@ -75,13 +72,8 @@ describe('every example loads the day somebody renames it', () => {
     for (const file of examples) {
       const abs = join(scratch, `example-${file.path.replace(/\//g, '-').replace(/\.example$/, '')}`);
       writeFileSync(abs, file.body);
-      const mod = (await import(pathToFileURL(abs).href)) as { check?: { id: string } };
-      expect(mod.check?.id, `${file.path} does not load as a check`).toBe(
-        file.path
-          .split('/')
-          .pop()
-          ?.replace(/\.check\.mjs\.example$/, ''),
-      );
+      const mod = (await import(pathToFileURL(abs).href)) as { check?: { run: unknown } };
+      expect(typeof mod.check?.run, `${file.path} does not load as a check`).toBe('function');
     }
   });
 
@@ -158,26 +150,37 @@ describe('the two checks it cannot configure honestly ship as examples', () => {
 
   it('each example says what to fill in and what happens if it is left half-done', () => {
     for (const f of monorepo.files(ctx()).filter((f) => f.path.endsWith('.example'))) {
-      expect(f.body, `${f.path} does not say how to switch it on`).toContain('rename');
-      expect(f.body, `${f.path} does not name the live extension`).toContain('.check.mjs`');
+      const id = f.path
+        .split('/')
+        .pop()
+        ?.replace(/\.check\.mjs\.example$/, '');
+      expect(f.body, `${f.path} does not say how to switch it on`).toContain(
+        `rename to ${id}.check.mjs AND uncomment its rule in rules.mjs`,
+      );
+      expect(f.body, `${f.path} does not say what to replace`).toContain('REPLACE');
     }
+  });
+
+  it('build-order looks where the workspace globs point, not at a folder it assumed', () => {
+    const body = (c: ITemplateContext) => monorepo.files(c).find((f) => f.path.includes('build-order'))?.body ?? '';
+    expect(body(ctx({ workspaces: ['libs/*'] }))).toContain("packagesDir: 'libs'");
+    expect(body(ctx({ workspaces: [] }))).toContain("packagesDir: 'packages'");
+    expect(body(ctx({ workspaces: ['*'] }))).toContain("packagesDir: 'packages'");
   });
 });
 
-describe('every live check is named by a rule', () => {
-  it('so a fresh tree has no orphan, and no rule points at an example', () => {
-    const ids = new Set(
-      live().map((f) =>
-        f.path
-          .split('/')
-          .pop()
-          ?.replace(/\.check\.mjs$/, ''),
-      ),
-    );
-    const named = new Set(
-      monorepo.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
-    );
-    expect([...named].sort()).toEqual([...ids].sort());
+describe('every rule lives where it can be read', () => {
+  it('each live check states its own rule, so a fresh tree has no orphan', () => {
+    for (const f of live(ctx({ scripts: ['lint', 'test'] })))
+      expect(f.body, `${f.path} states no rule`).toMatch(/^\s+rule: '/m);
+  });
+
+  it("the register holds each example's rule, for init to write commented out, and nothing else", () => {
+    expect(monorepo.rules(ctx({ ci: 'github' })).map((r) => r.id)).toEqual([
+      'build-order',
+      'dependency-pins',
+      'gate-coverage',
+    ]);
   });
 });
 
@@ -202,12 +205,12 @@ describe('what it takes from the repository rather than assuming', () => {
       const written = new Set(
         monorepo
           .files(c)
-          .filter((f) => f.path.endsWith('.check.mjs'))
+          .filter((f) => /\.check\.mjs(\.example)?$/.test(f.path))
           .map((f) =>
             f.path
               .split('/')
               .pop()
-              ?.replace(/\.check\.mjs$/, ''),
+              ?.replace(/\.check\.mjs(\.example)?$/, ''),
           ),
       );
       for (const rule of monorepo.rules(c)) {

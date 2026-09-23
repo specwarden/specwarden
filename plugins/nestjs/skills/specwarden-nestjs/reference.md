@@ -44,16 +44,43 @@ specwarden check --id nestjs/db-access-through-repositories
 
 ## Options
 
-| Option                  | What it is                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------ |
-| `modulesRoot`           | where the modules live, repository-relative                                                            |
-| `ormPackage`            | the ORM (or any data-access package) a module may not import directly                                  |
-| `allowedFrom`           | glob suffixes under `modulesRoot` that MAY import it. Default: `**/repositories/**` and `**/*.spec.ts` |
-| `ratchetId` / `ratchet` | for a tree that has existing violations. Omit both in a clean tree                                     |
-| `ruleDocument`          | where the host writes the rule down; named in the finding so a reader can go there                     |
+| Option                  | Kind                                   | Default                                                                  |
+| ----------------------- | -------------------------------------- | ------------------------------------------------------------------------ |
+| `modulesRoot`           | directory                              | — required                                                               |
+| `ormPackage`            | package name                           | — required                                                               |
+| `allowedFrom`           | glob suffixes under `modulesRoot`      | `**/repositories/**`, `**/entities/**`, `**/*.entity.ts`, `**/*.spec.ts` |
+| `ratchetId` / `ratchet` | ratchet id / number                    | none — omit both in a clean tree                                         |
+| `ruleDocument`          | file named in the finding's hint       | none                                                                     |
+| `rule`                  | a statement, or `{ statement, owner }` | none                                                                     |
+
+`modulesRoot` is where the modules live; `ormPackage` is the ORM (or any data-access
+package) a module may not import directly. Any other option is refused by name when the
+config loads.
 
 The default exemptions are what make the rule livable: the repository layer is where the
-query belongs, and the tests that exercise it necessarily reach the same package.
+query belongs, an entity IS the ORM's schema — a TypeORM or Drizzle entity cannot be
+written without importing it — and the tests that exercise them necessarily reach the
+same package. `allowedFrom`, when given, replaces the list; start from
+`DEFAULT_ALLOWED_FROM`, which is exported.
+
+In a repository that keeps a rule register (`rules: [...]` in the config), give the check
+its `rule`, or the register's orphan audit names it:
+
+```js
+import { nestjs } from '@specwarden/plugin-nestjs';
+import { defineConfig } from 'specwarden';
+
+export default defineConfig({
+  rules: [],
+  plugins: [
+    nestjs({
+      modulesRoot: 'src/modules',
+      ormPackage: 'drizzle-orm',
+      rule: { statement: 'a module reaches the database only through a repository', owner: 'docs/ARCHITECTURE.md' },
+    }),
+  ],
+});
+```
 
 ## The ratchet is YOURS
 
@@ -62,10 +89,20 @@ plugin takes an id and the host owns the file behind it. A plugin shipping a num
 be asserting something about a repository it has never seen.
 
 ```js
-nestjs({ modulesRoot: 'src/modules', ormPackage: 'drizzle-orm', ratchetId: 'nestjs-db-access' });
+import { nestjs } from '@specwarden/plugin-nestjs';
+import { defineConfig } from 'specwarden';
+
+export default defineConfig({
+  plugins: [
+    nestjs({ modulesRoot: 'src/modules', ormPackage: 'drizzle-orm', ratchetId: 'nestjs-db-access', ratchet: 1 }),
+  ],
+});
 ```
 
-Then `specwarden check --tighten` records today's count, and the next violation fails.
+Arm it at today's count with `ratchet`: the run passes over the debt it already has, names
+it as tolerated, and fails on the next violation. As the debt is paid,
+`specwarden check --tighten` records the lower count in the ratchet file under
+`ratchetId`. It never records a count the check FAILED at — a red run is not a threshold.
 
 ## What a plugin may and may not do
 

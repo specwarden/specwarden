@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ICheckContext, IVerdict } from '../../domain';
 import { InMemoryFileSource } from '../../infrastructure';
+import { matchPathspec } from '../../infrastructure/git-vcs/git-pathspec/git-pathspec.util';
 import { zoneBoundary } from './zone-boundary.check';
 
 const ID = { id: 'zone-boundary', title: 'the P/C barrier holds', tier: 'fast' as const };
@@ -10,6 +11,12 @@ const LITERALS = [
   { label: 'backend/ (a host workspace)', pattern: /(^|[^\w])backend\//m },
   { label: 'invoice (a host domain noun)', pattern: /\binvoice\b/i },
 ];
+
+/** Every file in the source, as version control would list it: the sweep reads the TRACKED set. */
+const trackedOver = (files: InMemoryFileSource) => ({
+  trackedFiles: (pathspec?: string) =>
+    matchPathspec(pathspec, [...(files as unknown as { files: Map<string, string> }).files.keys()]),
+});
 
 function run(files: InMemoryFileSource, opts: Partial<Parameters<typeof zoneBoundary>[0]> = {}): IVerdict {
   const check = zoneBoundary({
@@ -20,7 +27,7 @@ function run(files: InMemoryFileSource, opts: Partial<Parameters<typeof zoneBoun
     consumerImport: /\.specwarden\//,
     ...opts,
   });
-  return check.run({ changed: [], files } as unknown as ICheckContext) as IVerdict;
+  return check.run({ changed: [], files, vcs: trackedOver(files) } as unknown as ICheckContext) as IVerdict;
 }
 
 describe('zoneBoundary', () => {

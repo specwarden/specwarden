@@ -153,11 +153,19 @@ export interface ICheckRule {
   readonly id?: string;
   /** The assertion itself, in one line. */
   readonly statement: string;
-  /** The document that owns the rule — where its rationale is written. */
-  readonly owner: string;
+  /** The document that owns the rule — where its rationale is written. Absent on a
+   * discovered check: the file that declares it, repository-relative. */
+  readonly owner?: string;
   readonly zone?: TZone;
   /** Marks a rule whose violation cannot be undone. */
   readonly irreversible?: boolean;
+  /**
+   * Supplied by the FACTORY, not written by the consumer: a module knows what its check
+   * enforces, so its check names that rule and is no orphan the day it is wired. An
+   * implied rule yields to the register — it is dropped where a register rule already
+   * names this check, and never refused as a duplicate of one.
+   */
+  readonly implied?: boolean;
 }
 
 /**
@@ -203,6 +211,7 @@ export interface ICheckResult {
   readonly meta: ICheckMeta;
   readonly verdict: IVerdict;
   readonly durationMs: number;
-  /** Set when the check was selected but skipped (by request, or not relevant). */
-  readonly skipped?: 'not-relevant' | 'by-request';
+  /** Set when the check was selected but skipped (by request, or not relevant) — or ran
+   * and could not look (`cannot-tell`: its verdict says why, in `verdict.skipped`). */
+  readonly skipped?: 'not-relevant' | 'by-request' | 'cannot-tell';
 }

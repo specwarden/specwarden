@@ -14,6 +14,22 @@ import { speckit } from '@specwarden/speckit';
 export const source = speckit({ root: 'specs' });
 ```
 
+```js
+// .specwarden/warden.config.mjs
+import { defineConfig } from 'specwarden';
+
+import { source } from './spec-source.mjs';
+
+export default defineConfig({
+  specSource: source,
+  invariants: { docs: 'src/**/*_MODULE.md', idPattern: /<!--\s*invariant:\s*([^\s>]+)\s*-->/ },
+});
+```
+
+A deposit is `<!-- invariant: 001-invites#FR-001 -->` — the requirement's FULL id, feature
+prefix included, exactly as `sync-invariants` prints it. A pattern that captures a
+shorter local number can never match one, and the reconciliation never reaches "in sync".
+
 The seam is the same one the OpenSpec module fills, against the other tool — and it is
 **singular by construction**: the config takes one `specSource`, because a second spec
 tool is a second owner of one fact and the type refuses it rather than letting two copies

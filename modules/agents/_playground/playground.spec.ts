@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { agentDefinitions, parseFrontmatter } from '@specwarden/agents';
-import { errorsOf, runCheck, uncoveredFactories } from 'specwarden';
+import { errorsOf, publishedFactories, runCheck, uncoveredFactories } from 'specwarden';
 
 /**
  * Everything this package publishes, wired the way a consumer wires it.
@@ -66,6 +66,9 @@ describe('@specwarden/agents', () => {
     const mod = (await import('@specwarden/agents')) as Record<string, unknown>;
 
     expect(uncoveredFactories(mod, { covered: COVERED, probe: PROBE })).toEqual([]);
+    // And the probe is one the factory accepts: it refuses an option it does not have, so a
+    // probe it refused would read it as a helper and the line above would pass over nothing.
+    expect(publishedFactories(mod, PROBE)).toEqual(COVERED);
   });
 
   it('passes a roster where every role declares its tools and only the orchestrator spawns', async () => {
@@ -87,12 +90,24 @@ describe('@specwarden/agents', () => {
     expect(errors).toContain('no YAML frontmatter');
   });
 
-  it('a repository with no agents at all is a valid state, not a violation', async () => {
-    // The distinction that keeps this module optional: "nobody runs agents here" and
-    // "the roster is broken" are different answers, and only one of them is red.
-    const check = agentDefinitions({ ...ID, agentsDir: '.claude/agents' });
+  it('a roster that is not where `agentsDir` says is a failure naming the folder', async () => {
+    // "Nobody runs agents here" is a repository that does not install this module. One that
+    // did, and whose roster moved, passed as "nothing to verify" — forever.
+    const check = agentDefinitions({ ...ID });
 
-    expect((await runCheck(check, { tree: { 'README.md': '# no agents\n' } })).ok).toBe(true);
+    const verdict = await runCheck(check, { tree: { 'README.md': '# no agents\n' } });
+    expect(verdict.ok).toBe(false);
+    expect(errorsOf(verdict)[0]).toContain('.claude/agents does not exist');
+  });
+
+  it('a folder made before its first role is a pass that says it read none', async () => {
+    const check = agentDefinitions({ ...ID });
+
+    const verdict = await runCheck(check, { tree: { '.claude/agents/README.txt': 'roles go here\n' } });
+    expect(verdict.ok).toBe(true);
+    expect(verdict.findings.map((f) => f.message)).toEqual([
+      'no agent definition in .claude/agents, nothing to verify',
+    ]);
   });
 
   it('the orchestrator set is the host’s to decide, not this package’s', async () => {
@@ -118,5 +133,20 @@ describe('@specwarden/agents', () => {
     );
 
     expect(fields?.description).toBe('Plans and orchestrates.');
+  });
+});
+
+// Wired with no `rule`, a module's check was an orphan the moment a register existed —
+// and a preset's checks had nowhere to put one. The module knows what its check enforces.
+describe('@specwarden/agents — every check names the rule it enforces', () => {
+  it('carries an implied rule owned by the package, and a rule the consumer writes wins', () => {
+    const built = [agentDefinitions({ id: 'agent-definitions' })];
+    for (const check of built) {
+      expect(check.rule, check.id).toEqual(
+        expect.objectContaining({ statement: expect.any(String), owner: '@specwarden/agents', implied: true }),
+      );
+      expect(check.title, check.id).not.toBe(check.id);
+    }
+    expect(agentDefinitions({ id: 'agent-definitions', rule: 'ours' }).rule).toEqual({ statement: 'ours' });
   });
 });

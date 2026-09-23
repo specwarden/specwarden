@@ -28,26 +28,21 @@ afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 describe('the generated tree actually loads', () => {
   // A template emits strings; a typechecker never reads them. Without this, a renamed
   // module option leaves the template compiling and the tree throwing on its first run.
-  it('every .check.mjs imports and exports a check or checks', async () => {
+  it('every .check.mjs imports, exports a check or checks, and states the rule it enforces', async () => {
     for (const file of live()) {
       const abs = join(scratch, file.path.replace(/\//g, '-'));
       mkdirSync(dirname(abs), { recursive: true });
       writeFileSync(abs, file.body);
 
       const mod = (await import(pathToFileURL(abs).href)) as {
-        check?: { id: string };
-        checks?: readonly { id: string }[];
+        check?: { rule?: { statement: string } };
+        checks?: readonly { rule?: { statement: string } }[];
       };
       const found = mod.check ? [mod.check] : [...(mod.checks ?? [])];
       expect(found.length, `${file.path} exports no check`).toBeGreaterThan(0);
-      if (mod.check) {
-        expect(mod.check.id).toBe(
-          file.path
-            .split('/')
-            .pop()
-            ?.replace(/\.check\.mjs$/, ''),
-        );
-      }
+      for (const check of found) expect(check.rule?.statement, `${file.path} states no rule`).toBeTruthy();
+      // Named by its file, or by the plugin — never an `id:` restating the file name.
+      expect(file.body).not.toMatch(/^\s+id: '/m);
     }
   });
 
@@ -86,17 +81,23 @@ describe('the migration guard is an example, because it is about a PIPELINE', ()
 
   it('says when it is WRONG for you, not only how to switch it on', () => {
     const body = nestjsTemplate.files(ctx()).find((f) => f.path.endsWith('.example'))?.body ?? '';
-    expect(body).toContain('delete it rather than adapting it');
+    expect(body).toMatch(/yours swaps first, delete this file/);
   });
 });
 
-describe('every live check is named by a rule', () => {
-  it('including the plugin check, addressed by the id the plugin gives it', () => {
-    const named = new Set(
-      nestjsTemplate.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
-    );
-    expect(named.has('secret-scan')).toBe(true);
-    expect(named.has('nestjs/db-access-through-repositories')).toBe(true);
+describe('every rule lives where it can be read', () => {
+  it('the plugin check takes its rule from the plugin call, so the register need not name its id', () => {
+    const body = live().find((f) => f.path.includes('nestjs-conventions'))?.body ?? '';
+    expect(body).toContain("rule: 'A module never imports the ORM directly; persistence goes through a repository.'");
+    // An entity has to import the ORM; the plugin's default allows it, so the file does not restate it.
+    expect(body).not.toContain('allowedFrom');
+  });
+
+  it("the register holds each example's rule, for init to write commented out, and nothing else", () => {
+    expect(nestjsTemplate.rules(ctx({ composeFiles: ['compose.yaml'] })).map((r) => r.id)).toEqual([
+      'migrations-backwards-compatible',
+      'env-files-agree',
+    ]);
   });
 });
 
@@ -123,22 +124,20 @@ describe('what it asks the repository to install', () => {
   });
 });
 
-describe('every rule resolves to a check this tree writes', () => {
-  it('under every context the template reads — no rule names a check that is not registered', async () => {
+describe('every rule resolves to a file this tree writes', () => {
+  it('under every context the template reads — no rule names a check the tree does not have', () => {
     for (const c of [ctx(), ctx({ composeFiles: ['docker-compose.yml'], scripts: ['lint', 'test'] })]) {
-      const ids = new Set<string>();
-      for (const file of live(c)) {
-        const abs = join(scratch, `rules-${c.scripts.length}-${file.path.replace(/\//g, '-')}`);
-        writeFileSync(abs, file.body);
-        const mod = (await import(pathToFileURL(abs).href)) as {
-          check?: { id: string };
-          checks?: readonly { id: string }[];
-        };
-        for (const check of mod.check ? [mod.check] : (mod.checks ?? [])) ids.add(check.id);
-      }
+      const written = new Set(
+        nestjsTemplate.files(c).map((f) =>
+          f.path
+            .split('/')
+            .pop()
+            ?.replace(/\.check\.mjs(\.example)?$/, ''),
+        ),
+      );
       for (const rule of nestjsTemplate.rules(c)) {
         for (const id of (rule.enforcement as { checkIds: readonly string[] }).checkIds) {
-          expect(ids.has(id), `rule ${rule.id} names ${id}, which this tree does not register`).toBe(true);
+          expect(written.has(id), `rule ${rule.id} names ${id}, which this tree does not write`).toBe(true);
         }
       }
     }
@@ -155,7 +154,7 @@ describe('every example loads the day somebody renames it', () => {
     return ((await import(pathToFileURL(abs).href)) as { check: ICheck }).check;
   };
 
-  it('each one, renamed to `.check.mjs`, imports and exports a check with the id its file promises', async () => {
+  it('each one, renamed to `.check.mjs`, imports and constructs a check', async () => {
     // The migration guard once escaped its own template literals twice and emitted `\``
     // into the file — a syntax error the day anybody switched it on.
     expect(examples().map((f) => f.path)).toEqual([
@@ -164,12 +163,7 @@ describe('every example loads the day somebody renames it', () => {
     ]);
     for (const file of examples()) {
       const check = await load(`example-${file.path.replace(/\//g, '-').replace(/\.example$/, '')}`, file.body);
-      expect(check.id).toBe(
-        file.path
-          .split('/')
-          .pop()
-          ?.replace(/\.check\.mjs\.example$/, ''),
-      );
+      expect(typeof check.run, `${file.path} does not load as a check`).toBe('function');
     }
   });
 
@@ -194,15 +188,18 @@ describe('every example loads the day somebody renames it', () => {
     });
 
     expect(verdict.ok).toBe(true);
-    expect(verdict.findings.map((f) => f.message)).toContain('1 migration file(s) read');
+    expect(verdict.findings.map((f) => f.message).join('\n')).toContain('1 migration files examined');
   });
 
-  it('the migration guard over no migrations SAYS it read none, rather than a bare pass', async () => {
+  it('the migration guard over no migrations FAILS its corpus floor, rather than passing over nothing', async () => {
+    // Its comment said an empty corpus was "never passed over", while it printed a count
+    // and went green; the floor is what makes the sentence true.
     const file = examples().find((f) => f.path.includes('migrations'));
     const check = await load('migrations-empty.check.mjs', file?.body ?? '');
 
     const verdict = await runCheck(check, { tree: { 'src/main.ts': '' } });
 
-    expect(verdict.findings.map((f) => f.message)).toContain('0 migration file(s) read');
+    expect(verdict.ok).toBe(false);
+    expect(errorsOf(verdict).join('\n')).toContain('no .sql file under migrations/');
   });
 });

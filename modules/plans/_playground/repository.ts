@@ -116,16 +116,5 @@ export const PLAN_SHAPE_CONVENTION = {
   commandRe: /^\s*(pnpm|npm|node|bash)\s/,
 };
 
-/** The factories this playground claims to exercise. */
-export const COVERED = ['planStaleness', 'planShape', 'decisionLogShape'];
-
-/** The union of the options the three factories take, for the coverage probe. */
-export const PROBE = {
-  id: 'probe',
-  title: 'probe',
-  tier: 'fast' as const,
-  when: () => true,
-  ...PLAN_SHAPE_CONVENTION,
-  archiveDir: 'docs/_archive',
-  docs: '**/*.md',
-};
+/** The factories this playground claims to exercise — the three checks and the preset. */
+export const COVERED = ['planStaleness', 'planShape', 'decisionLogShape', 'planChecks'];

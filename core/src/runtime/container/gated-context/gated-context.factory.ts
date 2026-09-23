@@ -49,7 +49,9 @@ function gate<T extends object>(checkId: string, needed: TCapability, real: T, g
  */
 export function buildContext(
   check: ICheckMeta,
-  adapters: IEngineAdapters,
+  // The store is the runner's, never the check's — a check receives only its value — so a
+  // context can be built without one.
+  adapters: Omit<IEngineAdapters, 'ratchets'>,
   changed: readonly string[],
   shard?: string,
   ratchet?: number,

@@ -1,27 +1,16 @@
-/**
- * `dependency-pins` — versions that must stay exact stay exact, and coordinated
- * groups agree across workspaces.
- *
- * Ships as `.example` because the POLICY is yours: which packages are frozen, which
- * must agree with each other, and which image tags may float are decisions no engine
- * can guess. Write them down, rename this file to `.check.mjs`, and the rules below
- * become enforceable.
- *
- * Every failure it catches is silent: a caret on a frozen package still installs, two
- * majors of one library both compile, `:latest` still starts.
- */
+// `dependency-pins` — frozen versions stay exact, and coordinated groups agree across workspaces.
+// Every failure is silent: a caret on a frozen package still installs, two majors both compile.
+// OFF until the POLICY below is yours; an empty one says it is inert rather than passing.
+// Switch it on: rename to dependency-pins.check.mjs AND uncomment its rule in rules.mjs.
 import { fromResult } from 'specwarden';
 
-/** The policy. One declaration, never a second copy elsewhere. */
+// REPLACE: the policy, declared once.
 const FROZEN = [];        // e.g. ['react', 'typescript']
 const COORDINATED = [];   // e.g. [{ group: 'react', packages: ['react', 'react-dom'] }]
 
 export const check = fromResult({
   id: 'dependency-pins',
-  title: 'frozen versions stay exact and coordinated groups agree',
-  tier: 'fast',
-  when: (changed) => changed.some((f) => f.endsWith('package.json')),
-  hint: 'Fix the tree, or change the declaration above and say why in the commit message.',
+  hint: 'Fix the tree, or change the policy above and say why in the commit message.',
   run: (ctx) => {
     const manifests = ctx.vcs
       .trackedFiles('package.json')
@@ -47,7 +36,6 @@ export const check = fromResult({
       const versions = new Set([...seen.keys()].map((k) => k.split('@').pop()));
       if (versions.size > 1) failures.push(`group ${group} disagrees: ${[...seen.keys()].join(', ')}`);
     }
-    // An empty policy checks nothing — say so rather than reporting a clean pass.
     const notes = FROZEN.length + COORDINATED.length === 0 ? ['no policy declared yet — this check is inert'] : [`${manifests.length} manifest(s) read`];
     return { failures, notes };
   },

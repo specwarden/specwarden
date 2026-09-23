@@ -1,15 +1,9 @@
-/**
- * `secret-scan` — a credential-shaped string anywhere in the tracked tree.
- *
- * A backend is where connection strings, signing keys and provider tokens live, so this
- * is the one check worth having before any other. The built-in vendor library is a
- * PRESET: add your own formats with `patterns.extra`, and switch one off with
- * `patterns.disable` — which requires a reason, and reports it.
- */
+// `secret-scan` — no credential-shaped string in any tracked file.
+// A backend is where connection strings, signing keys and provider tokens live.
+// A match means rotate first, delete second.
+// Add a format with `patterns.extra`; switch one off with `patterns.disable`, which takes a reason.
 import { secretScan } from '@specwarden/security';
 
 export const check = secretScan({
-  id: 'secret-scan',
-  title: 'no credential-shaped string is committed',
-  tier: 'fast',
+  rule: 'A credential never enters the repository, not even a revoked one.',
 });

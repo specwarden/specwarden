@@ -1,5 +1,6 @@
 import type { ICheckMeta, ICheckResult, IReporter, TSeverity } from '../../domain';
 import { type TWriteSink, stdoutSink } from '../reporter-sink/reporter-sink.model';
+import { tallyRun } from '../run-tally/run-tally.util';
 
 /**
  * The run as GitHub Actions workflow commands — annotations on the diff, and a
@@ -54,13 +55,23 @@ export class GithubReporter implements IReporter {
   checkFinished(result: ICheckResult): void {
     // A skipped check opened no group, so it closes none. Reported as a plain line so
     // the log still says the gate existed and did not run.
+    // A check that ran and could not look DID open a group: its notes go inside it, as
+    // plain lines — nothing it says is a defect at a location.
+    if (result.skipped === 'cannot-tell') {
+      for (const finding of result.verdict.findings) this.write(`${escapeData(finding.message)}\n`);
+      this.write(`${escapeData(`skipped: ${result.meta.id} (cannot-tell) — ${result.verdict.skipped ?? ''}`)}\n`);
+      this.write('::endgroup::\n');
+      return;
+    }
     if (result.skipped) {
       this.write(`skipped: ${result.meta.id} (${result.skipped})\n`);
       return;
     }
 
     for (const finding of result.verdict.findings) {
-      const level = ANNOTATION[finding.severity];
+      // An advisory check does not block, so its errors are not errors on the diff: an
+      // `::error` on a green job reads as a gate that failed.
+      const level = result.meta.advisory && finding.severity === 'error' ? 'warning' : ANNOTATION[finding.severity];
       if (level === undefined) {
         this.write(`${escapeData(finding.message)}\n`);
         continue;
@@ -81,10 +92,9 @@ export class GithubReporter implements IReporter {
   }
 
   runFinished(results: readonly ICheckResult[], totalMs: number): void {
-    const active = results.filter((r) => !r.skipped);
-    const failed = active.filter((r) => !r.verdict.ok && !r.meta.advisory);
-    const passed = active.length - failed.length;
+    const { passed, failed, warned, skipped } = tallyRun(results);
     const secs = (totalMs / 1000).toFixed(1);
+    const aside = warned ? ` (${warned} warned)` : '';
 
     if (failed.length > 0) {
       // A NOTICE rather than an error: the failures are already annotated one by one,
@@ -92,8 +102,12 @@ export class GithubReporter implements IReporter {
       this.write(
         `::notice title=specwarden::${escapeData(`${failed.length} gate(s) failed: ${failed.map((r) => r.meta.id).join(', ')}`)}\n`,
       );
+    } else if (passed + warned === 0 && skipped > 0) {
+      this.write(
+        `::notice title=specwarden::${escapeData(`nothing ran — ${skipped} skipped, 0 checked, in ${secs}s`)}\n`,
+      );
     } else {
-      this.write(`::notice title=specwarden::${escapeData(`${passed} gate(s) passed in ${secs}s`)}\n`);
+      this.write(`::notice title=specwarden::${escapeData(`${passed} gate(s) passed${aside} in ${secs}s`)}\n`);
     }
   }
 }

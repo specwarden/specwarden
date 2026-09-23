@@ -10,6 +10,7 @@ description: Use when wiring specwarden into a NestJS backend — the module-dec
 ```js
 // .specwarden/warden.config.mjs
 import { nestjs } from '@specwarden/plugin-nestjs';
+import { defineConfig } from 'specwarden';
 
 export default defineConfig({
   plugins: [
@@ -39,6 +40,12 @@ migration author would think to check.
   be asserting something about your codebase it cannot know.
 - **`ruleDocument`** — the document that owns the reasoning, so a finding points at a
   page rather than at a plugin.
+- **`rule`** — in a repository with a rule register, the rule this check enforces, so the
+  register's orphan audit does not name it.
+
+The repository layer, the entities (`**/entities/**`, `**/*.entity.ts`) and the specs may
+import the ORM by default — an entity is the ORM's schema. Name `allowedFrom` only to
+change that list, and never to exempt a service.
 
 ## Arm it at reality, then walk it down
 

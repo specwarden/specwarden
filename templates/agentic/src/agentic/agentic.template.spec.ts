@@ -1,9 +1,8 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
-import type { IPart } from '@specwarden/scaffold-parts';
 import type { ITemplateContext } from 'specwarden';
 
 import { agentic } from './agentic.template';
@@ -34,17 +33,14 @@ const write = (name: string, body: string) => {
 };
 
 describe('the generated tree actually loads', () => {
-  it('every .check.mjs imports and names the id its file promises', async () => {
+  it('every .check.mjs imports, is named by its file, and states the rule it enforces', async () => {
     for (const file of live()) {
       const abs = write(file.path.replace(/\//g, '-'), file.body);
-      const mod = (await import(pathToFileURL(abs).href)) as { check?: { id: string } };
+      const mod = (await import(pathToFileURL(abs).href)) as { check?: { rule?: { statement: string } } };
       expect(mod.check, `${file.path} exports no check`).toBeDefined();
-      expect(mod.check?.id).toBe(
-        file.path
-          .split('/')
-          .pop()
-          ?.replace(/\.check\.mjs$/, ''),
-      );
+      // No `id:` — discovery names it after its file, so the two cannot disagree.
+      expect(file.body).not.toMatch(/^\s+id: '/m);
+      expect(mod.check?.rule?.statement, `${file.path} states no rule`).toBeTruthy();
     }
   });
 
@@ -89,12 +85,19 @@ describe('it wires what an agentic repository actually needs', () => {
     expect(paths()).toContain('checks/plans/decision-log-shape.check.mjs');
   });
 
-  it('spells the sizing patterns out in the generated file rather than hiding them in a default', () => {
-    // They are English. A repository writing plans in another language has to see
-    // exactly what to replace, or the check quietly finds nothing.
+  it('names the options that replace the English defaults, rather than restating the defaults', () => {
+    // They are English. A repository writing plans in another language has to see what
+    // to replace; the patterns themselves are the module's, one copy, and not forty lines here.
     const body = agentic.files(ctx()).find((f) => f.path.includes('plan-shape'))?.body ?? '';
-    expect(body).toContain('sizingPatterns');
-    expect(body).toContain('story');
+    for (const option of ['sizingPatterns', 'phaseHeadingRe', 'commandRe']) expect(body).toContain(option);
+    expect(body).not.toContain('story');
+  });
+
+  it('reads every tracked document — AGENTS.md and CLAUDE.md are what an agent follows first', () => {
+    const body = agentic.files(ctx({ docs: 'docs/**/*.md' })).find((f) => f.path.includes('doc-paths'))?.body ?? '';
+    expect(body).toContain("docs: '**/*.md'");
+    // A finished plan names files as they were; its paths are history, not claims.
+    expect(body).toContain("skipDirs: ['docs/_plans-archive/']");
   });
 
   it('the perimeter ships LIVE, not as an example', () => {
@@ -107,7 +110,9 @@ describe('it wires what an agentic repository actually needs', () => {
     const body = agentic.files(ctx()).find((f) => f.path === 'perimeter.mjs')?.body ?? '';
     expect(body).toContain('PreToolUse');
     expect(body).toContain('IAgentRuntime');
-    expect(body).toMatch(/FAILS OPEN/);
+    expect(body).toMatch(/fails OPEN/i);
+    // …and that until the hook is wired it enforces nothing.
+    expect(body).toContain('Nothing is enforced until the hook is wired');
   });
 
   it('every rule in the perimeter says what to do INSTEAD', () => {
@@ -117,53 +122,18 @@ describe('it wires what an agentic repository actually needs', () => {
   });
 });
 
-describe('every live check and perimeter rule is named by a rule', () => {
-  it('so a fresh tree has no orphan', () => {
-    const checkIds = live().map((f) =>
-      f.path
-        .split('/')
-        .pop()
-        ?.replace(/\.check\.mjs$/, ''),
-    );
-    const named = new Set(
-      agentic.rules(ctx()).flatMap((r) => (r.enforcement as { checkIds: readonly string[] }).checkIds),
-    );
-    for (const id of checkIds) expect(named.has(id as string), `${id} enforces no rule`).toBe(true);
-    // ...and the perimeter's own rule ids are enforcers too, which is why the engine
-    // takes `otherEnforcerIds`: they resolve against the perimeter file, not the roster.
-    expect(named.has('no-force-push')).toBe(true);
-  });
-});
-
-describe('the config fragment it hands init', () => {
-  it('imports only from a file this tree writes — a fragment importing a missing file breaks the config on load', () => {
-    const extras = agentic.configExtras?.(ctx());
-    const imported = [...(extras?.imports ?? '').matchAll(/from '\.\/([^']+)'/g)].map((m) => m[1]);
-
-    expect(imported.length).toBeGreaterThan(0);
-    for (const file of imported) expect(agentic.files(ctx()).map((f) => f.path)).toContain(file);
+describe('every rule lives where it can be read', () => {
+  it('a live check states its own rule, so the register holds only the perimeter rule', () => {
+    // A check with its rule in a register far away is two lists kept in step by memory;
+    // on the check, a fresh tree has no orphan by construction.
+    expect(agentic.rules(ctx()).map((r) => r.id)).toEqual(['no-irreversible-action-without-a-person']);
+    for (const f of live()) expect(f.body, `${f.path} states no rule`).toMatch(/^\s+rule: '/m);
   });
 
-  it('still hands init a fragment — never undefined — when its parts contribute no config source', async () => {
-    // init splices `fields` into the config file it writes; `undefined` there is a config
-    // that prints the word "undefined" into itself. The parts this template composes all
-    // contribute today, so the fallback is reached through the seam, not by accident.
-    vi.resetModules();
-    vi.doMock('@specwarden/scaffold-parts', async (original) => {
-      const parts: typeof import('@specwarden/scaffold-parts') = await original();
-      return {
-        ...parts,
-        compose: (...args: IPart[]) => ({ ...parts.compose(...args), configExtras: undefined }),
-      };
-    });
-    try {
-      const { agentic: isolated } = await import('./agentic.template');
-
-      expect(isolated.configExtras?.(ctx())).toEqual({ fields: '' });
-    } finally {
-      vi.doUnmock('@specwarden/scaffold-parts');
-      vi.resetModules();
-    }
+  it('hands init no config fragment — the engine reads the perimeter rule ids as enforcers itself', () => {
+    // It used to import perimeter.mjs into the config to list them, a second copy of a
+    // list the engine can read.
+    expect(agentic.configExtras).toBeUndefined();
   });
 });
 

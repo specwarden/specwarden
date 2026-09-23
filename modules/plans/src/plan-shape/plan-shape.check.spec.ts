@@ -158,25 +158,26 @@ describe('planShape — sizing and phases', () => {
 });
 
 describe('planShape — what it examined', () => {
-  it('passes vacuously, and says so, when the plans folder is absent', async () => {
+  it('fails over a plans folder that is not there, naming it — it passed as "nothing to verify"', async () => {
     const v = await run({ 'other/x.md': '' }, { plansDir: 'nope' });
 
-    expect(v.ok).toBe(true);
-    expect(v.findings).toEqual([{ severity: 'info', message: 'no nope, nothing to verify' }]);
+    expect(v.ok).toBe(false);
+    expect(errorsOf(v)).toEqual([
+      'nope does not exist — this check examined nothing, and a check that examined nothing cannot fail. Point `plansDir` at the folder the plans live in, or create it.',
+    ]);
   });
 
   it('says it looked at nothing when the folder holds no plan — a blank pass reads as "all well-shaped"', async () => {
     const v = await run({ 'docs/_plans/README.md': '# plans' });
 
     expect(v.ok).toBe(true);
-    expect(v.findings).toEqual([{ severity: 'info', message: 'no plan in docs/_plans, nothing to verify' }]);
+    expect(v.findings).toEqual([{ severity: 'info', message: 'no plan in docs/_plans — nothing in flight' }]);
   });
 
-  it('treats a FILE at the plans path as no folder, rather than crashing on the listing', async () => {
+  it('fails a FILE at the plans path, rather than crashing on the listing', async () => {
     const v = await run({ 'docs/_plans': 'not a folder' });
 
-    expect(v.ok).toBe(true);
-    expect(v.findings[0].message).toBe('no docs/_plans, nothing to verify');
+    expect(errorsOf(v)).toEqual(['docs/_plans is a file, not a folder of plans. Point `plansDir` at the folder.']);
   });
 });
 
