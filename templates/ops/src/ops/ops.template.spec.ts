@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import type { ITemplateContext } from 'specwarden';
@@ -28,9 +28,7 @@ const requires = (c = ctx()) =>
  * run. So the files are written and IMPORTED, examples included — an `.example` that
  * cannot construct will fail on the day somebody renames it, which is the worst day.
  */
-const scratch = mkdtempSync(
-  join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '..', '.tmp-generated-'),
-);
+const scratch = mkdtempSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '.tmp-generated-'));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe('the generated tree actually loads', () => {

@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { type ICheck, type ITemplateContext, errorsOf, runCheck } from 'specwarden';
@@ -20,9 +20,7 @@ const paths = (c = ctx()) => nestjsTemplate.files(c).map((f) => f.path);
 const live = (c = ctx()) => nestjsTemplate.files(c).filter((f) => f.path.endsWith('.check.mjs'));
 
 /** Written inside the package so the generated imports resolve as a consumer's would. */
-const scratch = mkdtempSync(
-  join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '..', '.tmp-generated-'),
-);
+const scratch = mkdtempSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '.tmp-generated-'));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe('the generated tree actually loads', () => {

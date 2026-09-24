@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import type { IPart } from '@specwarden/scaffold-parts';
@@ -22,9 +22,7 @@ const ctx = (over: Partial<ITemplateContext> = {}): ITemplateContext => ({
 const paths = (c = ctx()) => speckitTemplate.files(c).map((f) => f.path);
 const bodyOf = (path: string, c = ctx()) => speckitTemplate.files(c).find((f) => f.path === path)?.body ?? '';
 
-const scratch = mkdtempSync(
-  join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '..', '.tmp-generated-'),
-);
+const scratch = mkdtempSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '.tmp-generated-'));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe('the seam it exists for', () => {

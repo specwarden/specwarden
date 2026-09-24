@@ -23,10 +23,18 @@ describe('platformShell', () => {
     expect(shell.args).toEqual(['-c']);
   });
 
-  it('remembers the answer across calls, and forgets it on request', () => {
+  it('remembers the answer across calls', () => {
     const first = platformShell();
 
     expect(platformShell()).toBe(first);
+  });
+
+  // Off Windows the answer is one constant — there is nothing resolved to forget, and the
+  // same object comes back either way. This case failed on every Linux run for as long as
+  // it asserted a new object there; only Windows resolves a shell per environment.
+  it.skipIf(process.platform !== 'win32')('forgets it on request, and resolves it again', () => {
+    const first = platformShell();
+
     forgetPlatformShell();
     expect(platformShell()).not.toBe(first);
     expect(platformShell()).toEqual(first);

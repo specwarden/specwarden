@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { removeScratch, scratchTree, specwarden } from '../../../scripts/playgrounds.mjs';
@@ -70,9 +70,7 @@ const everyPart = (c = ctx()): Record<string, IPart> => ({
  * Written INSIDE the package so the generated imports resolve against its own
  * node_modules — the same resolution a consumer gets.
  */
-const scratch = mkdtempSync(
-  join(dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '..', '.tmp-generated-'),
-);
+const scratch = mkdtempSync(join(dirname(fileURLToPath(import.meta.url)), '..', '.tmp-generated-'));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 const importGenerated = async (name: string, body: string): Promise<Record<string, unknown>> => {
