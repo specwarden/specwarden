@@ -9,11 +9,15 @@
     "",
     "The engine is a NODE tool, so there is no DOM lib and no `jsx`. A check reads files,",
     "spawns processes and returns a verdict; anything reaching for a browser global here is",
-    "a mistake the type system should make immediately."
+    "a mistake the type system should make immediately.",
+    "",
+    "`lib` is ES2022 because what ships runs on Node 18.18 (the registry’s TOOLCHAIN.node), and",
+    "ES2023 adds the change-array-by-copy methods — toSorted, toReversed, toSpliced, with — that",
+    "arrived in Node 20. A lint rule cannot find ‘xs.toSorted()’ without the type of xs; tsc can."
   ],
   "compilerOptions": {
-    "target": "ES2023",
-    "lib": ["ES2023"],
+    "target": "ES2022",
+    "lib": ["ES2022"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "types": ["node"],

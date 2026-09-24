@@ -45,7 +45,19 @@ export const ORIGIN = Object.freeze({
  * nothing compared them.
  */
 export const TOOLCHAIN = Object.freeze({
-  node: '>=24',
+  /**
+   * The oldest Node a PUBLISHED package runs on: every package's `engines`, the build
+   * target (`buildTarget` below), and the floor the CLI shim refuses beneath. Developing
+   * here takes Node 24 — the root manifest says so, and vitest 4 and Stryker need 20 at
+   * least — but a consumer should not have to run the Node this repository is built with.
+   *
+   * 18.18.0 and not 18.0.0: `node --test` arrived in 18.1 and `--test-reporter` in 18.15,
+   * and what `new` prints and the guides show runs a check's test with both. It is the
+   * floor ESLint 9 and typescript-eslint already set, so a repository linting on 18 is
+   * already past it. The one runtime API the engine needed from later Nodes was
+   * `fs.globSync`; it walks trees itself now (`core/src/infrastructure/_shared/glob-walk/`).
+   */
+  node: '>=18.18.0',
   packageManager: 'pnpm@10.18.3',
   devDependencies: Object.freeze({
     '@types/node': '^24.0.0',
@@ -58,6 +70,9 @@ export const TOOLCHAIN = Object.freeze({
     vitest: '^4.0.0',
   }),
 });
+
+/** esbuild's name for the floor — `>=18.18.0` builds for `node18.18` — derived, so the two cannot disagree. */
+export const buildTarget = () => `node${TOOLCHAIN.node.replace(/^>=/, '').split('.').slice(0, 2).join('.')}`;
 
 /**
  * THE NAMING SCHEME. The engine is unscoped — `specwarden` is the thing you install and

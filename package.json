@@ -75,6 +75,7 @@
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^4.0.0",
     "eslint": "^9.39.0",
+    "eslint-plugin-n": "^17.24.0",
     "prettier": "^3.8.0",
     "specwarden": "workspace:*",
     "tsup": "^8.5.0",

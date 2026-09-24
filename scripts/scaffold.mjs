@@ -14,7 +14,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
-import { KINDS, ORIGIN, PACKAGES, TOOLCHAIN, byName, pkgDeps, pkgDir, pkgName } from './registry.mjs';
+import { KINDS, ORIGIN, PACKAGES, TOOLCHAIN, buildTarget, byName, pkgDeps, pkgDir, pkgName } from './registry.mjs';
 import { generateLlmsIndex } from './llms.mjs';
 import { generatedSkillFiles } from './skills.mjs';
 
@@ -222,11 +222,13 @@ export function vitestConfig(pkg) {
  * carried a paragraph explaining why it could not simply call `pnpm exec tsc` on
  * Windows. All of that is what a bundler already does.
  *
- * `target` is the node floor, and it is not decoration: esbuild lowers SYNTAX, never
- * library surface, so a target below the oldest runtime whose APIs the sources call
- * compiles clean and throws on import. It said `node20` once while the file source
- * imported `fs.globSync`, and every run on a node-20 shell died with a bare "does not
- * provide an export named 'globSync'" rather than a version complaint.
+ * `target` is the node floor, DERIVED from `TOOLCHAIN.node`, and it is not decoration:
+ * esbuild lowers SYNTAX, never library surface, so a target below the oldest runtime
+ * whose APIs the sources call compiles clean and throws on import. It said `node20` once
+ * while the file source imported `fs.globSync`, and every run on a node-20 shell died
+ * with a bare "does not provide an export named 'globSync'" rather than a version
+ * complaint. The library half is lint's (`eslint-plugin-n`, against each package's
+ * `engines`) and `core/_playground/runtime.test.mjs`'s, run on the floor itself.
  *
  * GENERATED from `scripts/registry.mjs`. Edit the registry.
  */
@@ -262,7 +264,7 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   platform: 'node',
-  target: 'node24',
+  target: '${buildTarget()}',
   // Nothing outside this package is bundled in: a workspace sibling is a real
   // dependency at runtime, and inlining it would ship a second copy of the engine
   // inside every module that uses it.
@@ -426,6 +428,30 @@ export function withPackageTable(markdown) {
   return markdown.slice(0, start) + packageTable() + markdown.slice(end + PACKAGE_TABLE_END.length);
 }
 
+// ── the Node floor, wherever a document states it ───────────────────────────────────
+
+/**
+ * "Requires Node 24 or newer" stood in the root README twice, by hand, while the floor it
+ * repeated was the registry's — so lowering the floor would have left the first thing a
+ * consumer reads saying the old one. The prose stays hand-written; the version inside it
+ * is filled in from `TOOLCHAIN.node` wherever it is marked, and `scaffold-drift` refuses a
+ * marked floor that says anything else.
+ */
+export const NODE_FLOOR_START = '<!-- NODE-FLOOR -->';
+export const NODE_FLOOR_END = '<!-- /NODE-FLOOR -->';
+export const FLOOR_DOCUMENTS = ['README.md', 'core/GUIDE.md'];
+
+const MARKED_FLOOR = /<!-- NODE-FLOOR -->[^<]*<!-- \/NODE-FLOOR -->/g;
+
+export const nodeFloor = () => `Node ${TOOLCHAIN.node.replace(/^>=/, '')}`;
+
+export function withNodeFloor(markdown) {
+  return markdown.replace(MARKED_FLOOR, `${NODE_FLOOR_START}${nodeFloor()}${NODE_FLOOR_END}`);
+}
+
+/** How many times a document states the floor where the scaffolder can keep it current. */
+export const markedFloors = (markdown) => (markdown.match(MARKED_FLOOR) ?? []).length;
+
 // ── what this script writes ─────────────────────────────────────────────────────────
 
 /** Every file the scaffolder owns, as path → contents. Exported so the drift check can
@@ -457,11 +483,14 @@ function main() {
   const files = generated();
   for (const [rel, text] of files) write(rel, text);
 
-  // The root README's table, in place.
-  const readmePath = join(ROOT, 'README.md');
-  const before = readFileSync(readmePath, 'utf8');
-  const after = withPackageTable(before);
-  if (after !== before) writeFileSync(readmePath, after, 'utf8');
+  // The root README's table, and every marked Node floor, in place.
+  for (const rel of FLOOR_DOCUMENTS) {
+    const path = join(ROOT, rel);
+    if (!existsSync(path)) continue;
+    const before = readFileSync(path, 'utf8');
+    const after = withNodeFloor(rel === 'README.md' ? withPackageTable(before) : before);
+    if (after !== before) writeFileSync(path, after, 'utf8');
+  }
 
   /**
    * What the scaffolder DELETES.

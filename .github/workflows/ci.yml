@@ -66,16 +66,85 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --dir core run test:mutation
 
+  # The published packages declare a Node far older than the one this repository is built
+  # with (`TOOLCHAIN.node`, scripts/registry.mjs). vitest itself needs 20, so the suites
+  # stay on the development Node and the ENGINE moves: the published build is held to the
+  # glob golden set on the old Node directly, and every playground and the installed
+  # tarballs run the CLI on it (`PLAYGROUND_NODE`, scripts/engine-node.mjs) — the same
+  # checks the heavy tier runs, not a second list.
+  runtimes:
+    name: engine on node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor itself, then the newest of every line between it and the development
+        # Node. The engine no longer calls any runtime's glob, so what each leg proves is
+        # that its own walk, and everything else it ships, answers the same on that Node.
+        node: ['18.18.0', '20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: the Node the engine runs on
+        id: engine
+        run: |
+          echo "path=$(command -v node)" >> "$GITHUB_OUTPUT"
+          node --version
+      # Set up second, so it is the one the PATH finds: the suites and the build run here.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: the published build, on the engine's Node
+        run: ${{ steps.engine.outputs.path }} --test core/_playground/runtime.test.mjs
+      - name: every playground and the installed tarballs, with the engine on it
+        env:
+          PLAYGROUND_NODE: ${{ steps.engine.outputs.path }}
+        run: node core/bin/specwarden.mjs check unit verify-build scripts-unit --all
+
+  # Beneath the floor the CLI must refuse in a sentence, not die on an import it cannot
+  # resolve — and exit 1, because the same file is an agent's PreToolUse hook, where 2
+  # would block every tool call.
+  below-floor:
+    name: refused below the floor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18.17.1'
+      - name: the CLI refuses, and says why
+        run: |
+          set +e
+          out="$(node core/bin/specwarden.mjs doctor 2>&1)"
+          code=$?
+          echo "$out"
+          if [ "$code" != "1" ] || ! printf '%s' "$out" | grep -q 'needs node >= '; then
+            echo "expected exit 1 and the floor in a sentence; got exit $code"
+            exit 1
+          fi
+
   ci-ok:
     name: ci-ok
     runs-on: ubuntu-latest
-    needs: [fast, heavy]
+    needs: [fast, heavy, runtimes, below-floor]
     if: ${{ !cancelled() }}
     steps:
       - name: every gate job passed
         run: |
-          if [ "${{ needs.fast.result }}" != "success" ] || [ "${{ needs.heavy.result }}" != "success" ]; then
-            echo "fast=${{ needs.fast.result }} heavy=${{ needs.heavy.result }}"
+          if [ "${{ needs.fast.result }}" != "success" ] || [ "${{ needs.heavy.result }}" != "success" ] \
+            || [ "${{ needs.runtimes.result }}" != "success" ] || [ "${{ needs.below-floor.result }}" != "success" ]; then
+            echo "fast=${{ needs.fast.result }} heavy=${{ needs.heavy.result }} runtimes=${{ needs.runtimes.result }} below-floor=${{ needs.below-floor.result }}"
             echo "A gate job did not pass. A skipped or cancelled dependency is not a pass."
             exit 1
           fi

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { ROOT, linkPackages, removeScratch, scratchTree } from '../../scripts/playgrounds.mjs';
+import { ENGINE_NODE, ROOT, linkPackages, removeScratch, scratchTree } from '../../scripts/playgrounds.mjs';
 
 /**
  * Journey E — a developer's shell and a CI job meet the command line: the commands, the
@@ -40,7 +40,7 @@ function cli(dir: string, args: readonly string[], env: TEnv = {}): TRun {
   const base: Record<string, string | undefined> = { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' };
   for (const name of ['CI', 'GITHUB_ACTIONS', 'SPECWARDEN_ALL', 'SPECWARDEN_SKIP', 'SPECWARDEN_BASE'])
     delete base[name];
-  const r = spawnSync(process.execPath, [ENGINE, ...args], { cwd: dir, encoding: 'utf8', env: { ...base, ...env } });
+  const r = spawnSync(ENGINE_NODE, [ENGINE, ...args], { cwd: dir, encoding: 'utf8', env: { ...base, ...env } });
   return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
 }
 
@@ -370,7 +370,7 @@ describe('3. reporters', () => {
 
   const ansi = '\u001b[';
   const forced = (args: string[]): string =>
-    spawnSync(process.execPath, [ENGINE, 'check', '--all', ...args], {
+    spawnSync(ENGINE_NODE, [ENGINE, 'check', '--all', ...args], {
       cwd: green,
       encoding: 'utf8',
       env: { ...process.env, CI: undefined, GITHUB_ACTIONS: undefined, FORCE_COLOR: '1', NO_COLOR: undefined },

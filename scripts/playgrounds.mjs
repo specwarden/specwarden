@@ -55,11 +55,12 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative, sep } from 'node:path';
+import { delimiter, dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { SELF_CHECK_IDS } from 'specwarden';
 
+import { ENGINE_NODE } from './engine-node.mjs';
 import { PACKAGES, pkgDeps, pkgDir, pkgName } from './registry.mjs';
 
 /** The repository root, from this file rather than from `cwd` — a template's suite runs
@@ -75,6 +76,9 @@ export const repositoryDir = (pkg) => join(playgroundDir(pkg), 'repository');
 
 /** The CLI, run out of this repository rather than an installed copy. */
 const ENGINE = join(ROOT, 'core', 'bin', 'specwarden.mjs');
+
+/** The Node the engine runs on in every playground — `scripts/engine-node.mjs` says which, and why. */
+export { ENGINE_NODE };
 
 /** What a tree walk never descends into: installed packages and a checkout's own git. */
 const NEVER = new Set(['node_modules', '.git']);
@@ -248,15 +252,27 @@ function installWithPnpm(dir, source) {
 export const removeScratch = (dir) => rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
 
 /** Run the CLI in `dir`. Never throws on a non-zero exit: the exit IS the answer. */
-export function specwarden(dir, args, { timeoutSec = 300, input } = {}) {
-  const r = spawnSync(process.execPath, [ENGINE, ...args], {
+export function specwarden(dir, args, { timeoutSec = 300, input, nodeOnPath = false } = {}) {
+  const r = spawnSync(ENGINE_NODE, [ENGINE, ...args], {
     cwd: dir,
     input,
     encoding: 'utf8',
-    env: playgroundEnv(),
+    env: nodeOnPath ? withEngineNodeOnPath(playgroundEnv()) : playgroundEnv(),
     timeout: timeoutSec * 1000,
   });
   return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
+}
+
+/**
+ * `env` with the engine's Node first on the PATH, for a scene whose command IS the
+ * consumer's — an example a guide tells them to paste — so that `node` in it is the Node a
+ * consumer on the floor has. Not the default: a fixture's own `npm test` is that
+ * repository's business, and several run TypeScript tests only a newer Node can load.
+ */
+export function withEngineNodeOnPath(env) {
+  // Windows spells it `Path`, and a second `PATH` beside it is not the one a child reads.
+  const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
+  return { ...env, [key]: `${dirname(ENGINE_NODE)}${delimiter}${env[key] ?? ''}` };
 }
 
 /**

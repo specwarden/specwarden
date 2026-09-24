@@ -60,3 +60,36 @@ describe('the engine imports nothing', () => {
     ).not.toContain('no-restricted-imports');
   });
 });
+
+/**
+ * The runtime floor. The engine once imported `fs.globSync` — Node 22 — and every file
+ * tool here agreed it was fine: `@types/node` describes the newest Node and esbuild never
+ * lowers a library call. So the rule is linted against the call that broke Node 18 and
+ * 20, from every shipped place a consumer's Node executes.
+ */
+describe('what ships runs on the Node its package declares', () => {
+  const NEWER_THAN_THE_FLOOR = [
+    [
+      'a Node 22 builtin',
+      "import { globSync } from 'node:fs';\nexport const g = globSync;\n",
+      'n/no-unsupported-features/node-builtins',
+    ],
+    ['a Node 21 global', 'export const g = Object.groupBy([], () => 0);\n', 'n/no-unsupported-features/es-builtins'],
+  ];
+
+  it.each([
+    ['the engine', 'core/src/probe/probe.util.ts'],
+    ['the CLI shim', 'core/bin/probe.mjs'],
+    ['a build-free script', 'core/scripts/probe.mjs'],
+    ['a module', 'modules/docs/src/probe/probe.util.ts'],
+    ['the runtime runner', 'core/_playground/probe.mjs'],
+  ])('refuses both from %s', async (_where, filePath) => {
+    for (const [, code, rule] of NEWER_THAN_THE_FLOOR) expect(await firedAt(filePath, code)).toContain(rule);
+  });
+
+  it('leaves this repository’s own scripts alone — they run on the Node it is developed on', async () => {
+    expect(await firedAt('scripts/probe.mjs', NEWER_THAN_THE_FLOOR[0][1])).not.toContain(
+      'n/no-unsupported-features/node-builtins',
+    );
+  });
+});

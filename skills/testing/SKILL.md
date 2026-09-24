@@ -5,7 +5,7 @@ description: What each kind of test answers, where it lives, what it must assert
 
 # testing
 
-## 1. Six kinds, six questions
+## 1. Seven kinds, seven questions
 
 | Kind                | Where                                   | Answers                                                           |
 | ------------------- | --------------------------------------- | ----------------------------------------------------------------- |
@@ -15,9 +15,16 @@ description: What each kind of test answers, where it lives, what it must assert
 | template playground | `templates/<name>/_playground/`         | is `init` green over a real repository, and can each check go red |
 | root playground     | `_playgrounds/`                         | do all the packages compose — in-process and through the CLI      |
 | script spec         | `scripts/<script>.test.mjs`             | does this repository's own guard still fail on what it exists for |
+| runtime             | `core/_playground/runtime.test.mjs`     | does the published build work on the oldest Node it declares      |
 
 Each answers something the others cannot; `skills/playgrounds/SKILL.md` owns the three
-playgrounds. `pnpm -r` never reaches the script specs — they are not a workspace package — so
+playgrounds.
+
+The runtime kind exists because vitest needs Node 20 and the engine declares 18.18: nothing
+else runs the published `dist` on the floor. It is build-free ESM for `node --test`,
+importing `specwarden` by name, and CI runs it once per supported Node line.
+
+`pnpm -r` never reaches the script specs — they are not a workspace package — so
 the `scripts-unit` check runs the root `vitest.config.mjs`, whose `include` is PINNED to
 `scripts/**/*.test.mjs`. It was not pinned once: with no config, the root run collected
 every package's specs, 892 tests, and not one script had a test.
@@ -57,6 +64,31 @@ by it too. The two used to disagree — the adapter passed pathspecs to git as w
 `**/*.md` skips every root document — so every documentation check was unit-tested over a
 `README.md` its real run never read. `core/src/infrastructure/_contract/vcs.contract.spec.ts` now holds both sides
 to the same cases.
+
+## 3a. A glob is held to a recording, never to the runtime
+
+`glob` — both file sources — answers what `core/src/infrastructure/_contract/glob/glob.golden.json`
+recorded Node 24.21's own `fs.globSync` answering, pattern by pattern, per platform. Not to
+the live runtime: Node 18 and 20 have no `globSync`; 22.x, 24.0–24.20, 25.x and 26.0–26.7
+skip sibling entries on an early return; 22.0–22.22.0, 24.0–24.13.0 and 25.0–25.3 skip a
+dot directory after `**` — the maintainer's own 24.9 among them; and 26.9 stopped following
+a directory link a segment after `**` names. A live comparison measures whichever of those
+the machine runs.
+
+A fuzz against native is only as good as its tree. The first one here held a single
+junction whose relative target pointed one directory too high — a relative target is
+resolved from the link's own directory — so it dangled, and "0 differences on 26.10" never
+touched a working link; 26.9 had changed exactly what a link does under `**`. Check that a
+link resolves before believing a run over it.
+
+- The trees and patterns are edited in the JSON; every `recorded` block is written by
+  `node scripts/record-glob-golden.mjs`, which refuses any Node but the one the file names,
+  and refuses to write a shared section that two platforms answered differently.
+- Record on each platform the set covers (win32 and linux today). A directory nobody may
+  read is only recorded as a non-root user.
+- A new glob construct is a new pattern in the JSON, recorded — not a hand-written
+  expectation. Against the adapters this replaced, the set was red on 89 cases: 15 on the
+  disk (Node 24.9's own glob) and 74 in the kit's fake.
 
 ## 4. Coverage is a ratchet, and the `unit` check turns it
 

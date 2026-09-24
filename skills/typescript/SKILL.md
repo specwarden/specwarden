@@ -20,12 +20,21 @@ eighteen manifests that happen to agree today.
 | `isolatedModules`                       | a construct a bundler cannot transpile file by file — which is what the build does |
 | `moduleDetection: force`                | a file that is a script rather than a module by accident                           |
 
-## No DOM
+## No DOM, and nothing the floor lacks
 
-`lib` is `ES2023` and nothing else; `types` is `node`. The engine is a node tool: a check
+`lib` is `ES2022` and nothing else; `types` is `node`. The engine is a node tool: a check
 reads files, spawns processes and returns a verdict. Anything reaching for a browser
 global here is a mistake the type system should make immediately, rather than at the
 moment somebody runs it in CI.
+
+`ES2022` and not `ES2023` because what ships runs on the published floor —
+`TOOLCHAIN.node` in `scripts/registry.mjs`, Node 18.18 — and ES2023's change-array-by-copy
+methods (`toSorted`, `toReversed`, `toSpliced`, `with`) arrived in Node 20. Only `tsc` can
+find them: a lint rule sees `xs.toSorted()` without knowing what `xs` is. The Node APIs are
+the other half, and neither tool here sees those either — `@types/node` describes the
+newest Node, so `fs.globSync` typechecked while the floor could not import it. That half is
+`eslint-plugin-n`'s, read against each package's own `engines`, and what neither static rule
+reaches runs on the floor itself in `core/_playground/runtime.test.mjs`.
 
 ## Declarations come from the build, not from `tsc`
 

@@ -59,6 +59,19 @@ source names no consumer literal and never imports the consumer zone.
     a duck-typed context literal that breaks the moment the check reads a second port. An
     unconfigured port therefore throws BY NAME rather than answering emptily.
 
+11. **A file listing comes from the engine's own glob, never the runtime's.** Both file
+    sources walk trees with `infrastructure/_shared/glob-walk`, held to the glob golden set
+    (`skills/testing/SKILL.md` §3a). `fs.globSync` does not exist on Node 18 and 20, which
+    the engine declares, and answers differently across 22.x and 24.x minors — the verdict
+    of a check reading `**/.github/**` depended on which one ran it. `eslint-plugin-n`
+    refuses the import against the package's `engines`.
+
+12. **The fake differs from the disk in two declared ways, and no others.** It ignores
+    case on no platform (the disk does on win32 and darwin, in a wildcard segment), so a
+    consumer's check test answers the same on a laptop as in CI. And a map holds no links,
+    so what the disk reads through one — `**/*` one level into a pnpm dependency, as Node
+    24.21 does — the map cannot hold.
+
 ## Changing the engine
 
 - **The public surface is `core/src/index.ts`.** A consumer imports from the package

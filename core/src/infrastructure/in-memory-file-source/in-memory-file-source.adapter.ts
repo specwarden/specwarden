@@ -1,4 +1,7 @@
+import { posix } from 'node:path';
+
 import { FileNotFoundError, type IFileSource } from '../../domain';
+import { walkGlob, type GlobEntry, type GlobTree } from '../_shared/glob-walk/glob-walk.util';
 
 /**
  * A file source backed by a map, not a disk. It is NOT a second-class test helper:
@@ -66,9 +69,67 @@ export class InMemoryFileSource implements IFileSource {
     return [...children].sort();
   }
 
+  /**
+   * The same walk `NodeFileSource` runs, over the map instead of a disk — which is what
+   * makes the two agree on braces, classes, extglobs and the dot rules by construction
+   * rather than by a second implementation kept in step. It used to be a regex of its
+   * own that read `{ts,tsx}` and `[abc]` as text, so a check tested through `runCheck`
+   * over `src/**\/*.{ts,tsx}` examined nothing that its real run read.
+   *
+   * Two differences from the disk are declared, not accidental. Case is significant here on
+   * every host — a consumer's check test must answer the same on a macOS laptop as on
+   * Linux CI — where win32 and darwin ignore it in a wildcard segment. And a map holds no
+   * links, so what the disk reads through one (`**\/*` one level into a pnpm dependency) the
+   * map cannot hold at all.
+   */
   glob(pattern: string): readonly string[] {
-    const re = this.globToRegExp(this.norm(pattern));
-    return [...this.files.keys()].filter((k) => re.test(k)).sort();
+    // The pattern goes to the walk as written: normalising it first read `docs/*/` — the
+    // directories under `docs` — as `docs/*`, and returned the files the disk does not.
+    const matched = walkGlob(pattern, this.tree, { nocase: false, windows: false });
+    return [...new Set(matched.map((m) => this.norm(m)))].filter((k) => this.files.has(k)).sort();
+  }
+
+  /**
+   * Every directory's entries, built once. The map is fixed after construction, and a
+   * listing that scanned every key per directory made `**` quadratic: 20 seconds for
+   * `**\/*.md` over 30,000 files, where the regex this replaced took 57 ms.
+   */
+  private children: Map<string, GlobEntry[]> | undefined;
+
+  private childrenOf(key: string): readonly GlobEntry[] {
+    if (!this.children) {
+      const index = new Map<string, GlobEntry[]>();
+      // A key that is a file and a directory both is listed once, as the directory.
+      const fileOnly = [...this.files.keys()].filter((f) => !this.dirs.has(f));
+      for (const path of [...this.dirs, ...fileOnly]) {
+        if (path === '') continue;
+        const parent = this.parentOf(path) as string;
+        const at = index.get(parent) ?? [];
+        at.push({
+          name: path.slice(parent === '' ? 0 : parent.length + 1),
+          directory: this.dirs.has(path),
+          symlink: false,
+        });
+        index.set(parent, at);
+      }
+      this.children = index;
+    }
+    return this.children.get(key) ?? [];
+  }
+
+  private readonly tree: GlobTree = {
+    stat: (path) => {
+      const key = this.key(path);
+      if (this.files.has(key)) return { directory: false, symlink: false };
+      return this.dirs.has(key) ? { directory: true, symlink: false } : undefined;
+    },
+    list: (path) => this.childrenOf(this.key(path)),
+  };
+
+  /** A walk's path as a map key: `.` is the root, and `a/../b` is `b`. */
+  private key(path: string): string {
+    const n = this.norm(posix.normalize(path.replace(/\\/g, '/')));
+    return n === '.' ? '' : n;
   }
 
   private put(path: string, content: string): void {
@@ -90,48 +151,5 @@ export class InMemoryFileSource implements IFileSource {
 
   private norm(path: string): string {
     return path.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+/g, '/').replace(/\/$/, '').replace(/^\//, '');
-  }
-
-  /** `**` crosses slashes, `*`/`?` stay within a segment, everything else is literal.
-   * The same semantics `fs.globSync` gives — INCLUDING its default exclusion of
-   * dotfiles: a `*`/`**` segment does not match a path component beginning with `.`
-   * unless the pattern segment spells the dot out (`.specwarden/`). Without that the
-   * two sources disagreed — the in-memory source scanned `.github`/`.specwarden` under
-   * a bare double-star glob while `NodeFileSource` skipped them — so a glob-driven check could
-   * pass in a test and silently under-scan in production. Pinned by the file-source
-   * contract spec's dotfile cases. */
-  private globToRegExp(pattern: string): RegExp {
-    const segs = pattern.split('/');
-    let out = '';
-    for (let i = 0; i < segs.length; i++) {
-      const seg = segs[i];
-      const last = i === segs.length - 1;
-      // A middle `**` emits its own trailing slashes, so the segment after it must not
-      // be preceded by another separator.
-      const afterMidStarStar = i > 0 && segs[i - 1] === '**' && i - 1 !== segs.length - 1;
-      if (i > 0 && !afterMidStarStar) out += '/';
-      if (seg === '**') {
-        // Zero+ dot-free segments in the middle (it carries the joining slash); one+
-        // dot-free segments when trailing (matching the files beneath a directory).
-        out += last ? '(?!\\.)[^/]+(?:/(?!\\.)[^/]+)*' : '(?:(?!\\.)[^/]+/)*';
-        continue;
-      }
-      out += this.segToRegExp(seg);
-    }
-    return new RegExp(`^${out}$`);
-  }
-
-  /** One path segment (no slash) to regex source. A `(?!\.)` guard is prepended when
-   * the segment starts with a wildcard, so `*`/`?`/`[` never match a leading dot —
-   * `fs.globSync`'s default. */
-  private segToRegExp(seg: string): string {
-    let out = '';
-    for (const c of seg) {
-      if (c === '*') out += '[^/]*';
-      else if (c === '?') out += '[^/]';
-      else if ('.+^${}()|[]\\'.includes(c)) out += `\\${c}`;
-      else out += c;
-    }
-    return (/^[*?[]/.test(seg) ? '(?!\\.)' : '') + out;
   }
 }

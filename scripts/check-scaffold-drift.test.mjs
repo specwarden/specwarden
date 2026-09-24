@@ -16,13 +16,22 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { driftProblems } from './check-scaffold-drift.mjs';
 import { PACKAGES, pkgDir } from './registry.mjs';
-import { PACKAGE_TABLE_END, PACKAGE_TABLE_START, generated, packageTable } from './scaffold.mjs';
+import {
+  NODE_FLOOR_END,
+  NODE_FLOOR_START,
+  PACKAGE_TABLE_END,
+  PACKAGE_TABLE_START,
+  generated,
+  nodeFloor,
+  packageTable,
+} from './scaffold.mjs';
 
 const SCRIPT = resolve('scripts/check-scaffold-drift.mjs');
 const SCAFFOLD = resolve('scripts/scaffold.mjs');
 
 const FILES = generated();
-const README = `# specwarden\n\n${packageTable()}\n`;
+const FLOOR = `${NODE_FLOOR_START}${nodeFloor()}${NODE_FLOOR_END}`;
+const README = `# specwarden\n\nRequires ${FLOOR} or newer.\n\n${packageTable()}\n`;
 const MANIFEST = `${pkgDir(PACKAGES[1])}/package.json`;
 
 /** A committed tree equal to what the scaffolder generates, with `edits` over it —
@@ -99,6 +108,24 @@ describe('what drift is', () => {
     expect(driftProblems(FILES, committed({ 'README.md': null }))).toEqual([]);
   });
 
+  it("refuses a document whose marked Node floor is not the registry's", () => {
+    // "Requires Node 24 or newer" stood in the README by hand while the registry said 18.18.
+    const stale = README.replace(FLOOR, `${NODE_FLOOR_START}Node 24${NODE_FLOOR_END}`);
+
+    expect(driftProblems(FILES, committed({ 'README.md': stale }))).toEqual([
+      `README.md: states a Node floor other than the registry's ${nodeFloor()} — run \`pnpm scaffold\`.`,
+    ]);
+  });
+
+  it('refuses a floor document that states the floor nowhere the scaffolder keeps it', () => {
+    // Unmarked, "Requires Node 24" is a copy nothing updates.
+    const unmarked = '# guide\n\nRequires Node 24 or newer.\n';
+
+    expect(driftProblems(FILES, committed({ 'core/GUIDE.md': unmarked }))).toEqual([
+      `core/GUIDE.md: states no Node floor between ${NODE_FLOOR_START} markers — say which Node it needs.`,
+    ]);
+  });
+
   it('reports every drifted file, not the first', () => {
     const problems = driftProblems(
       FILES,
@@ -130,9 +157,16 @@ describe('check-scaffold-drift.mjs', () => {
     // files it is not looking at.
     scratch = mkdtempSync(join(tmpdir(), 'specwarden-drift-'));
     mkdirSync(join(scratch, 'skills'));
-    writeFileSync(join(scratch, 'README.md'), `# x\n\n${PACKAGE_TABLE_START}\n${PACKAGE_TABLE_END}\n`, 'utf8');
+    // A floor that is wrong on purpose: the scaffolder fills in the registry's.
+    const wrongFloor = `Requires ${NODE_FLOOR_START}Node 0${NODE_FLOOR_END} or newer.`;
+    writeFileSync(
+      join(scratch, 'README.md'),
+      `# x\n\n${wrongFloor}\n\n${PACKAGE_TABLE_START}\n${PACKAGE_TABLE_END}\n`,
+      'utf8',
+    );
     execFileSync(process.execPath, [SCAFFOLD], { cwd: scratch, stdio: 'pipe' });
 
+    expect(readFileSync(join(scratch, 'README.md'), 'utf8')).toContain(`Requires ${FLOOR} or newer.`);
     expect(run(scratch).code).toBe(0);
 
     const target = join(scratch, MANIFEST);

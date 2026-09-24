@@ -107,6 +107,31 @@ through the root's hoisting.
 Both assert the same two lists in `repository.ts` — every check id, and exactly what the
 broken tree turns red — so the two ways of composing cannot describe different configs.
 
+## 4a. The Node the engine runs on
+
+Every playground runs the CLI on `ENGINE_NODE` (`scripts/engine-node.mjs`): the Node
+running the suite, or the binary `PLAYGROUND_NODE` names — which is how CI proves the
+published floor. The suites cannot move (vitest needs 20), so what moves is exactly what a
+consumer's Node executes:
+
+- the CLI, every time — `specwarden()` in `scripts/playgrounds.mjs`, and a journey's own
+  spawn of the engine;
+- a check's test under `node --test`, since it runs the published testing kit;
+- the entry points `verify-build` imports from the installed tarballs.
+
+The consumer's OWN commands — a fixture's `npm test`, which in three templates runs
+TypeScript tests only a newer Node can load — run on whatever the PATH finds, as they would
+in the consumer's repository. The exception is a scene whose command a guide tells the
+consumer to paste: `specwarden(dir, args, { nodeOnPath: true })` puts the engine's Node
+first, so the example is proved on the Node a consumer on the floor has. That is how the
+engine guide's `node --test "tests/**/*.test.mjs"` was found red on Node 18: a quoted glob
+is expanded by the runner only from 21.
+
+Two rules keep the proof honest. A named binary that does not exist is an error, never a
+fallback; and `scripts/engine-node.test.mjs` asks the engine, from inside a check it
+loaded, which Node it is running on. Name `--test-reporter` wherever a scene reads the
+output of `node --test`: a pipe gets TAP by default up to 22 and spec from 23.
+
 ## 5. The traps, in every kind
 
 - **The empty pathspec** means every tracked file to git; forwarded to a glob it matches

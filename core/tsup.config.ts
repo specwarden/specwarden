@@ -26,7 +26,7 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   platform: 'node',
-  target: 'node24',
+  target: 'node18.18',
   // Nothing outside this package is bundled in: a workspace sibling is a real
   // dependency at runtime, and inlining it would ship a second copy of the engine
   // inside every module that uses it.

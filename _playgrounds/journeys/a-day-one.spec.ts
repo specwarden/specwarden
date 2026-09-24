@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { removeScratch, scratchTree, specwarden } from '../../scripts/playgrounds.mjs';
+import { ENGINE_NODE, removeScratch, scratchTree, specwarden } from '../../scripts/playgrounds.mjs';
 
 /**
  * Journey A — day one, no template.
@@ -75,8 +75,10 @@ const commit = (dir: string) => {
   git(dir, ['add', '-A']);
   git(dir, ['commit', '-q', '--no-verify', '--allow-empty', '-m', 'step']);
 };
+// The reporter is named: Node's default for a pipe is TAP up to 22 and spec from 23, and
+// the scene is about the verdict of the test `new` wrote, not about which Node printed it.
 const nodeTest = (dir: string, rel: string) =>
-  spawnSync(process.execPath, ['--test', rel], { cwd: dir, encoding: 'utf8' });
+  spawnSync(ENGINE_NODE, ['--test', '--test-reporter=spec', rel], { cwd: dir, encoding: 'utf8' });
 const ratchetFile = (dir: string, id: string) =>
   JSON.parse(readFileSync(join(dir, '.specwarden/ratchets', `${id}.json`), 'utf8')) as { value: number };
 

@@ -27,12 +27,19 @@ export function verdictsIn(dir: string): {
   readonly failed: readonly string[];
 };
 
-/** Run the CLI in `dir` — never throws on a non-zero exit; the exit IS the answer. */
+/**
+ * Run the CLI in `dir` — never throws on a non-zero exit; the exit IS the answer.
+ * `nodeOnPath` puts the engine's Node first on the PATH, for a command that is the
+ * consumer's own: an example a guide tells them to paste.
+ */
 export function specwarden(
   dir: string,
   args: readonly string[],
-  options?: { readonly timeoutSec?: number; readonly input?: string },
+  options?: { readonly timeoutSec?: number; readonly input?: string; readonly nodeOnPath?: boolean },
 ): { readonly status: number | null; readonly stdout: string; readonly stderr: string };
+
+/** The Node the engine runs on in every playground — `PLAYGROUND_NODE`, or the one running the suite. */
+export const ENGINE_NODE: string;
 
 /** Link each `[name, source directory]` into `dir/node_modules`. */
 export function linkPackages(dir: string, installed: readonly (readonly [string, string])[]): void;

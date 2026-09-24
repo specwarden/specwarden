@@ -1,7 +1,9 @@
-import { existsSync, globSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { isAbsolute, resolve, sep } from 'node:path';
 
 import { FileNotFoundError, type IFileSource } from '../../domain';
+import { platformGlobOptions } from '../_shared/glob-pattern/glob-pattern.util';
+import { walkGlob, type GlobEntry, type GlobTree } from '../_shared/glob-walk/glob-walk.util';
 
 /**
  * The real file system, behind the port. Its counterpart `InMemoryFileSource`
@@ -58,11 +60,13 @@ export class NodeFileSource implements IFileSource {
   }
 
   glob(pattern: string): readonly string[] {
-    // globSync yields paths relative to cwd, and matches DIRECTORIES too — but a
-    // check globs to then read, and reading a directory throws. So glob returns
-    // FILES only (the in-memory source already does), the contract both must keep.
-    // Forward slashes and a stable order make the result identical across platforms.
-    return globSync(pattern, { cwd: this.rootDir })
+    // The walk is the engine's own, not `fs.globSync`: that exists only from Node 22,
+    // and answers differently across minors (24.9 found no `**\/.github/**` file that
+    // 24.21 finds). The walk matches DIRECTORIES too — but a check globs to then read,
+    // and reading a directory throws. So glob returns FILES only (the in-memory source
+    // already does), the contract both must keep. Forward slashes and a stable order
+    // make the result identical across platforms.
+    return walkGlob(pattern, this.tree, platformGlobOptions(process.platform))
       .filter((m) => {
         try {
           return statSync(resolve(this.rootDir, m)).isFile();
@@ -73,6 +77,34 @@ export class NodeFileSource implements IFileSource {
       .map((m) => m.split(sep).join('/'))
       .sort();
   }
+
+  /**
+   * The disk as a glob walks it: `lstat` and a directory listing, never following a link.
+   * An entry that cannot be looked at is an entry that is not there — not only one that
+   * is missing: a file inside a directory nobody may read threw `EACCES` here while Node's
+   * own glob skipped it, and a glob that throws turns a verdict into a crash.
+   */
+  private readonly tree: GlobTree = {
+    stat: (path) => {
+      try {
+        const stat = lstatSync(resolve(this.rootDir, path));
+        return { directory: stat.isDirectory(), symlink: stat.isSymbolicLink() };
+      } catch {
+        return undefined;
+      }
+    },
+    list: (path) => {
+      try {
+        return readdirSync(resolve(this.rootDir, path), { withFileTypes: true }).map((d): GlobEntry => ({
+          name: d.name,
+          directory: d.isDirectory(),
+          symlink: d.isSymbolicLink(),
+        }));
+      } catch {
+        return [];
+      }
+    },
+  };
 
   private toAbsolute(path: string): string {
     return isAbsolute(path) ? path : resolve(this.rootDir, path);

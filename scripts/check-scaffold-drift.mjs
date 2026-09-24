@@ -16,7 +16,15 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { generated, withPackageTable } from './scaffold.mjs';
+import {
+  FLOOR_DOCUMENTS,
+  NODE_FLOOR_START,
+  generated,
+  markedFloors,
+  nodeFloor,
+  withNodeFloor,
+  withPackageTable,
+} from './scaffold.mjs';
 
 /**
  * What disagrees, as human strings. Empty means every generated file is current.
@@ -57,6 +65,17 @@ export function driftProblems(files, read) {
   const readme = read('README.md');
   if (readme !== undefined && withPackageTable(readme) !== readme) {
     problems.push('README.md: the package table is out of date — run `pnpm scaffold`.');
+  }
+
+  for (const rel of FLOOR_DOCUMENTS) {
+    const text = read(rel);
+    if (text === undefined) continue;
+    if (markedFloors(text) === 0) {
+      // Unmarked, the floor in the prose is a copy nothing keeps current — or it is gone.
+      problems.push(`${rel}: states no Node floor between ${NODE_FLOOR_START} markers — say which Node it needs.`);
+    } else if (withNodeFloor(text) !== text) {
+      problems.push(`${rel}: states a Node floor other than the registry's ${nodeFloor()} — run \`pnpm scaffold\`.`);
+    }
   }
 
   return problems;

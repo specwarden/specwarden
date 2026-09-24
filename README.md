@@ -9,7 +9,7 @@ npx specwarden init       # write the starting tree: .specwarden/ and its first 
 npx specwarden check      # what the changed files make relevant
 ```
 
-Requires Node 24 or newer. [`core/GUIDE.md`](core/GUIDE.md) walks from the install to a
+Requires <!-- NODE-FLOOR -->Node 18.18.0<!-- /NODE-FLOOR --> or newer. [`core/GUIDE.md`](core/GUIDE.md) walks from the install to a
 green run; [`core/GLOSSARY.md`](core/GLOSSARY.md) defines every word the product uses.
 
 ---
@@ -183,7 +183,7 @@ specwarden perimeter                      # one assistant action on stdin — th
 Exit `0` every check held, `1` the answer is no (a check failed, doctor found a defect, a plan
 is not ready), `2` the line, the config or a file could not be used. `specwarden --help` lists every flag and environment variable.
 
-`spw` is a shorter alias for the same binary. Requires Node 24 or newer.
+`spw` is a shorter alias for the same binary. Requires <!-- NODE-FLOOR -->Node 18.18.0<!-- /NODE-FLOOR --> or newer.
 
 ## Where to go next
 

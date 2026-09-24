@@ -6,7 +6,7 @@ import { SELF_CHECK_IDS, PLAN_STATUSES } from 'specwarden';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { inScratchRepository, planted } from '../../scripts/playground-proof.mjs';
-import { ROOT } from '../../scripts/playgrounds.mjs';
+import { ENGINE_NODE, ROOT } from '../../scripts/playgrounds.mjs';
 
 /**
  * Journey D — day one with a template, the week after, and the surface an agent working
@@ -1163,14 +1163,14 @@ describe('the perimeter, wired as the agentic perimeter.mjs says', () => {
       // Exactly the command the comment says to put in .claude/settings.json.
       const hook = join(dir, 'node_modules', 'specwarden', 'bin', 'specwarden.mjs');
       const env = { ...process.env, CLAUDE_PROJECT_DIR: dir };
-      const w = spawnSync(process.execPath, [hook, 'perimeter'], {
+      const w = spawnSync(ENGINE_NODE, [hook, 'perimeter'], {
         cwd: dir,
         input: PAYLOADS['git push --force'],
         encoding: 'utf8',
         env,
       });
       wired = { status: w.status, stderr: w.stderr };
-      nested = spawnSync(process.execPath, [hook, 'perimeter'], {
+      nested = spawnSync(ENGINE_NODE, [hook, 'perimeter'], {
         cwd: join(dir, 'src', 'limits'),
         input: PAYLOADS['git push --force'],
         encoding: 'utf8',

@@ -112,6 +112,12 @@ carrying a prefix is a decision on record, not an oversight.
 pnpm --filter @specwarden-playgrounds/workspace test   # this one, journeys included
 pnpm --filter @specwarden/template-agentic test        # one template, unit suite and playground
 node scripts/playgrounds.mjs                            # every template's .specwarden/ is current
+PLAYGROUND_NODE=/path/to/node18 pnpm --filter @specwarden-playgrounds/workspace test
+                                                        # the same, with the ENGINE on another Node
 ```
 
 `pnpm build` first: the CLI refuses a `dist` older than its sources, by design.
+
+`PLAYGROUND_NODE` moves the engine and nothing else — the suites stay on the Node that runs
+them, and a fixture's own `npm test` on whatever the PATH finds. `skills/playgrounds/SKILL.md`
+§4a owns what moves and why.

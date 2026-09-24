@@ -32,6 +32,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { floorOf, isBelow, refusal } from '../scripts/node-floor.mjs';
 import { newestSrcMtimeMs, srcFingerprint } from '../scripts/src-fingerprint.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -56,8 +57,8 @@ function die(reason) {
 }
 
 /**
- * The engine calls library surface that older runtimes do not have, so importing the
- * bundle under one fails with a bare `does not provide an export named …` naming an
+ * Beneath the floor the bundle may call library surface the runtime does not have, and
+ * importing it then fails with a bare `does not provide an export named …` naming an
  * internal of a file the reader never opened. That is a version complaint wearing a
  * syntax error's clothes: it cost an afternoon of blaming the network, because the
  * failure surfaced only as `git push` exiting non-zero from a hook.
@@ -65,17 +66,14 @@ function die(reason) {
  * The floor is READ from `engines.node` rather than repeated here — a second copy is
  * how a declaration and its enforcement drift apart — and it is checked BEFORE the
  * import, which is the only point at which a readable message is still possible.
+ *
+ * Exit 1, not the 2 that means "could not be used": this same file is the agent
+ * perimeter's PreToolUse hook, where 2 BLOCKS the tool call. An engine that cannot start
+ * must let the agent work, not lock it out of every tool.
  */
-const floor = Number(
-  /(\d+)/.exec(JSON.parse(readFileSync(join(pkg, 'package.json'), 'utf8')).engines?.node ?? '')?.[1],
-);
-const running = Number(process.versions.node.split('.')[0]);
-if (Number.isFinite(floor) && running < floor) {
-  process.stderr.write(
-    `specwarden: needs node >= ${floor}, running ${process.versions.node}\n` +
-      `  this shell is on an older node than the package declares — switch it (a version\n` +
-      `  manager reading the repository's .nvmrc will do it: nvm use) and run the command again.\n`,
-  );
+const floor = floorOf(JSON.parse(readFileSync(join(pkg, 'package.json'), 'utf8')).engines?.node);
+if (floor && isBelow(process.versions.node, floor)) {
+  process.stderr.write(refusal(floor, process.versions.node));
   process.exit(1);
 }
 

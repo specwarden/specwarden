@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { removeScratch, scratchTree, specwarden } from '../../scripts/playgrounds.mjs';
+import { ENGINE_NODE, removeScratch, scratchTree, specwarden } from '../../scripts/playgrounds.mjs';
 
 /**
  * Journey B — a consumer writes every kind of check as a file under `.specwarden/checks/`.
@@ -47,10 +47,14 @@ const parse = (stdout: string): readonly IRow[] => {
   }
 };
 /** Build the scratch repository, run the CLI once, tear it down. */
-function cli(tree: TTree, args: readonly string[] = ['check', '--all', '--json']): IRun {
+function cli(
+  tree: TTree,
+  args: readonly string[] = ['check', '--all', '--json'],
+  options: { nodeOnPath?: boolean } = {},
+): IRun {
   const dir = scratchTree(tree, { installed: INSTALLED });
   try {
-    const r = specwarden(dir, args);
+    const r = specwarden(dir, args, options);
     return { ...r, rows: parse(r.stdout) };
   } finally {
     removeScratch(dir);
@@ -371,7 +375,8 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
       expect(block, 'the guide shows a commandCheck example').toBeDefined();
       const file = `import { commandCheck } from 'specwarden';\n${block}\n`;
       const TEST = "import test from 'node:test';\ntest('holds', () => {});\n";
-      const at = (tree: TTree) => row(cli(withCheck(file, tree)), 'x');
+      // The command is the consumer's, so `node` in it is theirs: the engine's Node, first.
+      const at = (tree: TTree) => row(cli(withCheck(file, tree), undefined, { nodeOnPath: true }), 'x');
       const ran = (r: IRow) => [r.ok, errors(r).length > 0];
 
       expect(ran(at({ 'tests/a.test.mjs': TEST }))).toEqual([true, false]);
@@ -830,7 +835,9 @@ test('a body that shells out without declaring exec fails in its test, as in the
     beforeAll(() => {
       dir = scratchTree(TESTED, { installed: INSTALLED });
       const env = { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' };
-      ({ stdout: out, status } = spawnSync(process.execPath, ['--test', ...TESTS], {
+      // The reporter is named: Node's default for a pipe is TAP up to 22 and spec from 23,
+      // and these scenes read the kit's verdicts, not which Node printed them.
+      ({ stdout: out, status } = spawnSync(ENGINE_NODE, ['--test', '--test-reporter=spec', ...TESTS], {
         cwd: dir,
         encoding: 'utf8',
         env,

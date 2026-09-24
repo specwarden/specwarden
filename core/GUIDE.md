@@ -25,6 +25,12 @@ that gets deleted.
 `nestjs`, `agentic`, `ops`, `openspec`, `speckit`. A template writes a part only where
 its subject exists.
 
+It runs on <!-- NODE-FLOOR -->Node 18.18.0<!-- /NODE-FLOOR --> or newer, and lists the same files on every one of them:
+a check's files come from the engine's own glob, not the runtime's, which Node 18 and 20
+do not have and later versions answer differently. (A POSIX class such as `[[:alpha:]]`
+still reads the runtime's Unicode tables.) Below the floor the CLI refuses in a sentence
+rather than failing on an import. The floor is raised only in a release marked breaking.
+
 ## 2. The tree
 
 ```
@@ -124,7 +130,8 @@ that matched no file complains on stderr and the check passes, the complaint an 
 
 ```js
 export const check = commandCheck({
-  cmd: 'node --test --test-reporter=tap "tests/**/*.test.mjs"',
+  cmd: 'node --test --test-reporter=tap',
+  cwd: 'tests', // verified before the command spawns; the runner finds every test under it
   rule: 'every test passes',
   paths: ['tests/'], // verified before the command spawns
   expect: [/^# pass [1-9]/m], // a zero exit is believed only beside this
@@ -132,9 +139,16 @@ export const check = commandCheck({
 });
 ```
 
-A command runs at the repository root wherever the CLI was invoked from. A package's own
-suite in a monorepo says where it lives — `cwd: 'packages/api'` — and that directory is
-verified before the command spawns, as `paths` are. `cwd` stays inside the repository (an
+A bare `node --test` started in `tests/` is the one spelling every Node reads alike for
+JavaScript tests: a quoted glob is expanded by the runner only from Node 21 (before that it
+is a file name that does not exist), and a directory argument means something else after
+it. A `.ts` test under it is run too from Node 22.18, which strips types, and skipped
+before. TAP is named for the same reason: a pipe gets TAP by default up to Node 22 and the
+spec reporter from 23, and `expect` reads one format.
+
+A command runs at the repository root wherever the CLI was invoked from, unless it says
+where it lives — `cwd: 'tests'` above, `cwd: 'packages/api'` for a package's own suite in
+a monorepo — and that directory is verified before the command spawns, as `paths` are. `cwd` stays inside the repository (an
 absolute path or `..` is refused when the file loads), and `paths` stay relative to the
 root whatever `cwd` says. Colour codes a tool prints under
 `FORCE_COLOR` are stripped before `expect` and `refuse` read the output.

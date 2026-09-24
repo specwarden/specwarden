@@ -30,6 +30,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { ENGINE_NODE } from './engine-node.mjs';
 import { PACKAGES, pkgDir, pkgName } from './registry.mjs';
 
 const ROOT = process.cwd();
@@ -122,7 +123,7 @@ try {
         '}\n',
     );
     try {
-      run(process.execPath, [probe], scratch);
+      run(ENGINE_NODE, [probe], scratch);
     } catch (error) {
       problems.push(
         `${name}: ${
@@ -138,7 +139,7 @@ try {
   // whose files are NOT compiled. It exits 2 with no arguments by design; what is being
   // proved is that node could load the shim at all.
   try {
-    run(process.execPath, [join(scratch, 'node_modules', 'specwarden', 'bin', 'specwarden.mjs')], scratch);
+    run(ENGINE_NODE, [join(scratch, 'node_modules', 'specwarden', 'bin', 'specwarden.mjs')], scratch);
   } catch (error) {
     const output = `${error.stdout ?? ''}${error.stderr ?? ''}`;
     if (!output.includes('usage: specwarden')) {

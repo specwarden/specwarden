@@ -14,7 +14,11 @@ pnpm doctor           # what is declared, without running any of it
 is a load error rather than a silent skip.
 
 Node 24 and pnpm 10 — both pinned in the root manifest, and the lockfile is what CI
-installs with.
+installs with. That is the Node this repository is BUILT with; what it publishes runs on
+the older floor in `scripts/registry.mjs` (`TOOLCHAIN.node`), and CI's `runtimes` job runs
+the engine on that floor and on every Node line between. To do the same locally, point
+`PLAYGROUND_NODE` at another Node binary and run `pnpm gate unit verify-build scripts-unit`
+— `skills/playgrounds/SKILL.md` §4a says what moves to it and what does not.
 
 ## The shape of the repository
 

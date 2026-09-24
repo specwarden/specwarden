@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { ROOT, removeScratch, scratchTree, verdictsIn, specwarden } from '../../scripts/playgrounds.mjs';
+import { ENGINE_NODE, ROOT, removeScratch, scratchTree, verdictsIn, specwarden } from '../../scripts/playgrounds.mjs';
 
 /**
  * JOURNEY C — a consumer installs an optional module and follows its GUIDE.
@@ -727,7 +727,7 @@ describe('@specwarden/ops, wired by its GUIDE', () => {
           const env: Record<string, string | undefined> = { ...process.env, NO_COLOR: '1' };
           delete env.SPECWARDEN_ALL;
           const r = spawnSync(
-            process.execPath,
+            ENGINE_NODE,
             [join(ROOT, 'core/bin/specwarden.mjs'), 'check', '--json', '--base', 'main'],
             {
               cwd: dir,

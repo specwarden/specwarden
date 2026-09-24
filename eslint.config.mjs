@@ -7,6 +7,7 @@
  * and is restated below against the packages that actually exist.
  */
 import eslint from '@eslint/js';
+import nodePlugin from 'eslint-plugin-n';
 import tseslint from 'typescript-eslint';
 
 /**
@@ -18,6 +19,20 @@ import tseslint from 'typescript-eslint';
  * four names, and a dependency for four names is a dependency to keep current.
  */
 const nodeGlobals = { process: 'readonly', console: 'readonly', URL: 'readonly', Buffer: 'readonly' };
+
+/**
+ * Everything a consumer's Node executes: each package's sources, and the engine's two
+ * uncompiled directories — the CLI shim and the fingerprint helper it imports.
+ */
+export const SHIPPED = [
+  'core/src/**/*.ts',
+  'core/src/**/*.mjs',
+  'core/bin/*.mjs',
+  'core/scripts/*.mjs',
+  'modules/*/src/**/*.ts',
+  'plugins/*/src/**/*.ts',
+  'templates/*/src/**/*.ts',
+];
 
 /**
  * The engine depends on NOTHING, and that is the load-bearing rule of the whole
@@ -129,9 +144,39 @@ export default tseslint.config(
   },
 
   {
+    /**
+     * What ships runs on the oldest Node its package DECLARES — `engines`, from the
+     * registry's `TOOLCHAIN.node` — not on the Node this repository is built with.
+     *
+     * Neither of the other two tools can see the difference. `@types/node` describes the
+     * newest Node, so `fs.globSync` typechecks; esbuild lowers syntax and never library
+     * surface, so it builds. The engine imported `globSync` (Node 22) under a floor that
+     * said 24, and on Node 18 and 20 it died on import. These rules read each file's own
+     * `package.json`, so a module's source is held to the module's floor. The prototype
+     * methods they cannot see — `toSorted` needs a type to be found — are `lib: ES2022`'s,
+     * in `tsconfig.base.json`; what no static rule reaches is run on the floor itself by
+     * `core/_playground/runtime.test.mjs`.
+     */
+    files: [...SHIPPED, 'core/_playground/*.mjs'],
+    ignores: ['**/*.spec.ts'],
+    plugins: { n: nodePlugin },
+    rules: {
+      'n/no-unsupported-features/node-builtins': 'error',
+      'n/no-unsupported-features/es-builtins': 'error',
+    },
+  },
+
+  {
     // The repository's own guard scripts. They are tools a person runs: printing IS
-    // their output, and they are plain ESM rather than a typed package.
-    files: ['scripts/**/*.mjs', 'core/scripts/**/*.mjs', 'core/bin/*.mjs'],
+    // their output, and they are plain ESM rather than a typed package. The glob golden
+    // set's helpers and its runner are the same kind of file, read on every Node.
+    files: [
+      'scripts/**/*.mjs',
+      'core/scripts/**/*.mjs',
+      'core/bin/*.mjs',
+      'core/src/**/*.mjs',
+      'core/_playground/*.mjs',
+    ],
     languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: nodeGlobals },
     rules: { 'no-console': 'off' },
   },
