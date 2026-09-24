@@ -13,5 +13,8 @@ export default defineConfig({
     environment: 'node',
     // The CLI scenes spawn the engine over a scratch repository: seconds, not milliseconds.
     testTimeout: 120_000,
+    // A `beforeAll` runs those scenes too — `cli.spec.ts` runs two whole-workspace scenes in
+    // one — and under vitest's 10s hook default it passed only while the machine was idle.
+    hookTimeout: 120_000,
   },
 });
