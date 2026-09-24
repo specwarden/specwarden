@@ -39,7 +39,7 @@ export const isSibling = (name) => SIBLINGS.has(name);
  * Pure over what it is handed — the manifest, and a predicate for which files exist — so
  * its spec drives it with a manifest literal rather than a scratch tree.
  */
-export function publishProblems(pkg, manifest, { releasing = false, has = () => true } = {}) {
+export function publishProblems(pkg, manifest, { releasing = false, has = () => true, read = () => null } = {}) {
   const dir = pkgDir(pkg);
   const problems = [];
   const at = (message) => problems.push(`${pkgName(pkg)}: ${message}`);
@@ -90,6 +90,20 @@ export function publishProblems(pkg, manifest, { releasing = false, has = () => 
       at(
         `declares a \`bin\` under ${missing.join(', ')}/ which \`files\` does not carry — the command would install and then fail to start.`,
       );
+
+    /**
+     * The tarball carries the working tree's bytes, and a checkout with `core.autocrlf=true`
+     * gives the shim a CRLF shebang: `env` then looks for a program called `node\r`, on
+     * every Linux and macOS machine, while every check on Windows passes — Windows starts
+     * the command through its own shim and never reads the line.
+     */
+    for (const entry of Object.values(manifest.bin)) {
+      const source = read(`${dir}/${entry.replace(/^\.\//, '')}`);
+      if (source?.split('\n', 1)[0].endsWith('\r'))
+        at(
+          `\`${entry}\` has a CRLF shebang — the command would not start on Linux or macOS. \`.gitattributes\` holds it to LF; re-checkout the file.`,
+        );
+    }
   }
 
   if (!has(`${dir}/LICENSE`)) at('has no LICENSE file — run `pnpm scaffold`.');
@@ -118,11 +132,13 @@ function main() {
   const root = process.cwd();
   const releasing = process.argv.includes('--releasing');
   const has = (rel) => existsSync(join(root, rel));
+  const read = (rel) => (has(rel) ? readFileSync(join(root, rel), 'utf8') : null);
 
   const problems = PACKAGES.flatMap((pkg) =>
     publishProblems(pkg, JSON.parse(readFileSync(join(root, pkgDir(pkg), 'package.json'), 'utf8')), {
       releasing,
       has,
+      read,
     }),
   );
 

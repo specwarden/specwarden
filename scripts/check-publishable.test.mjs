@@ -65,6 +65,17 @@ describe('publish readiness', () => {
     );
   });
 
+  it('refuses a bin whose shebang line ends in CRLF — it would not start on Linux or macOS', () => {
+    // A checkout on a machine with `core.autocrlf=true` rewrites the shim to CRLF, and the
+    // tarball carries what the working tree holds: `env` then looks for `node\r`. Every
+    // Windows check passes, because Windows starts the command through its own shim.
+    const crlf = publishProblems(ENGINE, shipped(ENGINE), { read: () => '#!/usr/bin/env node\r\nimport x;\n' });
+    const lf = publishProblems(ENGINE, shipped(ENGINE), { read: () => '#!/usr/bin/env node\nimport x;\n' });
+
+    expect(crlf.join()).toContain('CRLF');
+    expect(lf).toEqual([]);
+  });
+
   it('refuses a missing LICENSE or README on disk', () => {
     const problems = publishProblems(TEMPLATE, shipped(TEMPLATE), { has: () => false });
 

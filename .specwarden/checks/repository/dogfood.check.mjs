@@ -45,10 +45,12 @@ export const checks = [
     tier: 'fast',
     docs: '**/*.md',
     // A changeset describes a CONSUMER's tree, and a plan may name what does not exist yet
-    // (`skills/plans/SKILL.md` §2) — neither is a claim about this repository. A template
-    // playground's README names the files its defect scenes PLANT into a scratch copy; they
-    // exist only there, by design, so the fixture stays green on day one.
-    except: [...CONSUMER_TREES, '.changeset', '_plans', 'templates/*/_playground/README.md'],
+    // (`skills/plans/SKILL.md` §2) — neither is a claim about this repository. A CHANGELOG
+    // is the changesets, copied by `changeset version`: the same consumer paths, and absent
+    // until a release is being cut, so every run before that one was green over it. A
+    // template playground's README names the files its defect scenes PLANT into a scratch
+    // copy; they exist only there, by design, so the fixture stays green on day one.
+    except: [...CONSUMER_TREES, '.changeset', '**/CHANGELOG.md', '_plans', 'templates/*/_playground/README.md'],
     rule: {
       id: 'a-documented-path-resolves',
       statement: 'a path named in this repository’s documentation exists — an agent follows it as an instruction',

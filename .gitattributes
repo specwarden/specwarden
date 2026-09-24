@@ -1,0 +1,4 @@
+# Every text file is LF in the index AND in the working tree, whatever the machine's
+# core.autocrlf says: a tarball carries the working tree's bytes, and a CRLF shebang in a
+# bin does not start on Linux or macOS. `scripts/check-publishable.mjs` refuses one.
+* text=auto eol=lf

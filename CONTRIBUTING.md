@@ -93,8 +93,14 @@ check breaking.
 ```bash
 pnpm changeset          # describe the change and pick the bump
 pnpm version:packages   # changesets writes versions and changelogs
+pnpm scaffold           # the plugin manifests and the marketplace carry the version too
+git commit              # the version commit — pnpm publishes only from a clean tree
 pnpm release            # check, verify the built tarballs, publish
 ```
+
+`changeset version` moves only `package.json` and the changelogs; the plugin manifests
+generated from them still say the old version until `pnpm scaffold` runs, and
+`scaffold-drift` fails the release's own check list if it did not.
 
 `pnpm release` runs the whole check list first, on purpose: a manual release cannot skip
 what CI runs for it. The undo window on npm is 72 hours and exists once per version.
