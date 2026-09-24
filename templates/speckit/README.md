@@ -12,6 +12,7 @@ A starting tree for one kind of repository, so day one is one command rather tha
 
 ```bash
 pnpm add -D specwarden @specwarden/template-speckit @specwarden/speckit @specwarden/security @specwarden/docs
+npx specwarden init --template speckit
 ```
 
 It depends on [`specwarden`](https://github.com/specwarden/specwarden/tree/main/core#readme), [`@specwarden/scaffold-parts`](https://github.com/specwarden/specwarden/tree/main/templates/_parts#readme), [`@specwarden/speckit`](https://github.com/specwarden/specwarden/tree/main/modules/speckit#readme), [`@specwarden/security`](https://github.com/specwarden/specwarden/tree/main/modules/security#readme), [`@specwarden/docs`](https://github.com/specwarden/specwarden/tree/main/modules/docs#readme).

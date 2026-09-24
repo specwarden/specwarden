@@ -12,6 +12,7 @@ A starting tree for one kind of repository, so day one is one command rather tha
 
 ```bash
 pnpm add -D specwarden @specwarden/template-nestjs @specwarden/plugin-nestjs @specwarden/security @specwarden/ops
+npx specwarden init --template nestjs
 ```
 
 It depends on [`specwarden`](https://github.com/specwarden/specwarden/tree/main/core#readme), [`@specwarden/scaffold-parts`](https://github.com/specwarden/specwarden/tree/main/templates/_parts#readme), [`@specwarden/plugin-nestjs`](https://github.com/specwarden/specwarden/tree/main/plugins/nestjs#readme), [`@specwarden/security`](https://github.com/specwarden/specwarden/tree/main/modules/security#readme), [`@specwarden/ops`](https://github.com/specwarden/specwarden/tree/main/modules/ops#readme).

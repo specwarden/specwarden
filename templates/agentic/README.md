@@ -12,6 +12,7 @@ A starting tree for one kind of repository, so day one is one command rather tha
 
 ```bash
 pnpm add -D specwarden @specwarden/template-agentic @specwarden/agents @specwarden/plans @specwarden/docs
+npx specwarden init --template agentic
 ```
 
 It depends on [`specwarden`](https://github.com/specwarden/specwarden/tree/main/core#readme), [`@specwarden/scaffold-parts`](https://github.com/specwarden/specwarden/tree/main/templates/_parts#readme), [`@specwarden/agents`](https://github.com/specwarden/specwarden/tree/main/modules/agents#readme), [`@specwarden/plans`](https://github.com/specwarden/specwarden/tree/main/modules/plans#readme), [`@specwarden/docs`](https://github.com/specwarden/specwarden/tree/main/modules/docs#readme).

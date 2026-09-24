@@ -124,6 +124,39 @@ describe("a template's README, and the parts it is assembled from", () => {
   });
 });
 
+describe("every package's README — the page npm shows", () => {
+  const installable = PACKAGES.filter((p) => p.kind !== 'scaffold');
+
+  it('installs as a dev dependency, the way every GUIDE says, with the engine named first', () => {
+    // Core, the modules and the plugin used to read `npm install <name> specwarden` — a
+    // runtime dependency, while every GUIDE and shipped skill says `pnpm add -D`. A consumer
+    // who copied the README's line put a quality gate into their production dependencies.
+    for (const pkg of installable) {
+      const readme = FILES.get(`${pkgDir(pkg)}/README.md`);
+      const expected = pkg.kind === 'core' ? 'pnpm add -D specwarden' : `pnpm add -D specwarden ${pkgName(pkg)}`;
+      expect(readme, pkgName(pkg)).toContain(expected);
+      expect(readme, pkgName(pkg)).not.toMatch(/^npm install /m);
+    }
+  });
+
+  it('links the package’s own GUIDE wherever it has one — the "how do I use it" the README is not', () => {
+    for (const pkg of PACKAGES.filter((p) => existsSync(join(pkgDir(p), 'GUIDE.md')))) {
+      expect(FILES.get(`${pkgDir(pkg)}/README.md`), pkgName(pkg)).toContain(
+        `https://github.com/specwarden/specwarden/blob/main/${pkgDir(pkg)}/GUIDE.md`,
+      );
+    }
+  });
+
+  it('shows the first command to run after the install, so the page ends in a working repository', () => {
+    expect(FILES.get(`${pkgDir(ENGINE)}/README.md`)).toContain('npx specwarden adopt');
+    for (const pkg of PACKAGES.filter((p) => p.kind === 'template')) {
+      expect(FILES.get(`${pkgDir(pkg)}/README.md`), pkgName(pkg)).toContain(
+        `npx specwarden init --template ${posix.basename(pkgDir(pkg))}`,
+      );
+    }
+  });
+});
+
 describe('the dependency graph a manifest declares', () => {
   it('follows every sibling it depends on at runtime with workspace:^, never a pinned version', () => {
     // `workspace:^` becomes a caret range on publish, so a consumer's install tracks the

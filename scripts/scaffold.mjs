@@ -11,8 +11,8 @@
  *
  * Run: node scripts/scaffold.mjs
  */
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 
 import { KINDS, ORIGIN, PACKAGES, TOOLCHAIN, byName, pkgDeps, pkgDir, pkgName } from './registry.mjs';
 import { generateLlmsIndex } from './llms.mjs';
@@ -284,23 +284,54 @@ export default defineConfig({
 const templateInstallModules = (pkg) =>
   pkgDeps(pkg).filter((d) => d !== '@specwarden/scaffold-parts' && d !== 'specwarden');
 
+/**
+ * Every installable package installs as a DEV dependency, engine first, the way every GUIDE
+ * and shipped skill says. Core, the modules and the plugin used to read `npm install <name>
+ * specwarden` — the one line on the npm page that put a quality gate into a consumer's
+ * production dependencies.
+ */
+const installLine = (pkg) =>
+  [
+    'pnpm add -D specwarden',
+    ...(pkg.kind === 'core' ? [] : [pkgName(pkg)]),
+    ...(pkg.kind === 'template' ? templateInstallModules(pkg) : []),
+  ].join(' ');
+
+/**
+ * The commands a consumer types after the install — the step that turns the package into a
+ * checked repository. The engine's start with a read of what the tree already is; a
+ * template's is its own `init`. A module or a plugin is wired in the config, which its GUIDE
+ * shows, so it has none of its own.
+ */
+const FIRST_RUN = {
+  core: [
+    'npx specwarden adopt      # what this repository already is — reads, writes nothing',
+    'npx specwarden init       # write the starting tree',
+    'npx specwarden check      # what the changed files make relevant',
+  ],
+  template: (pkg) => [`npx specwarden init --template ${basename(pkgDir(pkg))}`],
+};
+
+const firstRun = (pkg) => {
+  const lines = typeof FIRST_RUN[pkg.kind] === 'function' ? FIRST_RUN[pkg.kind](pkg) : (FIRST_RUN[pkg.kind] ?? []);
+  return lines.map((line) => `\n${line}`).join('');
+};
+
 function readme(pkg) {
   const kind = KINDS[pkg.kind];
   const name = pkgName(pkg);
   const deps = pkgDeps(pkg);
+  const guide = existsSync(join(ROOT, pkgDir(pkg), 'GUIDE.md'))
+    ? `- [GUIDE.md](${ORIGIN.repository}/blob/main/${pkgDir(pkg)}/GUIDE.md) — how to use it, from the install to a green run\n`
+    : '';
 
   const install =
-    pkg.kind === 'template'
-      ? `\`\`\`bash
-pnpm add -D specwarden ${name}${templateInstallModules(pkg).length ? ` ${templateInstallModules(pkg).join(' ')}` : ''}
-\`\`\`
-`
-      : pkg.kind === 'scaffold'
-        ? `A build-time dependency of the templates listed in this repository's README — declared
+    pkg.kind === 'scaffold'
+      ? `A build-time dependency of the templates listed in this repository's README — declared
 automatically when you install one of them. Nothing installs it on its own.
 `
-        : `\`\`\`bash
-npm install ${name}${pkg.kind === 'core' ? '' : ' specwarden'}
+      : `\`\`\`bash
+${installLine(pkg)}${firstRun(pkg)}
 \`\`\`
 `;
 
@@ -325,7 +356,7 @@ It depends on ${deps.map((d) => `[\`${d}\`](${ORIGIN.repository}/tree/main/${pkg
   }
 ## Documentation
 
-- [What specwarden is](${ORIGIN.repository}#readme) — the failure it exists against
+${guide}- [What specwarden is](${ORIGIN.repository}#readme) — the failure it exists against
 - [ARCHITECTURE.md](${ORIGIN.repository}/blob/main/ARCHITECTURE.md) — how the packages divide the work
 - [CONTRIBUTING.md](${ORIGIN.repository}/blob/main/CONTRIBUTING.md) — running the repository, and how a release is cut
 

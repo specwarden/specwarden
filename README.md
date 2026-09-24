@@ -2,9 +2,15 @@
 
 **A repository declares its rules; specwarden proves which hold.**
 
-> **Status: pre-release.** The engine is written and running; this repository is being
-> prepared for its first public release. The npm name is reserved and currently ships
-> nothing but documentation. Watch this repository for the first working version.
+```bash
+pnpm add -D specwarden
+npx specwarden adopt      # what this repository already is — reads, writes nothing
+npx specwarden init       # write the starting tree: .specwarden/ and its first checks
+npx specwarden check      # what the changed files make relevant
+```
+
+Requires Node 24 or newer. [`core/GUIDE.md`](core/GUIDE.md) walks from the install to a
+green run; [`core/GLOSSARY.md`](core/GLOSSARY.md) defines every word the product uses.
 
 ---
 
@@ -179,11 +185,16 @@ is not ready), `2` the line, the config or a file could not be used. `specwarden
 
 `spw` is a shorter alias for the same binary. Requires Node 24 or newer.
 
-## What to do now
+## Where to go next
 
-Nothing is installable yet. If this is the kind of thing you want:
-
-- **Watch this repository** — the first release lands here.
+- **[`core/GUIDE.md`](core/GUIDE.md)** — the engine, from the install to a green run:
+  writing a check, the primitives, ratchets, rules and coverage, testing a check.
+- **A module's `GUIDE.md`** — each package in the table above has one beside its code,
+  with the options it takes and the failure each check exists against.
+- **[`core/GLOSSARY.md`](core/GLOSSARY.md)** — what a check, a rule, a ratchet, a tier and
+  a zone are, and the words retired in favour of them.
+- **Coding agents** — every package ships a skill, and Claude Code installs them from this
+  repository's marketplace: `/plugin marketplace add specwarden/specwarden`.
 - **Open an issue** if you have a check that went quietly green on you. Those reports are
   what the check roster is built from, and the failure modes listed at the top of this
   file all came from real ones.
