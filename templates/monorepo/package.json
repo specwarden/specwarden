@@ -1,6 +1,6 @@
 {
   "name": "@specwarden/template-monorepo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "template: A pnpm workspace — lockfile, credential scan, documentation paths; build order, dependency pins and CI coverage as examples.",
   "license": "MIT",

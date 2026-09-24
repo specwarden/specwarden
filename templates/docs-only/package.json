@@ -1,6 +1,6 @@
 {
   "name": "@specwarden/template-docs-only",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "template: A repository whose product is documentation — paths, hygiene, counts, placement.",
   "license": "MIT",

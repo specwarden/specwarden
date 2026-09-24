@@ -1,6 +1,6 @@
 {
   "name": "@specwarden/template-nestjs",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "template: A NestJS backend — module conventions via the plugin, credential scan, env pairing, migration guard.",
   "license": "MIT",

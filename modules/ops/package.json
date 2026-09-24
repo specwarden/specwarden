@@ -1,6 +1,6 @@
 {
   "name": "@specwarden/ops",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "module: Env files, proxy upstreams, CI coverage, build order, shell scoping.",
   "license": "MIT",

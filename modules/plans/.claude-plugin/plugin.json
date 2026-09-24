@@ -1,7 +1,7 @@
 {
   "name": "specwarden-plans",
   "description": "@specwarden/plans — Plans and decision logs — one way of working, not the only one.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "specwarden"
   },

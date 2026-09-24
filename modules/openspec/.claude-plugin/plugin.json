@@ -1,7 +1,7 @@
 {
   "name": "specwarden-openspec",
   "description": "@specwarden/openspec — Reads an OpenSpec tree as the source of requirements.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "specwarden"
   },

@@ -1,6 +1,6 @@
 {
   "name": "specwarden",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "core: A repository declares its rules; specwarden proves which hold.",
   "license": "MIT",
