@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Agent skills for specwarden — one plugin per package.",
-    "version": "0.0.0"
+    "version": "0.1.0"
   },
   "plugins": [
     {

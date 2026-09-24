@@ -1,6 +1,6 @@
 {
   "name": "@specwarden/template-node-ts",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "description": "template: An ordinary TypeScript repository — credential scan, doc paths and symbols, lint and tests.",
   "license": "MIT",

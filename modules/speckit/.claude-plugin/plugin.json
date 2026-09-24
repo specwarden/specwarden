@@ -1,7 +1,7 @@
 {
   "name": "specwarden-speckit",
   "description": "@specwarden/speckit — Reads a Spec Kit tree as the source of requirements.",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "author": {
     "name": "specwarden"
   },

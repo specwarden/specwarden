@@ -1,6 +1,6 @@
 {
   "name": "@specwarden/template-ops",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "description": "template: Infrastructure — env pairing, proxy upstreams, shell scoping, runbooks — credential scan and documentation paths always on.",
   "license": "MIT",

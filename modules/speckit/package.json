@@ -1,6 +1,6 @@
 {
   "name": "@specwarden/speckit",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "description": "module: Reads a Spec Kit tree as the source of requirements.",
   "license": "MIT",

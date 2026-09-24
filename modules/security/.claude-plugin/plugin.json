@@ -1,7 +1,7 @@
 {
   "name": "specwarden-security",
   "description": "@specwarden/security — Credential scanning, with a vendor library as a preset rather than a mandate.",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "author": {
     "name": "specwarden"
   },

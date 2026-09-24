@@ -1,7 +1,7 @@
 {
   "name": "specwarden-ops",
   "description": "@specwarden/ops — Env files, proxy upstreams, CI coverage, build order, shell scoping.",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "author": {
     "name": "specwarden"
   },

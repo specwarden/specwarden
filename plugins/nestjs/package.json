@@ -1,6 +1,6 @@
 {
   "name": "@specwarden/plugin-nestjs",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "description": "plugin: NestJS conventions, declared against the engine's primitives.",
   "license": "MIT",
