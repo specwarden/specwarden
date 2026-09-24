@@ -12,14 +12,21 @@
  * ask. They are grouped by what they are ABOUT rather than kept in one utility module:
  * assembling a check, framing a verdict, reading an import, reading a path.
  */
-export { UNNAMED_CHECK_ID, buildCheck, nameFromFile, normaliseRule } from './build-check/build-check.util';
-export { frameTolerated, verdictFrom } from './verdict/verdict.util';
+export {
+  UNNAMED_CHECK_ID,
+  attributionOf,
+  buildCheck,
+  nameFromFile,
+  normaliseRule,
+} from './build-check/build-check.util';
+export { frameTolerated, thresholdOf, verdictFrom } from './verdict/verdict.util';
+export type { IThreshold } from './verdict/verdict.util';
 export { belowCorpusFloor, examinedNote, withExaminedNote } from './corpus-floor/corpus-floor.util';
 export { CheckOptionsError, checkOptions } from './check-options/check-options.util';
-export type { IOptionRule, TOptionKind, TOptionSpec } from './check-options/check-options.util';
+export type { ICheckOptionsMode, IOptionShape, TOptionKind, TOptionSpec } from './check-options/check-options.util';
 export type { ICorpusFloor } from './corpus-floor/corpus-floor.util';
 export { emptyCorpusReason, readAll, readTracked, trackedCorpus } from './corpus/corpus.util';
-export type { IDocument, ITrackedCorpus } from './corpus/corpus.util';
+export type { IDocument, ITrackedCorpus, TPathspecs } from './corpus/corpus.util';
 export { changedContaining, changedEnding, changedUnder, resolveWhen } from '../../domain';
 export type { IWhenSpec, TWhen } from '../../domain';
 export { IMPORT_RE, matchesSpecifier, testStateless } from './import-specifier/import-specifier.util';

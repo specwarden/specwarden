@@ -156,7 +156,7 @@ describe('plan refuses what it cannot act on, with exit 2 and a usage line', () 
   it('a missing plan file is named', async () => {
     const cap = captureIo();
     expect(await planStatus(['plan', 'status', 'nope.md'], dir, cap.io, noSpawn)).toBe(2);
-    expect(cap.err()).toBe('no such plan: nope.md\n');
+    expect(cap.err()).toBe('no such plan: nope.md.\n');
   });
 
   it('an unknown or absent subcommand prints the usage', async () => {
@@ -170,11 +170,39 @@ describe('plan refuses what it cannot act on, with exit 2 and a usage line', () 
   it('a subcommand with no file says which subcommand, and offers --verify only where it applies', async () => {
     const status = captureIo();
     expect(await planStatus(['plan', 'status', '--verify'], dir, status.io, noSpawn)).toBe(2);
-    expect(status.err()).toBe('usage: specwarden plan status <file> [--verify]\n');
+    expect(status.err()).toBe('usage: specwarden plan status <file> [--verify] — one plan file.\n');
 
     const archive = captureIo();
     expect(await planStatus(['plan', 'archive'], dir, archive.io, noSpawn)).toBe(2);
-    expect(archive.err()).toBe('usage: specwarden plan archive <file>\n');
+    expect(archive.err()).toBe('usage: specwarden plan archive <file> — one plan file.\n');
+  });
+
+  // `plan` read argv for itself and looked for `--verify` by string: `--verfy` ran a plain
+  // status and exited 0 — a verification asked for and never made.
+  it('refuses a flag it does not know, and one another command owns, before reading the plan', async () => {
+    writeFileSync(join(dir, 'plan.md'), PLAN);
+    for (const [flag, said] of [
+      ['--verfy', 'unknown flag --verfy'],
+      ['--tier', '--tier needs a value; --tier is a flag of check, not of plan'],
+      ['--fix', '--fix is a flag of check, not of plan'],
+    ]) {
+      const cap = captureIo();
+      expect(await planStatus(['plan', 'status', 'plan.md', flag], dir, cap.io, noSpawn), flag).toBe(2);
+      expect(cap.err()).toBe(`${said}.\n`);
+      expect(cap.out()).toBe('');
+    }
+  });
+
+  it('refuses --verify on archive — it belongs to status', async () => {
+    const cap = captureIo();
+    expect(await planStatus(['plan', 'archive', 'p.md', '--verify'], dir, cap.io, noSpawn)).toBe(2);
+    expect(cap.err()).toContain('--verify is a flag of plan status, not of plan archive');
+  });
+
+  it('takes --flag=value like every other command', async () => {
+    const cap = captureIo();
+    expect(await planStatus(['plan', 'status', 'nope.md', '--verify=yes'], dir, cap.io, noSpawn)).toBe(2);
+    expect(cap.err()).toBe('--verify takes no value, and was given "yes".\n');
   });
 
   it('builds its own process runner when none is handed in', async () => {

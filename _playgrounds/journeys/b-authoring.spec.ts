@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { removeScratch, scratchTree, warden } from '../../scripts/playgrounds.mjs';
+import { removeScratch, scratchTree, specwarden } from '../../scripts/playgrounds.mjs';
 
 /**
  * Journey B — a consumer writes every kind of check as a file under `.specwarden/checks/`.
@@ -50,7 +50,7 @@ const parse = (stdout: string): readonly IRow[] => {
 function cli(tree: TTree, args: readonly string[] = ['check', '--all', '--json']): IRun {
   const dir = scratchTree(tree, { installed: INSTALLED });
   try {
-    const r = warden(dir, args);
+    const r = specwarden(dir, args);
     return { ...r, rows: parse(r.stdout) };
   } finally {
     removeScratch(dir);
@@ -77,7 +77,7 @@ const table = (text: string): string[][] =>
 
 /** A tree with one check file, `x.check.mjs`, and a config. */
 const withCheck = (file: string, tree: TTree = {}, config = CONFIG): TTree => ({
-  '.specwarden/warden.config.mjs': config,
+  '.specwarden/config.mjs': config,
   '.specwarden/checks/x.check.mjs': file,
   ...tree,
 });
@@ -103,19 +103,19 @@ const x = (file: string, tree: TTree = TREE, args?: readonly string[]): IRow =>
  */
 const MINIMAL: Readonly<Record<string, string>> = {
   forbidImport: `import { forbidImport } from 'specwarden';
-export const check = forbidImport({ id: 'forbid-import', title: 'no fs in fi/', tier: 'fast', from: 'fi/**/*.ts', to: 'node:fs' });`,
+export const check = forbidImport({ id: 'forbid-import', title: 'no fs in fi/', tier: 'fast', files: 'fi/**/*.ts', to: 'node:fs' });`,
   forbidPattern: `import { forbidPattern } from 'specwarden';
-export const check = forbidPattern({ id: 'forbid-pattern', title: 'no TODO in fp/', tier: 'fast', in: 'fp/**/*.ts', pattern: /TODO/ });`,
+export const check = forbidPattern({ id: 'forbid-pattern', title: 'no TODO in fp/', tier: 'fast', files: 'fp/**/*.ts', pattern: /TODO/ });`,
   pathContract: `import { pathContract } from 'specwarden';
-export const check = pathContract({ id: 'path-contract', title: 'contracts in pc/', tier: 'fast', kind: '**/*.contract.md', allowedIn: ['pc/**'] });`,
+export const check = pathContract({ id: 'path-contract', title: 'contracts in pc/', tier: 'fast', files: '**/*.contract.md', allowedIn: ['pc/**'] });`,
   siblingRequired: `import { siblingRequired } from 'specwarden';
-export const check = siblingRequired({ id: 'sibling-required', title: 'a service has a spec', tier: 'fast', subjects: 'sr/*.service.ts', require: '{name}.spec.ts' });`,
+export const check = siblingRequired({ id: 'sibling-required', title: 'a service has a spec', tier: 'fast', files: 'sr/*.service.ts', require: '{name}.spec.ts' });`,
   mustDeclare: `import { mustDeclare } from 'specwarden';
 export const check = mustDeclare({ id: 'must-declare', title: 'md/ names an owner', tier: 'fast', files: 'md/**/*.md', fields: [{ name: 'Owner', pattern: /^Owner:/m }] });`,
   referencesResolve: `import { referencesResolve } from 'specwarden';
-export const check = referencesResolve({ id: 'references-resolve', title: 'links resolve', tier: 'fast', in: 'rr/**/*.md', extract: /\\]\\(([^)]+)\\)/ });`,
+export const check = referencesResolve({ id: 'references-resolve', title: 'links resolve', tier: 'fast', files: 'rr/**/*.md', extract: /\\]\\(([^)]+)\\)/ });`,
   regenerable: `import { regenerable } from 'specwarden';
-export const check = regenerable({ id: 'regenerable', title: 'rg/table.md is generated', tier: 'fast', artifact: 'rg/table.md', by: 'cat rg/source.txt' });`,
+export const check = regenerable({ id: 'regenerable', title: 'rg/table.md is generated', tier: 'fast', artifact: 'rg/table.md', cmd: 'cat rg/source.txt' });`,
   sourcesAgree: `import { sourcesAgree } from 'specwarden';
 const names = (file) => (ctx) => JSON.parse(ctx.files.tryRead(file) ?? '{"names":[]}').names;
 export const check = sourcesAgree({ id: 'sources-agree', title: 'sa/a and sa/b agree', tier: 'fast', a: { name: 'sa/a.json', extract: names('sa/a.json') }, b: { name: 'sa/b.json', extract: names('sa/b.json') } });`,
@@ -143,7 +143,7 @@ const CHECK_FILES = Object.fromEntries(
 
 /** The clean tree: every corpus present and satisfying its check. */
 const CLEAN: TTree = {
-  '.specwarden/warden.config.mjs': CONFIG,
+  '.specwarden/config.mjs': CONFIG,
   ...CHECK_FILES,
   'fi/a.ts': "import { x } from './b';\nexport const a = x;\n",
   'fi/b.ts': 'export const x = 1;\n',
@@ -179,7 +179,7 @@ const BROKEN: TTree = {
   'cc/a.md': NO_OWNER,
 };
 /** Every corpus gone: the checks and the config, and not one file they are about. */
-const EMPTY: TTree = { '.specwarden/warden.config.mjs': CONFIG, ...CHECK_FILES };
+const EMPTY: TTree = { '.specwarden/config.mjs': CONFIG, ...CHECK_FILES };
 
 describe('journey B — a consumer writes every kind of check as a file under .specwarden/checks/', () => {
   let clean: IRun;
@@ -233,13 +233,15 @@ describe('journey B — a consumer writes every kind of check as a file under .s
     });
 
     it('the id is free of the file name: `not-x` in `x.check.mjs` is accepted without comment', () => {
-      const file = make('forbidPattern', "in: 'src/**', pattern: /TODO/").replace("id: 'x'", "id: 'not-x'");
+      const file = make('forbidPattern', "files: 'src/**', pattern: /TODO/").replace("id: 'x'", "id: 'not-x'");
       expect(row(cli(withCheck(file, { 'src/a.ts': 'ok\n' })), 'not-x').ok).toBe(true);
     });
 
     it('a check with no `id`, exported alone, takes its file’s name', () => {
       // It was refused as a file that "exports no check" — it did export one.
-      const run = cli(withCheck(make('forbidPattern', "in: 'src/**', pattern: /TODO/").replace("id: 'x', ", ''), TREE));
+      const run = cli(
+        withCheck(make('forbidPattern', "files: 'src/**', pattern: /TODO/").replace("id: 'x', ", ''), TREE),
+      );
       expect(run.stderr).not.toContain('exports no check');
       expect(errors(row(run, 'x'))).toEqual([
         'forbidden pattern in src/a.ts: TODO',
@@ -257,7 +259,7 @@ describe('journey B — a consumer writes every kind of check as a file under .s
     it.each([
       ['forbid-import', 'fi/a.ts imports `node:fs`, which is forbidden from fi/**/*.ts.'],
       ['forbid-pattern', 'forbidden pattern in fp/a.ts: TODO'],
-      ['path-contract', 'stray/b.contract.md is of kind `**/*.contract.md` but lives outside its contract (pc/**).'],
+      ['path-contract', 'stray/b.contract.md is one of `**/*.contract.md` but lives outside its contract (pc/**).'],
       ['sibling-required', 'sr/b.service.ts requires a sibling sr/b.service.spec.ts, which is missing.'],
       ['must-declare', 'md/a.md does not declare `Owner`.'],
       ['references-resolve', 'rr/a.md references `rr/gone.md`, which does not resolve.'],
@@ -396,20 +398,20 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
 
     /** factory ¦ what is wrong ¦ the options it is given ¦ what it says, by name */
     const MISCONFIGURED = table(`
-      forbidImport      ¦ no from               ¦ to: 'node:fs'                           ¦ forbidImport 'x': \`from\` is required
-      forbidPattern     ¦ no in                 ¦ pattern: /TODO/                         ¦ forbidPattern 'x': \`in\` is required
-      pathContract      ¦ no kind               ¦ allowedIn: ['docs/**']                  ¦ pathContract 'x': \`kind\` is required
-      pathContract      ¦ no allowedIn          ¦ kind: '**/*.md'                         ¦ pathContract 'x': \`allowedIn\` is required
-      pathContract      ¦ a string allowedIn    ¦ kind: '**/*.md', allowedIn: 'docs/**'   ¦ pathContract 'x': \`allowedIn\` must be an array (got the string "docs/**")
-      siblingRequired   ¦ no subjects           ¦ require: '{name}.spec.ts'               ¦ siblingRequired 'x': \`subjects\` is required
-      siblingRequired   ¦ no require            ¦ subjects: 'src/*.ts'                    ¦ siblingRequired 'x': \`require\` is required
+      forbidImport      ¦ no files              ¦ to: 'node:fs'                           ¦ forbidImport 'x': \`files\` is required
+      forbidPattern     ¦ no files              ¦ pattern: /TODO/                         ¦ forbidPattern 'x': \`files\` is required
+      pathContract      ¦ no files              ¦ allowedIn: ['docs/**']                  ¦ pathContract 'x': \`files\` is required
+      pathContract      ¦ no allowedIn          ¦ files: '**/*.md'                        ¦ pathContract 'x': \`allowedIn\` is required
+      pathContract      ¦ a string allowedIn    ¦ files: '**/*.md', allowedIn: 'docs/**'  ¦ pathContract 'x': \`allowedIn\` must be an array (got the string "docs/**")
+      siblingRequired   ¦ no files              ¦ require: '{name}.spec.ts'               ¦ siblingRequired 'x': \`files\` is required
+      siblingRequired   ¦ no require            ¦ files: 'src/*.ts'                       ¦ siblingRequired 'x': \`require\` is required
       mustDeclare       ¦ no files              ¦ fields: [{ name: 'O', pattern: /O/ }]   ¦ mustDeclare 'x': \`files\` is required
       mustDeclare       ¦ no fields             ¦ files: 'docs/*.md'                      ¦ mustDeclare 'x': \`fields\` is required
       mustDeclare       ¦ a string pattern      ¦ files: 'docs/*.md', fields: [{ name: 'O', pattern: 'O' }] ¦ mustDeclare 'x': \`fields[0]\` must be { name: string, pattern: RegExp }
-      referencesResolve ¦ no in                 ¦ extract: /\\((.*)\\)/                   ¦ referencesResolve 'x': \`in\` is required
-      referencesResolve ¦ no capture group      ¦ in: 'docs/*.md', extract: /Owner/       ¦ referencesResolve 'x': \`extract\` /Owner/ has no capture group
-      regenerable       ¦ no artifact           ¦ by: 'cat docs/guide.md'                 ¦ regenerable 'x': \`artifact\` is required
-      regenerable       ¦ no by                 ¦ artifact: 'docs/guide.md'               ¦ regenerable 'x': \`by\` is required
+      referencesResolve ¦ no files              ¦ extract: /\\((.*)\\)/                   ¦ referencesResolve 'x': \`files\` is required
+      referencesResolve ¦ no capture group      ¦ files: 'docs/*.md', extract: /Owner/    ¦ referencesResolve 'x': \`extract\` /Owner/ has no capture group
+      regenerable       ¦ no artifact           ¦ cmd: 'cat docs/guide.md'                ¦ regenerable 'x': \`artifact\` is required
+      regenerable       ¦ no cmd                ¦ artifact: 'docs/guide.md'               ¦ regenerable 'x': \`cmd\` is required
       sourcesAgree      ¦ no b                  ¦ a: { name: 'a', extract: () => ['x'] }  ¦ sourcesAgree 'x': \`b\` is required
       defineCheck       ¦ no run                ¦ hint: 'h'                               ¦ defineCheck 'x': \`run\` is required
       fromResult        ¦ no run                ¦ hint: 'h'                               ¦ fromResult 'x': \`run\` is required
@@ -436,15 +438,15 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
 
     it('a string `pattern` or `extract`, or no `pattern`, is refused by name — it crashed the whole run with a raw stack', () => {
       for (const [factory, options, said] of [
-        ['forbidPattern', "in: 'src/**/*.ts'", "forbidPattern 'x': `pattern` is required"],
+        ['forbidPattern', "files: 'src/**/*.ts'", "forbidPattern 'x': `pattern` is required"],
         [
           'forbidPattern',
-          "in: 'src/**/*.ts', pattern: 'TODO'",
+          "files: 'src/**/*.ts', pattern: 'TODO'",
           'forbidPattern \'x\': `pattern` must be a RegExp (got the string "TODO")',
         ],
         [
           'referencesResolve',
-          "in: 'docs/*.md', extract: 'Owner'",
+          "files: 'docs/*.md', extract: 'Owner'",
           'referencesResolve \'x\': `extract` must be a RegExp (got the string "Owner")',
         ],
       ]) {
@@ -454,48 +456,50 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
     });
 
     it('forbidImport with no `to` is refused at load — a ban with no target bans nothing, and it passed green', () => {
-      const run = cli(withCheck(make('forbidImport', "from: 'src/**/*.ts'"), TREE));
+      const run = cli(withCheck(make('forbidImport', "files: 'src/**/*.ts'"), TREE));
       expect([run.status, run.stderr.startsWith(`${LOADS}forbidImport 'x': \`to\` is required`)]).toEqual([2, true]);
     });
 
     it("forbidImport `to: '@db/'` bans everything under `@db/`, as `@db` does — it matched nothing", () => {
       const tree = { 'src/app.ts': "import { q } from '@db/core';\n" };
-      expect(x(make('forbidImport', "from: 'src/**/*.ts', to: '@db'"), tree).ok).toBe(false);
-      expect(errors(x(make('forbidImport', "from: 'src/**/*.ts', to: '@db/'"), tree))).toEqual([
+      expect(x(make('forbidImport', "files: 'src/**/*.ts', to: '@db'"), tree).ok).toBe(false);
+      expect(errors(x(make('forbidImport', "files: 'src/**/*.ts', to: '@db/'"), tree))).toEqual([
         'src/app.ts imports `@db/core`, which is forbidden from src/**/*.ts.',
       ]);
     });
 
     it('a `/g` regex is harmless in the file primitives — forbidPattern, mustDeclare, referencesResolve (commandCheck: §7)', () => {
-      expect(errors(x(make('forbidPattern', "in: 'src/**/*.ts', pattern: /TODO/g")))).toHaveLength(2);
+      expect(errors(x(make('forbidPattern', "files: 'src/**/*.ts', pattern: /TODO/g")))).toHaveLength(2);
       const twoDocs = { 'docs/a.md': 'Owner: a\n[a](gone-a.md) [b](gone-b.md)\n', 'docs/b.md': 'Owner: b\n' };
       expect(
         x(make('mustDeclare', "files: 'docs/*.md', fields: [{ name: 'O', pattern: /Owner:/g }]"), twoDocs).ok,
       ).toBe(true);
       expect(
-        errors(x(make('referencesResolve', "in: 'docs/*.md', extract: /\\]\\(([^)]+)\\)/g"), twoDocs)),
+        errors(x(make('referencesResolve', "files: 'docs/*.md', extract: /\\]\\(([^)]+)\\)/g"), twoDocs)),
       ).toHaveLength(2);
     });
 
     it('an `except` that exempts everything is caught by the floor, and the refusal says the `except` did it', () => {
       // The refusal blamed the glob: "`src/**/*.ts` matched nothing to scan".
       const said = 'examined 0 file(s) — `src/**/*.ts` matched 2 file(s), and `except` exempted all of them';
-      expect(errors(x(make('forbidPattern', "in: 'src/**/*.ts', pattern: /TODO/, except: ['src/**']")))[0]).toContain(
+      expect(
+        errors(x(make('forbidPattern', "files: 'src/**/*.ts', pattern: /TODO/, except: ['src/**']")))[0],
+      ).toContain(said);
+      expect(errors(x(make('forbidImport', "files: 'src/**/*.ts', to: './b', except: ['**/*.ts']")))[0]).toContain(
         said,
       );
-      expect(errors(x(make('forbidImport', "from: 'src/**/*.ts', to: './b', except: ['**/*.ts']")))[0]).toContain(said);
     });
 
     it('an option a factory does not take is refused at load, naming it and the ones it does take', () => {
-      // Dropped in silence: `except` on referencesResolve checked the file it meant to exempt.
+      // Dropped in silence: an exemption under the wrong name checked the file it meant to exempt.
       const rr = cli(
-        withCheck(make('referencesResolve', "in: 'docs/*.md', extract: /\\]\\(([^)]+)\\)/, except: ['docs/**']"), {}),
+        withCheck(make('referencesResolve', "files: 'docs/*.md', extract: /\\]\\(([^)]+)\\)/, skip: ['docs/**']"), {}),
       );
       expect([rr.status, rr.stderr.trim()]).toEqual([
         2,
-        `${LOADS}referencesResolve 'x': \`except\` is not an option of referencesResolve. Its own options are: corpus, extract, in, resolve.`,
+        `${LOADS}referencesResolve 'x': \`skip\` is not an option of referencesResolve. Its own options are: corpus, except, extract, files, resolve.`,
       ]);
-      const typo = cli(withCheck(make('forbidPattern', "in: 'src/**', pattern: /TODO/, excpet: ['src/**']"), TREE));
+      const typo = cli(withCheck(make('forbidPattern', "files: 'src/**', pattern: /TODO/, excpet: ['src/**']"), TREE));
       expect([typo.status, typo.stderr]).toEqual([
         2,
         expect.stringContaining('`excpet` is not an option of forbidPattern'),
@@ -506,7 +510,7 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
       // It globbed the working tree, so `**/*.md` found node_modules/ too.
       const tree = { 'docs/guide.md': 'x\n', 'node_modules/foo/README.md': 'x\n', 'dist/out.md': 'x\n' };
       expect(
-        x(make('pathContract', "kind: '**/*.md', allowedIn: ['docs/**']"), tree)
+        x(make('pathContract', "files: '**/*.md', allowedIn: ['docs/**']"), tree)
           .findings.filter((f) => f.severity === 'error')
           .map((f) => f.file),
       ).toEqual(['dist/out.md']);
@@ -515,7 +519,7 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
     /** what is wrong ¦ the options ¦ how the one error it reports ends */
     const COMMANDS = table(`
       a nonexistent cmd       ¦ cmd: 'no-such-zz --flag'                              ¦ x exited 127 — no-such-zz --flag
-      paths at a missing file ¦ cmd: 'true', paths: ['src/moved.ts']                  ¦ so this would have been a green gate over a shrinking subject.
+      paths at a missing file ¦ cmd: 'true', paths: ['src/moved.ts']                  ¦ so this would have been a green check over a shrinking subject.
       expect never matched    ¦ cmd: 'echo ran 0 tests', expect: /\\d+ passed/         ¦ it never means the command did anything.
       refuse matched          ¦ cmd: 'echo No test files', refuse: [/No test files/]  ¦ That pattern is declared as evidence the command silently did nothing.
       refuse matched, a why   ¦ cmd: 'echo None', refuse: [{ pattern: /None/, why: 'the filter matched nothing.' }] ¦ /None/. the filter matched nothing.
@@ -533,7 +537,10 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
 
     it('a tier outside the vocabulary is refused at load by name, as `--tier fastt` on the command line is', () => {
       // It loaded, ran under --all, and every --tier skipped it in silence: a gate no schedule runs.
-      const file = make('forbidPattern', "in: 'src/**/*.ts', pattern: /TODO/").replace("tier: 'fast'", "tier: 'fastt'");
+      const file = make('forbidPattern', "files: 'src/**/*.ts', pattern: /TODO/").replace(
+        "tier: 'fast'",
+        "tier: 'fastt'",
+      );
       for (const args of [
         ['check', '--all', '--json'],
         ['check', '--tier', 'fast', '--json'],
@@ -543,7 +550,7 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
           2,
           [],
           'check \'x\' (.specwarden/checks/x.check.mjs) declares tier "fastt" — expected one of: fast, heavy, nightly. ' +
-            'A tier outside the vocabulary is in no schedule, so no `--tier` would ever run it.',
+            'A tier outside the vocabulary is no tier a run can select, so no `--tier` would ever run it.',
         ]);
       }
       const typo = cli(withCheck(file, TREE), ['check', '--tier', 'fastt', '--json']);
@@ -574,13 +581,13 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
       }
     });
 
-    it('--tighten records a ratchet with or without `ratchetId`, which defaults to the check id', () => {
-      // With no `ratchetId` it wrote no file, and the ratchet was invisible to ratchet-direction.
+    it('--tighten records a ratchet with or without its own `id`, which defaults to the check id', () => {
+      // With no id of its own it wrote no file, and the ratchet was invisible to ratchet-direction.
       const stored = (id: string) => {
-        const file = make('forbidPattern', `in: 'src/**', pattern: /TODO/, ${id}ratchet: 5`);
+        const file = make('forbidPattern', `files: 'src/**', pattern: /TODO/, ratchet: ${id}`);
         const dir = scratchTree(withCheck(file, TREE), { installed: INSTALLED });
         try {
-          const run = warden(dir, ['check', '--all', '--json', '--tighten']);
+          const run = specwarden(dir, ['check', '--all', '--json', '--tighten']);
           expect(run.stdout).toContain('↑ 2 pre-existing violation(s) tolerated under ratchet 5; the lines below are');
           const path = join(dir, '.specwarden', 'ratchets', 'x.json');
           return existsSync(path) ? JSON.stringify(JSON.parse(readFileSync(path, 'utf8'))) : 'nothing';
@@ -588,7 +595,10 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
           removeScratch(dir);
         }
       };
-      expect([stored("ratchetId: 'x', "), stored('')]).toEqual(['{"id":"x","value":2}', '{"id":"x","value":2}']);
+      expect([stored("{ id: 'x', ceiling: 5 }"), stored('5')]).toEqual([
+        '{"id":"x","value":2}',
+        '{"id":"x","value":2}',
+      ]);
     });
 
     it('sourcesAgree and regenerable honour `ratchet` — the tolerance every other primitive gives', () => {
@@ -596,7 +606,7 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
       const names = "(ctx) => JSON.parse(ctx.files.read('a.json'))";
       const agree = make(
         'sourcesAgree',
-        `ratchetId: 'x', ratchet: 1, a: { name: 'a', extract: ${names} }, b: { name: 'b', extract: () => [] }`,
+        `ratchet: { id: 'x', ceiling: 1 }, a: { name: 'a', extract: ${names} }, b: { name: 'b', extract: () => [] }`,
       );
       expect(x(agree, { 'a.json': '["y"]' })).toMatchObject({
         ok: true,
@@ -605,7 +615,10 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
           { message: '`y` is in a but not b.' },
         ],
       });
-      const regen = make('regenerable', "ratchetId: 'x', ratchet: 1, artifact: 'gen/t.md', by: 'echo generated'");
+      const regen = make(
+        'regenerable',
+        "ratchet: { id: 'x', ceiling: 1 }, artifact: 'gen/t.md', cmd: 'echo generated'",
+      );
       expect(x(regen, { 'gen/t.md': 'edited\n' }).ok).toBe(true);
     });
 
@@ -615,17 +628,17 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
       expect([run.status, run.rows, run.stderr]).toEqual([
         2,
         [],
-        '.specwarden/checks/x.check.mjs failed to load: boom at import\n',
+        '.specwarden/checks/x.check.mjs failed to load: boom at import.\n',
       ]);
     });
   });
 
   describe('5. rules', () => {
     const RTREE = { 'src/a.ts': 'export const a = 1;\n', 'README.md': '# r\n' };
-    const prim = (rule = '') => make('forbidPattern', `in: 'src/**/*.ts', pattern: /FIXME/${rule}`);
+    const prim = (rule = '') => make('forbidPattern', `files: 'src/**/*.ts', pattern: /FIXME/${rule}`);
     const WITH_RULES = CONFIG.replace('({})', '({ rules: [] })');
     const IMPORTING = `import { defineConfig } from 'specwarden';\nimport { rules } from './rules.mjs';\nexport default defineConfig({ rules });\n`;
-    const REGISTER = `export const rules = [{ id: 'no-fixme', statement: 's', owner: 'README.md', enforcement: { checkIds: ['xx'] } }];\n`;
+    const REGISTER = `export const rules = [{ id: 'no-fixme', statement: 's', owner: 'README.md', enforcement: { enforcedBy: ['xx'] } }];\n`;
     const audit = (rule: string, id: string) => errors(row(cli(withCheck(prim(rule), RTREE, WITH_RULES)), id));
 
     it('with no `rules` key nothing audits the check and stderr says so; with `rules: []` it is an orphan, listed', () => {
@@ -635,8 +648,8 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
       expect(audit('', 'orphan-check')).toEqual(['1 check(s) enforce no declared rule: x']);
     });
 
-    it("`rules: []` in a hand-written tree does not fail rule-owner-resolves over the harness's own rule", () => {
-      // It did: the harness rule was owned by `.specwarden/README.md`, a file only `init`
+    it("`rules: []` in a hand-written tree does not fail rule-owner-resolves over the engine's own rule", () => {
+      // It did: the self-checks’ rule was owned by `.specwarden/README.md`, a file only `init`
       // writes. Without that README the engine owns its own rule.
       expect(audit('', 'rule-owner-resolves')).toEqual([]);
     });
@@ -674,8 +687,8 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
     it('a misspelled enforcer id fails enforcement-resolves, and the check it meant becomes an orphan', () => {
       const run = cli({ ...withCheck(prim(), RTREE, IMPORTING), '.specwarden/rules.mjs': REGISTER });
       expect(errors(row(run, 'enforcement-resolves'))).toEqual([
-        "rule 'no-fixme' names enforcer 'xx', which is not a registered check and not declared by any other enforcer " +
-          'registry — the rule counts as enforced and nothing enforces it.',
+        "rule 'no-fixme' names enforcer 'xx', which is not a registered check and not declared as a perimeter policy " +
+          '— the rule counts as enforced and nothing enforces it.',
       ]);
       expect(errors(row(run, 'orphan-check'))).toEqual(['1 check(s) enforce no declared rule: x']);
     });
@@ -691,12 +704,12 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
 
   describe('6. composition — two checks over one corpus', () => {
     const trees = (files: TTree): TTree => ({
-      '.specwarden/warden.config.mjs': CONFIG,
+      '.specwarden/config.mjs': CONFIG,
       'docs/guide.md': 'Owner: me\n',
       ...files,
     });
     const one = (docs: string, when: string, owner: string) =>
-      `import { forbidPattern } from 'specwarden';\nexport const check = forbidPattern({ id: 'one', title: 'no TODO in docs', tier: 'fast', when: ${when}, in: ${docs}, pattern: /TODO/, rule: { statement: 'no TODO in a document', owner: ${owner} } });\n`;
+      `import { forbidPattern } from 'specwarden';\nexport const check = forbidPattern({ id: 'one', title: 'no TODO in docs', tier: 'fast', when: ${when}, files: ${docs}, pattern: /TODO/, rule: { statement: 'no TODO in a document', owner: ${owner} } });\n`;
     const two = (docs: string, when: string, owner: string) =>
       `import { mustDeclare } from 'specwarden';\nexport const check = mustDeclare({ id: 'two', title: 'docs name an owner', tier: 'fast', when: ${when}, files: ${docs}, fields: [{ name: 'Owner', pattern: /^Owner:/m }], rule: { statement: 'a document names its owner', owner: ${owner} } });\n`;
     const BOTH = [0, ['one', 'two', 'ratchet-direction']];
@@ -720,7 +733,7 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
       });
       expect(ids(cli(viaHelper))).toEqual(BOTH);
       const oneFile = `import { forbidPattern, mustDeclare } from 'specwarden';\nconst DOCS = 'docs/**/*.md';\nexport const checks = [
-  forbidPattern({ id: 'one', title: 't', tier: 'fast', in: DOCS, pattern: /TODO/ }),
+  forbidPattern({ id: 'one', title: 't', tier: 'fast', files: DOCS, pattern: /TODO/ }),
   mustDeclare({ id: 'two', title: 't', tier: 'fast', files: DOCS, fields: [{ name: 'Owner', pattern: /^Owner:/m }] }),
 ];\n`;
       expect(ids(cli(trees({ '.specwarden/checks/docs.check.mjs': oneFile })))).toEqual(BOTH);
@@ -733,7 +746,7 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
         '.specwarden/checks/_shared/docs.check.mjs exports no check. A file under .specwarden/checks/ named *.check.mjs ' +
           'must export `check`, `checks` or a default — rename it if it is a helper, or export the check it builds.',
       ]);
-      const file = make('forbidPattern', "in: 'docs/**', pattern: /TODO/");
+      const file = make('forbidPattern', "files: 'docs/**', pattern: /TODO/");
       const dup = cli(trees({ '.specwarden/checks/a.check.mjs': file, '.specwarden/checks/b.check.mjs': file }));
       expect([dup.status, dup.stderr.trim()]).toEqual([
         2,
@@ -744,11 +757,11 @@ export const check = fromResult({ id: 'x', corpus: { atLeast: 1 }, run: (ctx) =>
 
   describe('7. the test the guide recommends — runCheck under node:test, inside the consumer tree', () => {
     const TESTED: TTree = {
-      '.specwarden/warden.config.mjs': CONFIG,
+      '.specwarden/config.mjs': CONFIG,
       'src/a.ts': 'export const a = 1;\n',
       'docs/guide.md': 'Owner: me\n',
       '.specwarden/checks/hygiene/no-todo.check.mjs': `import { forbidPattern } from 'specwarden';
-export const check = forbidPattern({ id: 'no-todo', title: 'no TODO in src', tier: 'fast', in: 'src/**/*.ts', pattern: /TODO/ });
+export const check = forbidPattern({ id: 'no-todo', title: 'no TODO in src', tier: 'fast', files: 'src/**/*.ts', pattern: /TODO/ });
 `,
       '.specwarden/checks/hygiene/no-todo.check.test.mjs': `import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -792,7 +805,7 @@ export const checks = [
 `,
       // Not a *.check.mjs: it cannot load, which is the point, and discovery would refuse the run.
       '.specwarden/checks/quirks/string-when.mjs': `import { forbidPattern } from 'specwarden';
-export const check = forbidPattern({ id: 'docs-only', title: 't', tier: 'fast', when: 'docs/', in: 'docs/**/*.md', pattern: /TODO/ });
+export const check = forbidPattern({ id: 'docs-only', title: 't', tier: 'fast', when: 'docs/', files: 'docs/**/*.md', pattern: /TODO/ });
 `,
       '.specwarden/checks/quirks/quirks.check.test.mjs': `import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -860,13 +873,13 @@ test('a body that shells out without declaring exec fails in its test, as in the
     it('runCheck applies the capability gate the runner applies: the test and the CLI agree', () => {
       // A body that shelled out without `exec` was green in its test and red in the CLI.
       expect(out).toContain('✔ a body that shells out without declaring exec fails in its test, as in the CLI');
-      const r = warden(dir, ['check', '--id', 'shells-out', '--json']);
+      const r = specwarden(dir, ['check', '--id', 'shells-out', '--json']);
       expect(r.status).toBe(1);
       expect(r.stdout).toContain("check 'shells-out' used a 'exec' capability it did not declare (called run).");
     });
 
     it('discovery does not load the `*.check.test.mjs` files as checks', () => {
-      const r = warden(dir, ['check', '--list']);
+      const r = specwarden(dir, ['check', '--list']);
       expect(
         r.stdout
           .trim()

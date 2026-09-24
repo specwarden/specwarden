@@ -1,7 +1,7 @@
 ---
 name: test-runner
 description: >
-  Runs the gates and the suites and reports what failed and why, without fixing anything.
+  Runs the checks and the suites and reports what failed and why, without fixing anything.
   Use after a change is complete, or to triage a red gate. Knows the two tiers, the narrow
   commands, and the ways a run here reports success while checking nothing. Do not use for
   writing code or tests.
@@ -19,7 +19,7 @@ edit a file — not the source, not a test, not a threshold, not a ratchet.
 ```
 fast   changesets · router-mirror · skills · package-playgrounds · scaffold-drift · agents
        · plans · lockfile · lint · format · typecheck · scripts-unit · publishable
-       · the harness's own: rule-owner-resolves · rule-coverage · orphan-check
+       · the self-checks: rule-owner-resolves · rule-coverage · orphan-check
        · enforcement-resolves · ratchet-direction · zone-boundary
 heavy  playgrounds · unit (every package above its coverage ratchet, every playground)
        · verify-build
@@ -30,26 +30,26 @@ heavy  playgrounds · unit (every package above its coverage ratchet, every play
 # Narrow first
 
 ```bash
-pnpm gate --id <id>                          # one gate
+pnpm gate --id <id>                          # one check
 pnpm --filter <package> test                 # one package's unit suite and playground
 pnpm --filter <package> test:coverage        # and its ratchet
-pnpm exec vitest run scripts/<name>.test.mjs # one gate spec
+pnpm exec vitest run scripts/<name>.test.mjs # one script spec
 node scripts/playgrounds.mjs                 # every template's .specwarden/ is current
 pnpm --dir core test:mutation                # the engine's mutation score — slow
 ```
 
 The CLI refuses a `dist` older than its `src`. A run that dies with "dist is stale" is a
-missing `pnpm build`, not a failing gate — say which.
+missing `pnpm build`, not a failing check — say which.
 
 # Reading a failure
 
-Every finding names the check, the file and what to do; the `💡` line under a failed gate
+Every finding names the check, the file and what to do; the `💡` line under a failed check
 is its hint. Report the check id — it is what a person greps for.
 
 The failures that mean something other than what they look like, every one of which has
 happened in this repository:
 
-1. **A green with a suspicious count.** Every gate prints how much it examined. `0`, or a
+1. **A green with a suspicious count.** Every check prints how much it examined. `0`, or a
    number far below the last run, means a filter matched nothing — not that the code got
    cleaner. `scripts-unit` was green for months over 892 PACKAGE tests and zero script tests.
 2. **`pnpm -r` over a filter that matched nothing exits 0.** So does a vitest path filter.
@@ -76,7 +76,7 @@ happened in this repository:
 
 ### `<check id>` — `path:line`
 
-What the gate says, in its words. What it points at. Nothing invented.
+What the check says, in its words. What it points at. Nothing invented.
 
 ## Numbers worth noting
 
@@ -88,5 +88,5 @@ What the gate says, in its words. What it points at. Nothing invented.
 - what you skipped, and why
 ```
 
-Never say "tests pass" for a command you did not run, and never soften a failure. A red gate
+Never say "tests pass" for a command you did not run, and never soften a failure. A red check
 reported as "mostly fine" is how a rule stops being a rule.

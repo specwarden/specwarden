@@ -29,12 +29,14 @@ export type { INamedSource, ISourcesAgreeOptions } from './sources-agree/sources
  * checks.
  */
 export {
+  attributionOf,
   buildCheck,
   checkOptions,
   CheckOptionsError,
   belowCorpusFloor,
   withExaminedNote,
   frameTolerated,
+  thresholdOf,
   verdictFrom,
   resolveCatalog,
   catalogNotes,
@@ -51,9 +53,12 @@ export type {
   ICatalogDisable,
   ICatalogEntry,
   ICatalogOptions,
+  ICheckOptionsMode,
   ICorpusFloor,
-  IOptionRule,
+  IOptionShape,
   IResolvedCatalog,
+  IThreshold,
+  TPathspecs,
   TOptionKind,
   TOptionSpec,
 } from './_shared';

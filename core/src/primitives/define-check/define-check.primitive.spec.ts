@@ -36,9 +36,7 @@ describe('defineCheck', () => {
       advisory: true,
       hint: 'do the thing',
       capabilities: ['read', 'exec'],
-      ratchetId: 'x',
-      ratchetDirection: 'up',
-      ratchet: 4,
+      ratchet: { id: 'x', direction: 'up', ceiling: 4 },
     });
 
     expect(check.tier).toBe('heavy');
@@ -50,15 +48,19 @@ describe('defineCheck', () => {
   });
 
   it('attributes every finding to the check, so nothing is left untraceable', async () => {
-    const verdict = await runCheck(build(() => [error('bad'), { ...error('worse'), ruleId: 'other' }]));
+    const verdict = await runCheck(build(() => [error('bad'), error('worse')]));
 
-    expect(verdict.findings.map((f) => f.ruleId)).toEqual(['x', 'other']);
+    expect(verdict.findings.map((f) => f.ruleId)).toEqual(['x', 'x']);
   });
 
-  it('attributes to a named rule when the check enforces one under another name', async () => {
-    const verdict = await runCheck(build(() => [error('bad')], { ruleId: 'the-rule' }));
+  it('attributes to the rule the check names, when it names one under another id', async () => {
+    const verdict = await runCheck(build(() => [error('bad')], { rule: { id: 'the-rule', statement: 's' } }));
 
-    expect(verdict.findings[0].ruleId).toBe('the-rule');
+    expect(verdict.findings.map((f) => f.ruleId)).toEqual(['the-rule']);
+  });
+
+  it('refuses `ruleId` — the attribution is the rule the check names, never a second id beside it', () => {
+    expect(() => build(() => [], { ruleId: 'the-rule' } as never)).toThrow('`ruleId` is not an option of defineCheck');
   });
 
   // ── the verdict it assembles ───────────────────────────────────────────────────
@@ -119,9 +121,9 @@ describe('defineCheck', () => {
   });
 
   it('a stored threshold overrides the inline one', async () => {
-    const check = build(() => [error('a'), error('b')], { ratchetId: 'x', ratchet: 5 });
+    const check = build(() => [error('a'), error('b')], { ratchet: { id: 'x', ceiling: 5 } });
 
-    expect((await runCheck(check, { ratchet: 1 })).ok).toBe(false);
+    expect((await runCheck(check, { threshold: 1 })).ok).toBe(false);
   });
 
   it('frames a tolerated pass, so a wall of errors under a green tick is explained', async () => {
@@ -134,7 +136,7 @@ describe('defineCheck', () => {
   it('states the measurement on the verdict, so --tighten never has to guess', async () => {
     const verdict = await runCheck(build(() => [error('a'), error('b')], { ratchet: 2 }));
 
-    expect(verdict.ratchet).toEqual({ value: 2 });
+    expect(verdict.measured).toBe(2);
   });
 
   it('a body that SUMMARISES reports its own number, which the findings do not show', async () => {
@@ -144,7 +146,7 @@ describe('defineCheck', () => {
     const verdict = await runCheck(build(() => ({ findings: [], measured: 17, examined: 400 }), { ratchet: 17 }));
 
     expect(verdict.ok).toBe(true);
-    expect(verdict.ratchet).toEqual({ value: 17 });
+    expect(verdict.measured).toBe(17);
   });
 
   it('a summarised measurement past the ratchet still fails', async () => {
@@ -153,9 +155,9 @@ describe('defineCheck', () => {
     expect(verdict.ok).toBe(false);
   });
 
-  it('an `up` ratchet fails BELOW its floor and holds at or above it', async () => {
+  it('an `up` ratchet fails BELOW its ceiling and holds at or above it', async () => {
     const at = (score: number) =>
-      build(() => ({ findings: [], measured: score }), { ratchet: 68, ratchetDirection: 'up' });
+      build(() => ({ findings: [], measured: score }), { ratchet: { ceiling: 68, direction: 'up' } });
 
     expect((await runCheck(at(61))).ok).toBe(false);
     expect((await runCheck(at(68))).ok).toBe(true);
@@ -163,6 +165,17 @@ describe('defineCheck', () => {
   });
 
   // ── the corpus floor ───────────────────────────────────────────────────────────
+
+  // One ICorpusFloor for every factory, and its `atLeast` defaults to one there as it does on
+  // the primitives: `corpus: {}` is a floor, never a declaration that nothing is expected.
+  it('reads `corpus: {}` as a floor of one', async () => {
+    const none = await runCheck(build(() => ({ findings: [], examined: 0 }), { corpus: {} }));
+    expect(none.ok).toBe(false);
+    expect(errorsOf(none)[0]).toContain('below the declared floor of 1');
+    const silent = await runCheck(build(() => [], { corpus: {} }));
+    expect(errorsOf(silent)[0]).toContain('declares `corpus: { atLeast: 1 }`, and its body reported no');
+    expect((await runCheck(build(() => ({ findings: [], examined: 1 }), { corpus: {} }))).ok).toBe(true);
+  });
 
   it('fails when it examined fewer units than it declared it must', async () => {
     const verdict = await runCheck(
@@ -289,7 +302,7 @@ describe('defineCheck — a body that could not look', () => {
     expect(verdict).toEqual({
       ok: true,
       skipped: 'the env files are gitignored',
-      findings: [{ severity: 'info', message: 'prod: absent' }],
+      findings: [{ severity: 'info', message: 'prod: absent', ruleId: 'blind' }],
     });
   });
 

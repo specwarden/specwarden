@@ -1,6 +1,7 @@
 /**
  * The known names closest to one that was not known, as the tail of a refusal:
- * ` — did you mean 'no-todo'?`, or nothing when no name is close enough to be the one meant.
+ * ` (did you mean 'no-todo'?)`, or nothing when no name is close enough to be the one meant —
+ * in parentheses, so the refusal it ends still closes with a period.
  *
  * A refusal that names only what was wrong leaves the reader to diff what they typed
  * against a list they cannot see; the id is almost always one keystroke from a real one.
@@ -11,7 +12,7 @@
 export function didYouMean(word: string, known: readonly string[]): string {
   const close = nearest(word, known);
   if (close.length === 0) return '';
-  return ` — did you mean ${close.map((name) => `'${name}'`).join(' or ')}?`;
+  return ` (did you mean ${close.map((name) => `'${name}'`).join(' or ')}?)`;
 }
 
 /** Up to three known names close to `word`, nearest first; ties keep the given order. */

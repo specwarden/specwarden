@@ -4,10 +4,10 @@ import { orphanChecks } from '../rule-audit/rule-audit.util';
 
 export interface IOrphanCheckOptions {
   /** The full set of check ids to audit, as a thunk read at run time (so the check
-   * sees the registry as it stands, itself excluded). */
-  readonly checkIds: () => readonly string[];
-  /** The declared rules, as a THUNK. Read at run time for the same reason `checkIds`
-   * is: the harness contributes the rule its own checks enforce, and a snapshot taken
+   * sees the roster as it stands, itself excluded). */
+  readonly roster: () => readonly string[];
+  /** The declared rules, as a THUNK. Read at run time for the same reason `roster`
+   * is: the engine contributes the rule its self-checks enforce, and a snapshot taken
    * while the roster was still being built reports those checks as orphans. */
   readonly rules: () => readonly IRule[];
   readonly id?: string;
@@ -39,7 +39,7 @@ export function orphanCheck(options: IOrphanCheckOptions): ICheck {
     hint: "Add `rule: '<the statement it enforces>'` to the check — or, for a rule several checks share, name it in the rule register.",
     when: () => true,
     run: () => {
-      const ids = options.checkIds().filter((c) => c !== id);
+      const ids = options.roster().filter((c) => c !== id);
       const orphans = orphanChecks(ids, options.rules());
       if (orphans.length === 0) return { ok: true, findings: [] };
       const shown = orphans.slice(0, 8).join(', ');

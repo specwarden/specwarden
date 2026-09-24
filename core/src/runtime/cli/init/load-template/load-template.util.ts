@@ -59,13 +59,20 @@ export function installedTemplates(files: IFileSource): readonly string[] {
  * tool is kept. So the check happens BEFORE anything is written, and it names every
  * missing package at once rather than one per attempt.
  */
-export async function loadTemplate(
+/**
+ * Resolve one template's exported object, from the package alone.
+ *
+ * `found` says whether the PACKAGE resolved at all, separately from whether it exported
+ * something template-shaped: `loadTemplate` tells "nobody installed this" from "this is
+ * installed but broken" by it, and a LISTING (`init --template` alone) reads every
+ * installed template's own line whether or not this repository has declared what it
+ * needs yet — the point is to say what is here, not to gate it a second time.
+ */
+async function resolveTemplateModule(
   name: string,
   files: IFileSource,
-  context: ITemplateContext,
-): Promise<ITemplateLoad> {
+): Promise<{ found: boolean; template?: ITemplate }> {
   const pkg = packageForTemplate(name);
-
   let mod: Record<string, unknown>;
   try {
     // Resolved from the REPOSITORY, not from this package. A template is the
@@ -75,6 +82,39 @@ export async function loadTemplate(
     const require = createRequire(join(files.root(), 'package.json'));
     mod = (await import(pathToFileURL(require.resolve(pkg)).href)) as Record<string, unknown>;
   } catch {
+    return { found: false };
+  }
+  return { found: true, template: Object.values(mod).find(isTemplate) };
+}
+
+/**
+ * Every template this repository has installed, with the one line it introduces itself
+ * by — what `init --template` with no name prints, since a wrong or forgotten name is
+ * answered better by what IS here than by silence.
+ *
+ * A name that fails to resolve, or resolves to something not template-shaped, is left
+ * out rather than shown broken: the manifest's OWN declaration already said what should
+ * be here, and a package that does not deliver it is a separate problem from this list.
+ */
+export async function listInstalledTemplates(
+  files: IFileSource,
+): Promise<readonly { readonly name: string; readonly describe: string }[]> {
+  const resolved = await Promise.all(
+    installedTemplates(files).map(async (name) => ({ name, ...(await resolveTemplateModule(name, files)) })),
+  );
+  return resolved
+    .filter((r): r is { name: string; found: true; template: ITemplate } => r.template !== undefined)
+    .map(({ name, template }) => ({ name, describe: template.describe }));
+}
+
+export async function loadTemplate(
+  name: string,
+  files: IFileSource,
+  context: ITemplateContext,
+): Promise<ITemplateLoad> {
+  const pkg = packageForTemplate(name);
+  const { found, template } = await resolveTemplateModule(name, files);
+  if (!found) {
     const here = installedTemplates(files).filter((t) => t !== name);
     return {
       problem:
@@ -83,8 +123,6 @@ export async function loadTemplate(
         `  Install it and run init again, or omit --template for a minimal tree.`,
     };
   }
-
-  const template = Object.values(mod).find(isTemplate);
   if (!template) {
     return {
       problem: `${pkg} exports no template — it must export an object with name, describe, requires, files() and rules().`,

@@ -12,7 +12,7 @@ import type { TZone } from '../zone/zone.model';
  * not mechanizable. The reason is an assertion, not an apology — why enforcement is
  * impossible, not that nobody got to it — and there is no way to state "unenforced"
  * without one. */
-export type TRuleEnforcement = { readonly checkIds: readonly string[] } | { readonly notMechanizable: string };
+export type TRuleEnforcement = { readonly enforcedBy: readonly string[] } | { readonly notMechanizable: string };
 
 export interface IRule {
   readonly id: string;
@@ -24,7 +24,7 @@ export interface IRule {
   readonly zone?: TZone;
   /** Marks a rule whose violation cannot be undone — a deleted volume, a force
    * push, a dropped column. These are the rules the constraint card is generated
-   * from, so the card and the registry cannot drift. */
+   * from, so the card and the roster cannot drift. */
   readonly irreversible?: boolean;
   /**
    * The line this rule contributes to the constraint card, when it is irreversible.
@@ -45,7 +45,7 @@ export interface IRule {
 
 /** Whether a rule is actually enforced (named at least one check). */
 export function isEnforced(rule: IRule): boolean {
-  return 'checkIds' in rule.enforcement && rule.enforcement.checkIds.length > 0;
+  return 'enforcedBy' in rule.enforcement && rule.enforcement.enforcedBy.length > 0;
 }
 
 /** Whether a rule is declared not-mechanizable with a reason. */

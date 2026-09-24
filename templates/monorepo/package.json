@@ -2,7 +2,7 @@
   "name": "@specwarden/template-monorepo",
   "version": "0.0.0",
   "type": "module",
-  "description": "template: A pnpm workspace — lockfile, build order, dependency pins, CI coverage.",
+  "description": "template: A pnpm workspace — lockfile, credential scan, documentation paths; build order, dependency pins and CI coverage as examples.",
   "license": "MIT",
   "repository": {
     "type": "git",

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { openspec } from '@specwarden/openspec';
-import { planInvariantSync, testContext } from 'specwarden';
+import { CheckOptionsError, planInvariantSync, testContext, uncoveredFactories } from 'specwarden';
 
 /**
  * Everything this package publishes, wired the way a consumer wires it.
@@ -46,6 +46,14 @@ const ABSENT: Record<string, string> = { 'README.md': '# a repository with no op
 const EMPTY: Record<string, string> = { 'openspec/specs/billing/spec.md': '# billing\n\nStill to be written.\n' };
 
 describe('@specwarden/openspec', () => {
+  it('publishes a source and no check factory — a check added here must join a playground that runs it', async () => {
+    const mod = (await import('@specwarden/openspec')) as Record<string, unknown>;
+
+    // A source handed its own options returns a source, not a check; anything that builds a
+    // check is listed here, and `covered` is empty, so it would be reported.
+    expect(uncoveredFactories(mod, { covered: [], probe: { specsDir: 'openspec/specs' } })).toEqual([]);
+  });
+
   it('reads requirements out of a capability, one id per heading', () => {
     const result = openspec().requirements(filesOf(INSTALLED));
 
@@ -88,7 +96,7 @@ describe('@specwarden/openspec', () => {
 
     expect(openspec().requirements(filesOf(tree)).items).toEqual([]);
     expect(
-      openspec({ requirementHeading: /^#{2,4}\s+Rule:\s*(.+?)\s*$/ }).requirements(filesOf(tree)).items,
+      openspec({ requirementPattern: /^#{2,4}\s+Rule:\s*(.+?)\s*$/ }).requirements(filesOf(tree)).items,
     ).toHaveLength(1);
   });
 
@@ -99,5 +107,32 @@ describe('@specwarden/openspec', () => {
 
     expect(plan.toDeposit).toHaveLength(2);
     expect(plan.orphaned).toEqual([]);
+  });
+
+  it('reads a layout the tool moved, once the consumer says where — every path is an option', () => {
+    const moved = {
+      'spec/capabilities/billing/requirements.md': '### Requirement: The system SHALL freeze an invoice\n',
+      'spec/proposals/freeze/todo.md': '- [ ] wire the gateway\n',
+    };
+    const source = openspec({
+      specsDir: 'spec/capabilities',
+      changesDir: 'spec/proposals',
+      specFile: 'requirements.md',
+      tasksFile: 'todo.md',
+    });
+
+    expect(openspec().requirements(filesOf(moved)).found).toBe(false);
+    expect(source.requirements(filesOf(moved)).items).toHaveLength(1);
+    expect(source.tasks(filesOf(moved)).items).toHaveLength(1);
+  });
+
+  it('refuses an option it does not have, a check’s identity, an empty path and a string pattern — by name', () => {
+    expect(() => openspec({ root: 'openspec' } as never)).toThrow(CheckOptionsError);
+    expect(() => openspec({ root: 'openspec' } as never)).toThrow('`root` is not an option of openspec');
+    expect(() => openspec({ tier: 'fast' } as never)).toThrow('`tier` is not an option of openspec');
+    expect(() => openspec({ changesDir: '' })).toThrow('`changesDir` is empty');
+    expect(() => openspec({ requirementPattern: 'Requirement:' } as never)).toThrow(
+      '`requirementPattern` must be a RegExp',
+    );
   });
 });

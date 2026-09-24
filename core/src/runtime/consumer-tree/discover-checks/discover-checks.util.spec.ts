@@ -35,16 +35,15 @@ describe('discoverChecks', () => {
     expect(files).toHaveLength(2);
   });
 
-  it('accepts the three export spellings the consumer zone already used', async () => {
+  it('accepts the three export spellings: check, checks, default', async () => {
     write('docs/one.check.mjs', CHECK('one', 'check'));
-    write('docs/two.check.mjs', CHECK('two', 'gateCheck'));
     write(
       'docs/many.check.mjs',
       `export const checks = [${CHECK('three').replace('export const check = ', '').trim().replace(/;$/, '')}];\n`,
     );
     write('docs/dflt.check.mjs', CHECK('four').replace('export const check =', 'export default'));
     const { checks } = await run();
-    expect(checks.map((c) => c.id).sort()).toEqual(['four', 'one', 'three', 'two']);
+    expect(checks.map((c) => c.id).sort()).toEqual(['four', 'one', 'three']);
   });
 
   it('ignores helpers, tests and data — only *.check.mjs is a check', async () => {
@@ -54,6 +53,11 @@ describe('discoverChecks', () => {
     write('docs/allow.json', '{}');
     const { checks } = await run();
     expect(checks.map((c) => c.id)).toEqual(['a']);
+  });
+
+  it('reads no `gateCheck` — the alias is gone, and a file exporting only it exports no check', async () => {
+    write('docs/two.check.mjs', CHECK('two', 'gateCheck'));
+    await expect(run()).rejects.toThrow(CheckDiscoveryError);
   });
 
   it('refuses a check file that exports no check — a silent skip would read as coverage', async () => {

@@ -9,7 +9,7 @@ pnpm gate:fast        # the tier a commit runs: everything that only reads files
 pnpm doctor           # what is declared, without running any of it
 ```
 
-`pnpm gate` **is** the check list. There is no second place to add a gate: a file under
+`pnpm gate` **is** the check list. There is no second place to add a check: a file under
 `.specwarden/checks/` is one the moment it exists, and a file there that exports no check
 is a load error rather than a silent skip.
 
@@ -47,7 +47,7 @@ Nothing below is edited by hand:
 Change `scripts/registry.mjs` and run `pnpm scaffold` — or, for a template playground, change
 the template and run `node scripts/playgrounds.mjs --write <name>`.
 A direct edit does not survive the next run — which is why the window between the edit and
-that run is closed by a gate rather than by memory.
+that run is closed by a check rather than by memory.
 
 ## Adding a package
 
@@ -73,7 +73,7 @@ exactly one claim on a global name — and `@specwarden/*` for everything else.
 
 ```bash
 pnpm test             # every package, one at a time — unit suites and playgrounds
-pnpm test:coverage    # the same, above each package's ratchet (what the unit gate runs)
+pnpm test:coverage    # the same, above each package's ratchet (what the `unit` check runs)
 pnpm test:scripts     # the repository's own guard scripts
 ```
 

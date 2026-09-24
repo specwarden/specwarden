@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ICheck, IFixable, IReporter, IVcs } from '../../../domain';
 import { testContext } from '../../../testing';
-import { CheckRegistry } from '../../container';
+import { CheckRoster } from '../../container';
 import type { IParsedArgs } from '../_shared/parse-args/parse-args.util';
 import { check } from './check.command';
 import { aCheck, args, setup, tracer } from './check.command.spec-helpers';
@@ -41,7 +41,7 @@ describe('refused before anything runs', () => {
     const t = tracer();
     const s = setup([t.make('a')]);
     expect(await s.run({ reporter: 'sarif' })).toBe(2);
-    expect(s.err()).toBe('unknown reporter "sarif" — expected one of: tty, json, github\n');
+    expect(s.err()).toBe('unknown reporter "sarif" — expected one of: tty, json, github.\n');
     expect(t.ran).toEqual([]);
   });
 
@@ -49,7 +49,7 @@ describe('refused before anything runs', () => {
     const t = tracer();
     const s = setup([t.make('a')]);
     expect(await s.run({ ids: ['a', 'typo'] })).toBe(2);
-    expect(s.err()).toBe("unknown check id 'typo'\n");
+    expect(s.err()).toBe("unknown check id 'typo'.\n");
     expect(t.ran).toEqual([]);
   });
 
@@ -61,7 +61,7 @@ describe('refused before anything runs', () => {
 });
 
 describe('what the environment means', () => {
-  it('ignores SPECWARDEN_SKIP under CI=true — a skip that reaches the arbiter is a hole', async () => {
+  it('ignores SPECWARDEN_SKIP under CI=true — a skip that reaches CI is a hole', async () => {
     const t = tracer();
     const s = setup([t.make('a')]);
     expect(await s.run({}, { SPECWARDEN_SKIP: 'a', CI: 'true' })).toBe(0);
@@ -140,9 +140,9 @@ describe('flags forwarded to the runner', () => {
     expect(await setup([aCheck('a', { ...red, advisory: true })]).run()).toBe(0);
   });
 
-  it('--jobs wins over the config’s concurrency, in both directions', async () => {
+  it('--jobs wins over the config’s jobs, in both directions', async () => {
     // Observed as the largest number of checks in flight at once.
-    const measure = async (a: Partial<IParsedArgs>, concurrency?: number) => {
+    const measure = async (a: Partial<IParsedArgs>, jobs?: number) => {
       let inFlight = 0;
       let peak = 0;
       const slow = (id: string) =>
@@ -154,7 +154,7 @@ describe('flags forwarded to the runner', () => {
             return { ok: true, findings: [] };
           },
         });
-      await setup([slow('a'), slow('b'), slow('c')], { concurrency }).run(a);
+      await setup([slow('a'), slow('b'), slow('c')], { jobs }).run(a);
       return peak;
     };
     expect(await measure({}, 3)).toBe(3);
@@ -191,18 +191,18 @@ describe('flags forwarded to the runner', () => {
     // written anywhere else is a number the next clone never sees.
     const root = mkdtempSync(join(tmpdir(), 'spw-ratchet-'));
     try {
-      const registry = new CheckRegistry();
-      registry.registerAll([
+      const roster = new CheckRoster();
+      roster.registerAll([
         aCheck('counted', {
           ratchet: { id: 'todo-count' },
-          run: () => ({ ok: true, findings: [], ratchet: { value: 4 } }),
+          run: () => ({ ok: true, findings: [], measured: 4 }),
         }),
       ]);
       const t = testContext({ changed: [] });
       const code = await check(
         args({ tighten: true }),
         { adapters: () => ({ vcs: t.vcs, files: t.files, clock: t.clock }) },
-        registry,
+        roster,
         root,
         {},
         { out: () => {}, err: () => {} },

@@ -94,18 +94,23 @@ describe('JsonReporter', () => {
     const { reporter, chunks } = capture();
     reporter.runFinished([], 0);
 
-    expect(JSON.parse(chunks[0])).toEqual({ totalMs: 0, results: [] });
+    expect(JSON.parse(chunks[0])).toEqual({ version: 1, totalMs: 0, results: [] });
   });
 
   // A dashboard reading the document could not tell a filtered run from a fail-safe one.
   it('carries why relevance did not filter the run, and nothing when it did', () => {
     const full = capture();
     full.reporter.runFinished([], 0, { fullRunReason: 'CI with no base' });
-    expect(JSON.parse(full.chunks[0])).toEqual({ totalMs: 0, fullRunReason: 'CI with no base', results: [] });
+    expect(JSON.parse(full.chunks[0])).toEqual({
+      version: 1,
+      totalMs: 0,
+      fullRunReason: 'CI with no base',
+      results: [],
+    });
 
     const filtered = capture();
     filtered.reporter.runFinished([], 0, {});
-    expect(Object.keys(JSON.parse(filtered.chunks[0]))).toEqual(['totalMs', 'results']);
+    expect(Object.keys(JSON.parse(filtered.chunks[0]))).toEqual(['version', 'totalMs', 'results']);
   });
 
   describe('its default sink', () => {
@@ -118,7 +123,7 @@ describe('JsonReporter', () => {
       new JsonReporter().runFinished([], 7);
 
       expect(write).toHaveBeenCalledTimes(1);
-      expect(JSON.parse(String(write.mock.calls[0][0]))).toEqual({ totalMs: 7, results: [] });
+      expect(JSON.parse(String(write.mock.calls[0][0]))).toEqual({ version: 1, totalMs: 7, results: [] });
     });
   });
 });

@@ -1,11 +1,11 @@
 import type { IRule, ITemplate, ITemplateContext, ITemplateFile } from 'specwarden';
-import { compose, docPathsPart, secretScanPart, specSourcePart } from '@specwarden/scaffold-parts';
+import { compose, docPathsPart, scriptWrappersPart, secretScanPart, specSourcePart } from '@specwarden/scaffold-parts';
 
 /**
  * A starting tree for a repository that specifies its work with OPENSPEC.
  *
  * WHAT THIS TEMPLATE IS ACTUALLY FOR. OpenSpec already owns the specification: what
- * must be true, which change proposes it, which tasks remain. SpecWarden does not
+ * must be true, which change proposes it, which tasks remain. specwarden does not
  * duplicate any of that and must not — two tools owning one fact is how a
  * specification and its enforcement drift apart in the first place. What it adds is the
  * SEAM: the spec source, so `specwarden sync-invariants` can reconcile the requirements
@@ -15,9 +15,11 @@ import { compose, docPathsPart, secretScanPart, specSourcePart } from '@specward
  * was written for approval — into a module invariant read as truth about behaviour is a
  * person's decision, every time.
  *
- * Beside the seam, the two checks any repository benefits from: the credential scan, and
- * documentation paths. Deliberately no plan checks — a repository using OpenSpec plans
- * in OpenSpec, and a second lifecycle would compete with the first.
+ * Beside the seam, what any code repository of this kind benefits from: the credential
+ * scan, documentation paths, and the linter and suite the manifest already declares —
+ * the same three the Spec Kit template wires, since a repository specified in either tool
+ * is otherwise an ordinary codebase. Deliberately no plan checks — a repository using
+ * OpenSpec plans in OpenSpec, and a second lifecycle would compete with the first.
  */
 const assembled = (ctx: ITemplateContext) =>
   compose(
@@ -26,11 +28,12 @@ const assembled = (ctx: ITemplateContext) =>
     docPathsPart(ctx, {
       header: 'A change proposal citing a file that has moved is read as current by whoever picks it up next.',
     }),
+    scriptWrappersPart(ctx),
   );
 
 export const openspecTemplate: ITemplate = {
   name: 'openspec',
-  describe: 'a repository specified with OpenSpec — the spec source wired, credential scan, doc paths',
+  describe: 'A repository specified with OpenSpec — the spec source wired, credential scan, doc paths, lint and tests.',
   requires: ['@specwarden/openspec', '@specwarden/security', '@specwarden/docs'],
 
   files: (ctx: ITemplateContext): readonly ITemplateFile[] => assembled(ctx).files,

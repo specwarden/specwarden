@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import type { ITemplateContext } from 'specwarden';
 
-import { docsOnly } from './docs-only.template';
+import { docsOnlyTemplate } from './docs-only.template';
 
 const ctx = (over: Partial<ITemplateContext> = {}): ITemplateContext => ({
   docs: '**/*.md',
@@ -16,8 +16,9 @@ const ctx = (over: Partial<ITemplateContext> = {}): ITemplateContext => ({
   ...over,
 });
 
-const paths = (c = ctx()) => docsOnly.files(c).map((f) => f.path);
-const bodyOf = (fragment: string, c = ctx()) => docsOnly.files(c).find((f) => f.path.includes(fragment))?.body ?? '';
+const paths = (c = ctx()) => docsOnlyTemplate.files(c).map((f) => f.path);
+const bodyOf = (fragment: string, c = ctx()) =>
+  docsOnlyTemplate.files(c).find((f) => f.path.includes(fragment))?.body ?? '';
 
 describe('a documentation repository gets a smaller tree, on purpose', () => {
   it('enables the two checks that need no code to compare against', () => {
@@ -43,7 +44,7 @@ describe('the count check ships disabled, and says why', () => {
 
   it('the example names the four grammars a non-English repository must replace', () => {
     const body = bodyOf('doc-counts');
-    for (const option of ['hedge', 'ordinalLead', 'numberPattern', 'dated']) expect(body).toContain(option);
+    for (const option of ['hedge', 'ordinalLead', 'number', 'dated']) expect(body).toContain(option);
     expect(body).toContain('English');
   });
 
@@ -58,15 +59,15 @@ describe('the count check ships disabled, and says why', () => {
 
 describe('the tree it emits is the convention', () => {
   it('no live check names an id — its file name is its id; an example names the one its rule names', () => {
-    for (const f of docsOnly.files(ctx()).filter((x) => x.path.endsWith('.check.mjs')))
+    for (const f of docsOnlyTemplate.files(ctx()).filter((x) => x.path.endsWith('.check.mjs')))
       expect(f.body, f.path).not.toMatch(/^\s+id: '/m);
-    for (const f of docsOnly.files(ctx()).filter((x) => x.path.endsWith('.example')))
+    for (const f of docsOnlyTemplate.files(ctx()).filter((x) => x.path.endsWith('.example')))
       expect(f.body, f.path).toMatch(/^ {2}id: 'doc-(counts|placement)',$/m);
   });
 
   it('imports only from the package it declares it requires', () => {
-    const allowed = new Set(['specwarden', ...(docsOnly.requires as readonly string[])]);
-    for (const f of docsOnly.files(ctx())) {
+    const allowed = new Set(['specwarden', ...(docsOnlyTemplate.requires as readonly string[])]);
+    for (const f of docsOnlyTemplate.files(ctx())) {
       for (const [, pkg] of f.body.matchAll(/^import .* from '([^']+)';$/gm)) expect(allowed.has(pkg)).toBe(true);
     }
   });
@@ -74,21 +75,22 @@ describe('the tree it emits is the convention', () => {
   it('reads every tracked document whatever directory init found — the root README is the index', () => {
     // A docs-directory glob left the handbook's own README unread, and a dead path in the
     // page that promises "a moved runbook breaks the build" passed.
-    for (const f of docsOnly.files(ctx({ docs: 'docs/**/*.md' }))) expect(f.body, f.path).toContain("docs: '**/*.md'");
+    for (const f of docsOnlyTemplate.files(ctx({ docs: 'docs/**/*.md' })))
+      expect(f.body, f.path).toContain("docs: '**/*.md'");
   });
 });
 
 describe('every rule lives where it can be read', () => {
   it('each live check states its own rule, so a fresh tree has no orphan', () => {
-    for (const f of docsOnly.files(ctx()).filter((x) => x.path.endsWith('.check.mjs')))
+    for (const f of docsOnlyTemplate.files(ctx()).filter((x) => x.path.endsWith('.check.mjs')))
       expect(f.body, `${f.path} states no rule`).toMatch(/^\s+rule: '/m);
   });
 
   it("each example's rule is declared, naming the example, for init to write commented out", () => {
     // Declared nowhere, the rule an example enforces lived nowhere the repository could read.
-    expect(docsOnly.rules(ctx()).map((r) => [r.id, r.enforcement])).toEqual([
-      ['doc-counts', { checkIds: ['doc-counts'] }],
-      ['doc-placement', { checkIds: ['doc-placement'] }],
+    expect(docsOnlyTemplate.rules(ctx()).map((r) => [r.id, r.enforcement])).toEqual([
+      ['doc-counts', { enforcedBy: ['doc-counts'] }],
+      ['doc-placement', { enforcedBy: ['doc-placement'] }],
     ]);
   });
 });
@@ -120,7 +122,7 @@ afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe('the generated tree actually loads', () => {
   it('every live check and every example, renamed, imports and constructs a check', async () => {
-    const files = docsOnly.files(ctx()).filter((f) => /\.check\.mjs(\.example)?$/.test(f.path));
+    const files = docsOnlyTemplate.files(ctx()).filter((f) => /\.check\.mjs(\.example)?$/.test(f.path));
     expect(files.length).toBeGreaterThan(0);
 
     for (const file of files) {

@@ -2,120 +2,85 @@
 
 # @specwarden/ops — guide
 
-Five checks over operational configuration: environment files, reverse-proxy upstreams,
-CI job coverage, workspace build order, and shell scoping.
+Five checks over operational configuration. Each assumes a stack — compose files, a Caddy
+config, GitHub Actions, a pnpm workspace, bash — which is why they are a module and not the
+engine: an assumption about a stack is the fastest way for a check to stop being portable.
 
-Each assumes a stack — compose files, a proxy config, GitHub Actions, a pnpm workspace.
-That is precisely why they are not in the engine: an assumption about a stack is the
-fastest way for a product zone to stop being portable.
+## What it catches
 
-**Every defect here loads cleanly, boots green, and is wrong.** That is the family these
-five belong to.
+**Every defect here loads cleanly, boots green, and is wrong.**
 
-## Install and wire
+| Check             | Factory          | Catches                                                                                     |
+| ----------------- | ---------------- | ------------------------------------------------------------------------------------------- |
+| `env-pairing`     | `envPairing`     | a key the sender has and the verifier lacks, two values for one key, an empty interpolation |
+| `proxy-upstreams` | `proxyUpstreams` | an upstream that cannot resolve where the proxy runs — loopback vs. service name            |
+| `ci-coverage`     | `ciCoverage`     | a heavy check no CI job runs, a job the required job does not wait for, no cheap tier       |
+| `build-order`     | `buildOrder`     | an image building a workspace package before the packages it imports                        |
+| `shell-scope`     | `shellScope`     | `local` outside a function, which aborts the script at run time                             |
+
+## Wiring
 
 ```bash
 pnpm add -D @specwarden/ops
 ```
 
+The whole module in one file — every check is built unless it is told `false`, so a stack
+you do not have is one line:
+
 ```js
 // .specwarden/checks/ops/ops.check.mjs
-import {
-  buildOrderFollowsDeps,
-  envFilesAgree,
-  gatesHaveCiJobs,
-  parseEnvFile,
-  shellLocalScope,
-  upstreamsResolve,
-} from '@specwarden/ops';
+import { opsChecks, parseEnvFile } from '@specwarden/ops';
 
-export const checks = [
-  envFilesAgree({
-    id: 'env-pairing',
-    title: 'the verifier has every key the sender has',
+export const checks = opsChecks({
+  envPairing: {
     composeFile: 'docker-compose.yml',
     modes: ['prod'],
     verifierService: 'be',
     declaredKeys: (read) => new Set(parseEnvFile(read('.env.example') ?? '').keys()),
-  }),
-  upstreamsResolve({
-    id: 'caddy-upstreams',
-    title: 'an upstream resolves where its proxy runs',
+  },
+  proxyUpstreams: {
     modes: ['local', 'prod'],
     fileFor: (mode) => `caddy/Caddyfile.${mode}`,
     hostModes: ['local'],
-  }),
-  gatesHaveCiJobs({
-    id: 'gate-coverage',
-    title: 'every heavy gate has a CI job',
-    workflow: '.github/workflows/ci.yml',
-    arbiterJob: 'ci-ok',
-  }),
-  buildOrderFollowsDeps({
-    id: 'workspace-build-order',
-    title: 'an image builds a package after what it imports',
+  },
+  ciCoverage: { workflowFile: '.github/workflows/ci.yml', requiredJob: 'ci-ok' },
+  buildOrder: {
     packagesDir: 'packages',
     scopePrefix: '@acme/',
     containerFiles: '*Dockerfile*',
-    buildInvocation: String.raw`--filter\s+(@acme\/[a-z0-9-]+)\s+run\s+build`,
-  }),
-  shellLocalScope({ id: 'shell-local-scope', title: '`local` only inside a function' }),
-];
-```
-
-Wire the ones whose stack you have; each is independent. The engine discovers any file
-under `checks/` at any depth.
-
-Every factory takes the engine's identity — `id`, `title`, `tier` (default `fast`),
-`when` (default: always relevant), `hint`, `rule` — beside the options below, and refuses
-an option it does not have, by name, when the file loads. A misspelled option was dropped
-in silence before, and the check ran without it.
-
-## `envFilesAgree` — the sender has the secret and the verifier does not
-
-The production defect this was written for: one service signs a request with a key, the
-other verifies it, only one file carries the key, both services start, and every request
-is refused.
-
-```js
-import { envFilesAgree, parseEnvFile } from '@specwarden/ops';
-
-export const check = envFilesAgree({
-  id: 'env-pairing',
-  title: 'the verifier has every key the sender has',
-  composeFile: 'docker-compose.yml',
-  modes: ['prod'],
-  verifierService: 'be',
-  declaredKeys: (read) => new Set(parseEnvFile(read('.env.example') ?? '').keys()),
+    buildInvocation: /--filter\s+(@acme\/[a-z0-9-]+)\s+run\s+build/,
+  },
+  shellScope: {},
 });
 ```
 
-`declaredKeys` is how YOUR application declares its environment, read through the file
-port: a sample env file as above, a JSON schema
-(`new Set(Object.keys(JSON.parse(read('config/env.schema.json') ?? '{}')))`), or a
-constants file matched with a pattern. It is the one function this check cannot write for
-you.
+Or one check per file, with only the facts it cannot default:
 
-It compares the VALUES of the env files one stack loads together, and catches four
-things:
+```js
+// .specwarden/checks/ops/shell-scope.check.mjs
+import { shellScope } from '@specwarden/ops';
 
-- a declared key a sending service's file sets, missing from the verifier's file;
-- the same key present but EMPTY in the verifier's file — treated as missing, and
-  reported as missing, not as a differing value;
-- two different values for one key across the stack's files;
-- a variable a mounted config interpolates (`${VAR}`, or Caddy's `{$VAR}`) that its own
-  service's env file does not carry. A mounted file is read when it is YAML, JSON, a
-  `.conf`, a `.caddy`, or a `Caddyfile`.
+export const check = shellScope({ scripts: ['scripts/**/*.sh'] });
+```
 
-A mode with fewer than two of its files present is reported as **SKIPPED** — env files are
-usually gitignored — and a verifier whose file is absent is named as "could not be
-compared". Neither is a finding, and neither says the stack is clean. When **no** mode
-could be compared, the check itself is reported as skipped (`cannot-tell`): not a pass,
-and not a failure on a checkout that never has the files. Run it where they live.
+A check's id is its factory's name in kebab case (`env-pairing`, `ci-coverage`, …), and it
+carries the rule the package implies, owned by `@specwarden/ops`. Write `id` or `rule` only
+to say something else. The engine discovers any file under `checks/` at any depth.
 
-A key that both files carry must carry the same value; give each service its own key
-where they genuinely differ (`BE_PORT`, `EDGE_PORT`), rather than one name with two
-values.
+## Options
+
+Every factory takes the engine's identity beside its own options — `id`, `title`, `tier`
+(default `fast`), `when` (default: always relevant), `hint`, `advisory`, `rule` and
+`ratchet` — plus `corpus: { atLeast }`, how many units a run must examine (default 1). It
+refuses `zone`, an option it does not have, an empty list and a value of the wrong kind,
+by name, when the file loads. A misspelled option used to be dropped in silence, and the
+check ran without it.
+
+**`opsChecks`** takes `tier` and `when`, applied to every check it builds, and one entry
+per check: its options (laid over the preset's `tier` and `when`), or `false` to leave it
+out. A missing entry is refused, naming what the check needs.
+
+### `envPairing` — units: compose services
 
 | Option            | Kind                               | Default    |
 | ----------------- | ---------------------------------- | ---------- |
@@ -124,120 +89,95 @@ values.
 | `verifierService` | compose service name               | — required |
 | `declaredKeys`    | `(read) => Set<string>`            | — required |
 
-## `upstreamsResolve` — an address that resolves where its proxy runs
+`declaredKeys` is how YOUR application declares its environment, read through the file
+port: a sample env file as above, a JSON schema
+(`new Set(Object.keys(JSON.parse(read('config/env.schema.json') ?? '{}')))`), or a
+constants file matched with a pattern. It is the one function this check cannot write for
+you.
 
-The same proxy config is written twice: for a mode where the proxy runs on the HOST beside
-the services, and for a mode where it runs INSIDE the container network. `localhost:3000`
-and `be:3000` are each right in exactly one of those and a 502 in the other.
+### `proxyUpstreams` — units: proxy configs
 
-```js
-import { upstreamsResolve } from '@specwarden/ops';
+| Option          | Kind                                         | Default                               |
+| --------------- | -------------------------------------------- | ------------------------------------- |
+| `modes`         | strings                                      | — required                            |
+| `fileFor`       | `(mode) => path`                             | — required                            |
+| `hostModes`     | the modes whose proxy runs on the host; `[]` | — required                            |
+| `loopbackHosts` | names meaning "this machine"                 | `['localhost', '127.0.0.1', '[::1]']` |
 
-export const check = upstreamsResolve({
-  id: 'caddy-upstreams',
-  title: 'an upstream resolves where its proxy runs',
-  modes: ['local', 'prod'],
-  fileFor: (mode) => `caddy/Caddyfile.${mode}`,
-  hostModes: ['local'],
-});
-```
+### `ciCoverage` — units: workflow jobs
 
-Both directions are errors: a container service name in a host-mode file has no DNS, and
-a loopback address in a deployed file points the container at itself. An interpolated
-upstream (`{$VAR}`) is left alone — a guess there is a finding nobody can act on.
-
-A file with no upstream at all **fails**, and so does a run where **no** mode's file
-exists: that is `fileFor` pointed at the wrong place, not a repository without a proxy. A
-mode whose file is absent while another's is read is a SKIPPED note.
-
-| Option          | Kind                                   | Default                               |
-| --------------- | -------------------------------------- | ------------------------------------- |
-| `modes`         | strings                                | — required                            |
-| `fileFor`       | `(mode) => path`                       | — required                            |
-| `hostModes`     | the modes whose proxy runs on the host | — required                            |
-| `loopbackHosts` | names meaning "this machine"           | `['localhost', '127.0.0.1', '[::1]']` |
-
-## `gatesHaveCiJobs` — every heavy gate is run by a job the arbiter waits for
-
-```js
-import { gatesHaveCiJobs } from '@specwarden/ops';
-
-export const check = gatesHaveCiJobs({
-  id: 'gate-coverage',
-  title: 'every heavy gate has a CI job the arbiter waits for',
-  workflow: '.github/workflows/ci.yml',
-  arbiterJob: 'ci-ok',
-});
-```
-
-`gates` defaults to the run's own roster. It catches a heavy gate no job runs, a gate id
-the roster does not have (a typo runs nothing), a fast gate named in the heavy workflow
-(it runs twice, on the wrong schedule), a gate job outside the arbiter's `needs` (it can
-be red while the arbiter is green), and a workflow where no job runs the cheap tier — a
-client-side hook can be skipped.
+| Option          | Kind                                 | Default                                        |
+| --------------- | ------------------------------------ | ---------------------------------------------- |
+| `workflowFile`  | file                                 | — required                                     |
+| `requiredJob`   | the job branch protection requires   | — required                                     |
+| `ciTier`        | tier                                 | `heavy`                                        |
+| `cheapTier`     | tier                                 | `fast`                                         |
+| `runnerPattern` | RegExp matching a check-running line | `DEFAULT_RUNNER_PATTERN`, the engine's command |
+| `checks`        | `() => [{ id, title, tier }]`        | the run's own roster                           |
 
 The cheap tier is recognised from the engine's own invocation — `specwarden check`,
-`spw check` or `warden.mjs check`, followed anywhere on its line by `--tier fast` or
-`--tier=fast` — or from your `runnerPattern` followed by the same flag.
+`spw check` or `specwarden.mjs check`, followed anywhere on its line by `--tier fast` or
+`--tier=fast` — or from your `runnerPattern` followed by the same flag. A check id is read
+from a matrix list (`check: [a, b]`, or `gate:` in an older workflow), an inline
+`{ check: a }`, or `--id a`.
 
-It fails rather than passes when the workflow cannot be read, when the scan yields no
-jobs, and when no gate id is recognisable.
+### `buildOrder` — units: container files that run a build
 
-| Option          | Kind                               | Default                                        |
-| --------------- | ---------------------------------- | ---------------------------------------------- |
-| `workflow`      | file                               | — required                                     |
-| `arbiterJob`    | job id branch protection reads     | — required                                     |
-| `ciTier`        | tier                               | `heavy`                                        |
-| `cheapTier`     | tier                               | `fast`                                         |
-| `runnerPattern` | RegExp SOURCE string, not a RegExp | `DEFAULT_RUNNER_PATTERN`, the engine's command |
-| `gates`         | `() => [{ id, title, tier }]`      | the run's own roster                           |
+| Option            | Kind                              | Default    |
+| ----------------- | --------------------------------- | ---------- |
+| `packagesDir`     | directory                         | — required |
+| `scopePrefix`     | package-name prefix, `@scope/`    | — required |
+| `containerFiles`  | git pathspec                      | — required |
+| `buildInvocation` | RegExp capturing the package name | — required |
 
-## `buildOrderFollowsDeps` — an image builds a package after what it imports
+### `shellScope` — units: shell files
 
-```js
-import { buildOrderFollowsDeps } from '@specwarden/ops';
+| Option    | Kind                    | Default   |
+| --------- | ----------------------- | --------- |
+| `scripts` | git pathspec, or a list | `**/*.sh` |
+| `except`  | git pathspecs left out  | none      |
 
-export const check = buildOrderFollowsDeps({
-  id: 'workspace-build-order',
-  title: 'an image builds a package after what it imports',
-  packagesDir: 'packages',
-  scopePrefix: '@acme/',
-  containerFiles: '*Dockerfile*',
-  buildInvocation: String.raw`--filter\s+(@acme\/[a-z0-9-]+)\s+run\s+build`,
-});
-```
+## What fails and what passes
 
-Both real cases: an image that never builds a dependency, and one that builds it a line
-too late. Both compile from a warm local checkout and fail in a clean image — which is
-the only place it runs. Reading no manifests at all is a failure, not a clean tree.
+A clean pass prints what it examined — `✓ shell-scope — 3 shell file(s) examined, clean` —
+and a run that examined fewer units than `corpus.atLeast` **fails**, because a check that
+examined nothing cannot fail. Declare `corpus: { atLeast: 0 }` where an empty set is
+expected. Every finding carries the file, and the line where there is one.
 
-| Option            | Kind                                            | Default    |
-| ----------------- | ----------------------------------------------- | ---------- |
-| `packagesDir`     | directory                                       | — required |
-| `scopePrefix`     | package-name prefix, `@scope/`                  | — required |
-| `containerFiles`  | git pathspec                                    | — required |
-| `buildInvocation` | RegExp SOURCE string capturing the package name | — required |
+- **`envPairing`** fails a declared key a sending service's file sets and the verifier's
+  file lacks or leaves EMPTY (reported as missing, not as a differing value); two
+  different values for one key across one stack's files; and a variable a mounted config
+  interpolates (`${VAR}`, or Caddy's `{$VAR}`) that its own service's env file does not
+  carry — a mounted YAML, JSON, `.conf`, `.caddy` or `Caddyfile` is read. A mode with fewer
+  than two of its files present is **SKIPPED** — env files are gitignored — and when no
+  mode could be compared the check is reported as skipped (`cannot-tell`): not a pass, and
+  not a failure on a checkout that never has the files. A compose file that cannot be read
+  is below the corpus floor. A key both files carry must carry the same value; give each service
+  its own key where they genuinely differ (`BE_PORT`, `EDGE_PORT`).
+- **`proxyUpstreams`** fails a container service name in a host-mode file (no DNS there)
+  and a loopback address in a deployed file (the container is pointing at itself). An
+  interpolated upstream (`{$VAR}`) is left alone. A file with no upstream fails; a mode
+  whose file is absent while another's is read is a SKIPPED note; every file absent is
+  below the corpus floor — `fileFor` is pointed at the wrong place.
+- **`ciCoverage`** fails a heavy check no job runs, a check id the run does not declare (a
+  typo runs nothing), a check of another tier in this workflow (it runs twice), a job that
+  runs checks outside the required job's `needs` (it can be red while the merge button is
+  green), a missing required job, a workflow that names no check, and a workflow where no
+  job runs the cheap tier — a client-side hook can be skipped.
+- **`buildOrder`** fails an image that never builds a dependency and one that builds it a
+  line too late; both compile from a warm checkout and fail in a clean image. No in-scope
+  manifest under `packagesDir` fails, naming the scope.
+- **`shellScope`** fails `local` outside every function. It understands heredocs (data,
+  and the reported line stays true), nested, one-line and indented definitions.
 
-## `shellLocalScope` — `local` only inside a function
-
-`local` outside a function is a run-time error in bash, in the deploy script, on the
-deploy. The scan understands heredocs (data, and the reported line stays true), nested
-definitions, one-line definitions and indented ones. A scan that matched no files fails.
-
-```js
-import { shellLocalScope } from '@specwarden/ops';
-
-export const check = shellLocalScope({ id: 'shell-local-scope', title: '`local` only inside a function' });
-```
-
-| Option      | Kind          | Default       |
-| ----------- | ------------- | ------------- |
-| `pathspecs` | git pathspecs | `['**/*.sh']` |
+Every check honours `ratchet`: armed with `ratchet: n`, it passes while its findings do not
+exceed the stored threshold, and fails on one more.
 
 ## Exports
 
 The barrel names its exports rather than star-re-exporting. Two checks both export a
 `violationsFor`; the upstream one is prefixed `upstreamViolationsFor`, because a caller
 reaching for the bare name almost always means the build-order one. The parsers —
-`parseCompose`, `parseEnvFile`, `parseUpstreams`, `parseWorkflowJobs` — are exported for a
+`parseCompose`, `parseEnvFile`, `parseUpstreams`, `parseWorkflowJobs` — and
+`buildSequence`, `workspaceDeps`, `functionSpans`, `localOutsideFunction` are exported for a
 `declaredKeys` or a check of your own.

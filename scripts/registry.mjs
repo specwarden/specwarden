@@ -133,13 +133,13 @@ export const PACKAGES = Object.freeze([
     // rather than special-cased in `pkgDir`, so every reader of a package's location
     // reads it from the same field.
     dir: 'core',
-    description: 'A repository declares its rules; the warden proves which hold.',
+    description: 'A repository declares its rules; specwarden proves which hold.',
     summary:
-      'Ports, primitives, the runner and the CLI, plus the only checks that verify the harness itself: zones, ratchets and the rule register.',
+      'Ports, primitives, the runner and the CLI, plus the self-checks, which audit the declarations: zones, ratchets and the rule register.',
     deps: [],
     coverage: { statements: 99, branches: 97, functions: 98, lines: 99, measured: '2026-09-23' },
     /** The CLI. A build-free ESM shim that runs the compiled engine and refuses a stale one. */
-    bin: { specwarden: './bin/warden.mjs', spw: './bin/warden.mjs' },
+    bin: { specwarden: './bin/specwarden.mjs', spw: './bin/specwarden.mjs' },
     /** Shipped beside `dist` because the shim and its fingerprint are not compiled. */
     extraFiles: ['bin', 'scripts'],
     /** Mutation testing belongs to the engine alone: a P-zone check's behaviour is public
@@ -151,7 +151,7 @@ export const PACKAGES = Object.freeze([
     },
     skill: {
       name: 'specwarden',
-      description: 'Write, run and reason about quality gates with specwarden.',
+      description: 'Write, run and reason about checks with specwarden.',
     },
   },
 
@@ -276,23 +276,23 @@ export const PACKAGES = Object.freeze([
       '@specwarden/speckit',
     ],
     summary:
-      'A part is one check: the file that configures it, the rule that file enforces, and where one is needed the config field that makes the two resolve.',
+      'One piece a template is assembled from: the check or checks it writes, the rule they enforce, and where one is needed the config field that makes the two resolve.',
     deps: [],
     coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'node-ts',
     kind: 'template',
-    description: 'An ordinary TypeScript repository.',
+    description: 'An ordinary TypeScript repository — credential scan, doc paths and symbols, lint and tests.',
     summary:
-      'The smallest tree worth having on day one: documentation paths, a credential scan, and the harness auditing itself.',
+      'The smallest tree worth having on day one: a credential scan, documentation paths, a symbol check as an example, and the linter and test suite wrapped where the manifest already has them.',
     deps: ['@specwarden/scaffold-parts', '@specwarden/docs', '@specwarden/security'],
     coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'docs-only',
     kind: 'template',
-    description: 'A repository whose product IS documentation.',
+    description: 'A repository whose product is documentation — paths, hygiene, counts, placement.',
     summary: 'Every documentation check the docs module has, and nothing that assumes code.',
     deps: ['@specwarden/scaffold-parts', '@specwarden/docs'],
     coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
@@ -300,16 +300,17 @@ export const PACKAGES = Object.freeze([
   {
     slug: 'monorepo',
     kind: 'template',
-    description: 'A pnpm workspace — lockfile, build order, dependency pins, CI coverage.',
+    description:
+      'A pnpm workspace — lockfile, credential scan, documentation paths; build order, dependency pins and CI coverage as examples.',
     summary:
-      'What a workspace can get wrong that a single package cannot: a stale lockfile, a Dockerfile that builds out of order, a heavy gate with no CI job.',
+      'What a workspace can get wrong that a single package cannot: a stale lockfile, a Dockerfile that builds out of order, a heavy check with no CI job.',
     deps: ['@specwarden/scaffold-parts', '@specwarden/ops', '@specwarden/security', '@specwarden/docs'],
     coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
   },
   {
     slug: 'nestjs',
     kind: 'template',
-    description: 'A NestJS backend — the plugin wired, plus what a backend needs.',
+    description: 'A NestJS backend — module conventions via the plugin, credential scan, env pairing, migration guard.',
     summary: 'The module-decomposition plugin, the credential scan and the operational checks a service carries.',
     deps: ['@specwarden/scaffold-parts', '@specwarden/plugin-nestjs', '@specwarden/security', '@specwarden/ops'],
     coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
@@ -317,7 +318,8 @@ export const PACKAGES = Object.freeze([
   {
     slug: 'agentic',
     kind: 'template',
-    description: 'A repository coding agents work in — roles, docs, plans, a perimeter.',
+    description:
+      'A repository coding agents work in — role files, agent-read docs, plan and decision lifecycle, a perimeter.',
     summary:
       'The agent-facing half: role definitions that resolve, plans that die when finished, and a perimeter computed before the action rather than after it.',
     deps: ['@specwarden/scaffold-parts', '@specwarden/agents', '@specwarden/plans', '@specwarden/docs'],
@@ -326,7 +328,8 @@ export const PACKAGES = Object.freeze([
   {
     slug: 'ops',
     kind: 'template',
-    description: 'Infrastructure — env files, proxy upstreams, shell scoping, runbooks.',
+    description:
+      'Infrastructure — env pairing, proxy upstreams, shell scoping, runbooks — credential scan and documentation paths always on.',
     summary: 'For a repository whose product is the operation of something else.',
     deps: ['@specwarden/scaffold-parts', '@specwarden/security', '@specwarden/docs', '@specwarden/ops'],
     coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
@@ -334,7 +337,8 @@ export const PACKAGES = Object.freeze([
   {
     slug: 'openspec',
     kind: 'template',
-    description: 'A repository specified with OpenSpec — the spec seam wired.',
+    description:
+      'A repository specified with OpenSpec — the spec source wired, credential scan, doc paths, lint and tests.',
     summary: 'The requirement source declared, so `sync-invariants` has both halves on day one.',
     deps: ['@specwarden/scaffold-parts', '@specwarden/openspec', '@specwarden/security', '@specwarden/docs'],
     coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },
@@ -342,7 +346,8 @@ export const PACKAGES = Object.freeze([
   {
     slug: 'speckit',
     kind: 'template',
-    description: 'A repository specified with Spec Kit — the spec seam wired.',
+    description:
+      'A repository specified with Spec Kit — the spec source wired, credential scan, doc paths, lint and tests.',
     summary: 'The same as the OpenSpec template, against the other tool.',
     deps: ['@specwarden/scaffold-parts', '@specwarden/speckit', '@specwarden/security', '@specwarden/docs'],
     coverage: { statements: 99, branches: 99, functions: 99, lines: 99, measured: '2026-09-23' },

@@ -24,7 +24,7 @@ const nodeGlobals = { process: 'readonly', console: 'readonly', URL: 'readonly',
  * product.
  *
  * It is what makes the engine liftable: a repository installs `specwarden` and gets the
- * runner, the ports and the harness's own audits, with no opinion about documentation,
+ * runner, the ports and the self-checks, with no opinion about documentation,
  * plans or credentials arriving unasked. The day `core` imports a module, "the engine
  * knows no repository" stops being true and nothing but this line would notice — the
  * import would resolve, the tests would pass, and the coupling would only show up as a
@@ -55,7 +55,7 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/.tmp-generated-*/**',
       '**/coverage/**',
-      // A template playground's repository is a stranger's code — a NestJS service that
+      // A template playground's repository is a consumer's code — a NestJS service that
       // imports an ORM nobody here installs, on purpose. Its style is not ours to lint, and
       // its `.specwarden/` is generated and compared byte for byte.
       '**/_playground/repository/**',

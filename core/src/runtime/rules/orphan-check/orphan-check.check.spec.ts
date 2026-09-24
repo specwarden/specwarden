@@ -3,17 +3,17 @@ import { describe, expect, it } from 'vitest';
 import type { ICheckContext, IRule } from '../../../domain';
 import { orphanCheck } from './orphan-check.check';
 
-const rule = (checkIds: string[]): IRule => ({
+const rule = (enforcedBy: string[]): IRule => ({
   id: 'r',
   statement: 's',
   owner: 'AGENTS.md',
-  enforcement: { checkIds },
+  enforcement: { enforcedBy },
 });
 const ctx = {} as ICheckContext;
 
 describe('orphanCheck', () => {
   it('fails (advisory) with a count and ids when checks enforce no rule, excluding itself', () => {
-    const check = orphanCheck({ checkIds: () => ['a', 'b', 'orphan-check'], rules: () => [rule(['a'])] });
+    const check = orphanCheck({ roster: () => ['a', 'b', 'orphan-check'], rules: () => [rule(['a'])] });
     expect(check.zone).toBe('product');
     expect(check.advisory).toBe(true);
     const verdict = check.run(ctx) as { ok: boolean; findings: readonly { message: string }[] };
@@ -24,7 +24,7 @@ describe('orphanCheck', () => {
   });
 
   it('passes when every check has a rule', () => {
-    const check = orphanCheck({ checkIds: () => ['a'], rules: () => [rule(['a'])] });
+    const check = orphanCheck({ roster: () => ['a'], rules: () => [rule(['a'])] });
     expect((check.run(ctx) as { ok: boolean }).ok).toBe(true);
   });
 });
@@ -38,7 +38,7 @@ describe('orphanCheck — what it reports and how it is declared', () => {
    * as "these eight are all of them".
    */
   it('names at most eight orphans and marks the list as cut, while counting all of them', () => {
-    const check = orphanCheck({ checkIds: () => ids(11), rules: () => [] });
+    const check = orphanCheck({ roster: () => ids(11), rules: () => [] });
     const verdict = check.run(ctx) as { findings: readonly { message: string; severity: string; ruleId?: string }[] };
 
     expect(verdict.findings).toHaveLength(1);
@@ -47,7 +47,7 @@ describe('orphanCheck — what it reports and how it is declared', () => {
   });
 
   it('does not mark a list of exactly eight as cut', () => {
-    const verdict = orphanCheck({ checkIds: () => ids(8), rules: () => [] }).run(ctx) as {
+    const verdict = orphanCheck({ roster: () => ids(8), rules: () => [] }).run(ctx) as {
       findings: readonly { message: string }[];
     };
 
@@ -62,7 +62,7 @@ describe('orphanCheck — what it reports and how it is declared', () => {
   it('reads the roster and the rules when it runs, not when it is built', () => {
     const roster = ['a'];
     const rules: IRule[] = [];
-    const check = orphanCheck({ checkIds: () => roster, rules: () => rules });
+    const check = orphanCheck({ roster: () => roster, rules: () => rules });
     roster.push('b');
     rules.push(rule(['a', 'b']));
 
@@ -76,13 +76,13 @@ describe('orphanCheck — what it reports and how it is declared', () => {
       owner: 'AGENTS.md',
       enforcement: { notMechanizable: 'judgement' },
     };
-    const verdict = orphanCheck({ checkIds: () => ['a'], rules: () => [notMechanizable] }).run(ctx) as { ok: boolean };
+    const verdict = orphanCheck({ roster: () => ['a'], rules: () => [notMechanizable] }).run(ctx) as { ok: boolean };
 
     expect(verdict.ok).toBe(false);
   });
 
   it('excludes itself under the id it was given, and attributes the finding to that id', () => {
-    const check = orphanCheck({ id: 'rules-audit', checkIds: () => ['rules-audit', 'x'], rules: () => [] });
+    const check = orphanCheck({ id: 'rules-audit', roster: () => ['rules-audit', 'x'], rules: () => [] });
     const verdict = check.run(ctx) as { findings: readonly { message: string; ruleId?: string }[] };
 
     expect(check.id).toBe('rules-audit');
@@ -91,7 +91,7 @@ describe('orphanCheck — what it reports and how it is declared', () => {
   });
 
   it('is advisory by default, blocking when the repository says so, and runs in the tier it is given', () => {
-    const base = { checkIds: () => [], rules: () => [] };
+    const base = { roster: () => [], rules: () => [] };
 
     expect(orphanCheck(base)).toMatchObject({ advisory: true, tier: 'fast', capabilities: [] });
     expect(orphanCheck({ ...base, advisory: false, tier: 'nightly' })).toMatchObject({
@@ -101,7 +101,7 @@ describe('orphanCheck — what it reports and how it is declared', () => {
   });
 
   it('is relevant to every change — an orphan is a property of the roster, not of a diff', () => {
-    const check = orphanCheck({ checkIds: () => [], rules: () => [] });
+    const check = orphanCheck({ roster: () => [], rules: () => [] });
 
     expect(check.when([])).toBe(true);
     expect(check.when(['docs/a.md'])).toBe(true);
@@ -110,7 +110,7 @@ describe('orphanCheck — what it reports and how it is declared', () => {
 
 describe('orphanCheck — the fix it points at', () => {
   it('names the smallest fix first: a `rule` on the check itself, not the register', () => {
-    expect(orphanCheck({ checkIds: () => [], rules: () => [] }).hint).toBe(
+    expect(orphanCheck({ roster: () => [], rules: () => [] }).hint).toBe(
       "Add `rule: '<the statement it enforces>'` to the check — or, for a rule several checks share, name it in the rule register.",
     );
   });

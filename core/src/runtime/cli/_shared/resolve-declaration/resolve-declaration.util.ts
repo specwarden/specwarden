@@ -5,7 +5,7 @@ import { join } from 'node:path';
  * Where a consumer declaration may sit: flat in the zone root, or in its own folder.
  *
  * The engine scaffolds `.specwarden/perimeter.mjs` flat and resolved only that, which made the
- * flat root a contract rather than a default — a consumer whose house style is
+ * flat root a contract rather than a default — a consumer whose own style is
  * FOLDER-PER-UNIT (a file that has a test lives in a folder together with it, instead of
  * sitting flat beside the next unit's test) had to choose between its own convention and a
  * working CLI. Accepting both layouts costs one `existsSync` and keeps the choice on the
@@ -13,7 +13,7 @@ import { join } from 'node:path';
  *
  * THE FOLDER IS NAMED FOR THE FILE'S STEM — everything before the first dot. That is the same
  * derivation folder-per-unit uses everywhere else (`perimeter.mjs` -> `perimeter/`,
- * `warden.config.mjs` -> `warden/`, `dependency-pins.check.mjs` -> `dependency-pins/`): the
+ * `config.mjs` -> `config/`, `dependency-pins.check.mjs` -> `dependency-pins/`): the
  * dotted tail is a CONCERN, not part of the unit's name, so two concerns of one unit share
  * one folder rather than inventing two.
  *

@@ -1,6 +1,6 @@
 // `dependency-pins` — frozen versions stay exact, and coordinated groups agree across workspaces.
 // Every failure is silent: a caret on a frozen package still installs, two majors both compile.
-// OFF until the POLICY below is yours; an empty one says it is inert rather than passing.
+// Switched off until the POLICY below is yours; an empty one says it is inert rather than passing.
 // Switch it on: rename to dependency-pins.check.mjs AND uncomment its rule in rules.mjs.
 import { fromResult } from 'specwarden';
 

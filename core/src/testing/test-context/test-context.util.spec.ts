@@ -42,11 +42,11 @@ describe('testContext', () => {
   });
 
   it('carries the changed set, the shard and the stored ratchet', () => {
-    const ctx = testContext({ changed: ['a.ts'], shard: '1/3', ratchet: 7 });
+    const ctx = testContext({ changed: ['a.ts'], shard: '1/3', threshold: 7 });
 
     expect(ctx.changed).toEqual(['a.ts']);
     expect(ctx.shard).toBe('1/3');
-    expect(ctx.ratchet).toBe(7);
+    expect(ctx.threshold).toBe(7);
   });
 
   it('reports `undefined` branches as "cannot tell" rather than "none"', () => {

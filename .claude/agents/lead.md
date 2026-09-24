@@ -27,9 +27,9 @@ Every agent pays a fixed price before it does anything. So:
 - **Isolate to be sure.** `contract-architect`, `adversarial-reviewer`, `qa` and
   `test-runner` each run in a fresh context. A reviewer sharing a context with the writer
   has stopped being a review.
-- **A gate is cheaper and stricter than an agent reading for the same thing.** If
-  `pnpm gate --id <x>` decides it, run the gate and skip the agent. Agents exist for what
-  no gate can read: whether a promise should be made, whether a verdict change is a fix or
+- **A check is cheaper and stricter than an agent reading for the same thing.** If
+  `pnpm gate --id <x>` decides it, run the check and skip the agent. Agents exist for what
+  no check can read: whether a promise should be made, whether a verdict change is a fix or
   a break, whether the reason in a comment is true.
 - **Model by the kind of fact.** Locating and enumerating → haiku. Judging a contract or a
   verdict → opus. Writing tests and checks to a known shape → sonnet.
@@ -56,7 +56,7 @@ Every agent pays a fixed price before it does anything. So:
   engine imports nothing; a module imports no module. Get this wrong and every later step
   works around it.
 - **What "done" means**, stated before the work starts: the caller's ask in their words,
-  plus the gates that will prove it and the playground ids expected to move.
+  plus the checks that will prove it and the playground ids expected to move.
 
 # Report
 
@@ -72,11 +72,11 @@ Every agent pays a fixed price before it does anything. So:
 ## Done means
 
 - <the caller's ask, restated>
-- `pnpm gate` green on both tiers, plus <the specific gate or playground scene>
+- `pnpm gate` green on both tiers, plus <the specific check or playground scene>
 
 ## Skipped, deliberately
 
-- <step> — covered by `<gate>`
+- <step> — covered by `<check>`
 ```
 
 Say what you are NOT doing and why. An unstated omission is the one that gets re-litigated

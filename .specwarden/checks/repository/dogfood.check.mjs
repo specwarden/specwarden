@@ -15,11 +15,11 @@ import { TEMPLATED, repositoryDir } from '../../../scripts/playgrounds.mjs';
 import { ROOT } from '../../../scripts/playgrounds.mjs';
 
 /**
- * Where a document is somebody else's: a template playground's repository is a stranger's
+ * Where a document is somebody else's: a template playground's repository is a consumer's
  * tree with its own paths, and its `.specwarden/` is what `init` writes — the template's
  * unit suite and playground own both.
  */
-const STRANGERS = TEMPLATED.map((p) => `${repositoryDir(p).slice(ROOT.length).replace(/\\/g, '/')}/`);
+const CONSUMER_TREES = TEMPLATED.map((p) => `${repositoryDir(p).slice(ROOT.length).replace(/\\/g, '/')}/`);
 
 export const checks = [
   agentDefinitions({
@@ -45,8 +45,10 @@ export const checks = [
     tier: 'fast',
     docs: '**/*.md',
     // A changeset describes a CONSUMER's tree, and a plan may name what does not exist yet
-    // (`skills/plans/SKILL.md` §2) — neither is a claim about this repository.
-    skipDirs: [...STRANGERS, 'node_modules/', '.changeset/', '_plans/'],
+    // (`skills/plans/SKILL.md` §2) — neither is a claim about this repository. A template
+    // playground's README names the files its defect scenes PLANT into a scratch copy; they
+    // exist only there, by design, so the fixture stays green on day one.
+    except: [...CONSUMER_TREES, '.changeset', '_plans', 'templates/*/_playground/README.md'],
     rule: {
       id: 'a-documented-path-resolves',
       statement: 'a path named in this repository’s documentation exists — an agent follows it as an instruction',
@@ -71,14 +73,13 @@ export const checks = [
     title: 'a plan names its phases’ acceptance, sizes nothing, and is filed flat',
     tier: 'fast',
     plansDir: '_plans',
-    nameRe: /^\d{2}-[a-z0-9-]+\.md$/,
-    allowedNonPlans: ['README.md'],
-    sizingPatterns: [/\b\d+\s*(hours?|days?|weeks?)\b/i, /\bstory\s*points?\b/i],
-    phaseHeadingRe: /^##+\s+Phase\b/im,
-    commandRe: /^\s*(?:\$|>|```(?:bash|sh))/m,
+    name: /^\d{2}-[a-z0-9-]+\.md$/,
+    sizing: [/\b\d+\s*(hours?|days?|weeks?)\b/i, /\bstory\s*points?\b/i],
+    phaseHeading: /^##+\s+Phase\b/im,
+    command: /^\s*(?:\$|>|```(?:bash|sh))/m,
     rule: {
       id: 'a-plan-is-accepted-by-a-command',
-      statement: 'every phase of a plan ends with a command that proves it, naming only gates that exist',
+      statement: 'every phase of a plan ends with a command that proves it, naming only checks that exist',
       owner: 'skills/plans/SKILL.md',
     },
   }),
@@ -91,8 +92,8 @@ export const checks = [
     // Plans here are DELETED when harvested, not archived; the folder never exists, and
     // nothing may link to it.
     archiveDir: '_plans/_archive',
-    // Its rule is in `rules.mjs`: this factory takes no `rule` on its options, and the
-    // orphan audit said so on the first full run.
+    // Its rule is in `rules.mjs`, which names this check as its enforcer — so the rule the
+    // factory implies is dropped rather than registered beside it.
   }),
 
   decisionLogShape({

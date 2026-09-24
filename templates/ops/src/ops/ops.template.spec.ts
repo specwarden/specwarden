@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import type { ITemplateContext } from 'specwarden';
 
-import { ops } from './ops.template';
+import { opsTemplate } from './ops.template';
 
 const ctx = (over: Partial<ITemplateContext> = {}): ITemplateContext => ({
   docs: 'docs/**/*.md',
@@ -18,8 +18,9 @@ const ctx = (over: Partial<ITemplateContext> = {}): ITemplateContext => ({
   ...over,
 });
 
-const paths = (c = ctx()) => ops.files(c).map((f) => f.path);
-const requires = (c = ctx()) => (typeof ops.requires === 'function' ? ops.requires(c) : ops.requires);
+const paths = (c = ctx()) => opsTemplate.files(c).map((f) => f.path);
+const requires = (c = ctx()) =>
+  typeof opsTemplate.requires === 'function' ? opsTemplate.requires(c) : opsTemplate.requires;
 
 /**
  * A template emits STRINGS, and a typechecker never reads them: an option renamed in a
@@ -34,7 +35,7 @@ afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe('the generated tree actually loads', () => {
   it('every generated file imports and exports a check', async () => {
-    for (const file of ops.files(ctx())) {
+    for (const file of opsTemplate.files(ctx())) {
       const abs = join(scratch, file.path.replace(/\//g, '-').replace(/\.example$/, ''));
       mkdirSync(dirname(abs), { recursive: true });
       writeFileSync(abs, file.body);
@@ -48,11 +49,11 @@ describe('the generated tree actually loads', () => {
 
 describe('what an infrastructure repository gets wrong that others do not', () => {
   it('checks shell scoping — `local` at top level ends a deploy halfway, under set -e', () => {
-    expect(paths()).toContain('checks/ops/shell-local-scope.check.mjs');
+    expect(paths()).toContain('checks/ops/shell-scope.check.mjs');
   });
 
   it('sweeps the deploy scripts too, not only scripts/', () => {
-    const body = ops.files(ctx()).find((f) => f.path.includes('shell-local-scope'))?.body ?? '';
+    const body = opsTemplate.files(ctx()).find((f) => f.path.includes('shell-scope'))?.body ?? '';
     expect(body).toContain("'deploy/**/*.sh'");
   });
 
@@ -66,24 +67,24 @@ describe('what an infrastructure repository gets wrong that others do not', () =
 });
 
 describe('what it refuses to guess', () => {
-  it('the env-file check ships as an example — where the app declares its keys is yours', () => {
-    expect(paths()).toContain('checks/ops/env-files-agree.check.mjs.example');
+  it('the env-pairing check ships as an example — where the app declares its keys is yours', () => {
+    expect(paths()).toContain('checks/ops/env-pairing.check.mjs.example');
   });
 
   it('and is omitted entirely with no compose file — it would reconcile against nothing', () => {
-    expect(paths(ctx({ composeFiles: [] })).some((p) => p.includes('env-files'))).toBe(false);
+    expect(paths(ctx({ composeFiles: [] })).some((p) => p.includes('env-pairing'))).toBe(false);
   });
 
   it('the upstream check ships as an example — which modes run the proxy on the host is a deployment fact', () => {
-    expect(paths()).toContain('checks/ops/upstreams-resolve.check.mjs.example');
+    expect(paths()).toContain('checks/ops/proxy-upstreams.check.mjs.example');
   });
 
   it("each example's rule is declared, for init to write commented out beside the others", () => {
     // Declared nowhere, the rule an example enforces lived nowhere the repository could read.
-    expect(ops.rules(ctx({ ci: 'github' })).map((r) => r.id)).toEqual([
-      'env-files-agree',
-      'upstreams-resolve',
-      'gate-coverage',
+    expect(opsTemplate.rules(ctx({ ci: 'github' })).map((r) => r.id)).toEqual([
+      'env-pairing',
+      'proxy-upstreams',
+      'ci-coverage',
     ]);
   });
 
@@ -94,31 +95,31 @@ describe('what it refuses to guess', () => {
       proxyConfigs: ['deploy/nginx/upstreams.conf'],
       envSamples: ['.env.example'],
     } as Partial<ITemplateContext>);
-    const body = (fragment: string) => ops.files(found).find((f) => f.path.includes(fragment))?.body ?? '';
-    expect(body('upstreams-resolve')).toContain("fileFor: () => 'deploy/nginx/upstreams.conf'");
-    expect(body('gate-coverage')).toContain("workflow: '.github/workflows/deploy.yml'");
-    expect(body('env-files-agree')).toContain("read('.env.example')");
+    const body = (fragment: string) => opsTemplate.files(found).find((f) => f.path.includes(fragment))?.body ?? '';
+    expect(body('proxy-upstreams')).toContain("fileFor: () => 'deploy/nginx/upstreams.conf'");
+    expect(body('ci-coverage')).toContain("workflowFile: '.github/workflows/deploy.yml'");
+    expect(body('env-pairing')).toContain("read('.env.example')");
   });
 });
 
 describe('CI coverage follows the repository', () => {
   it('is written where a workflow was detected', () => {
-    expect(paths(ctx({ ci: 'github' }))).toContain('checks/harness/gate-coverage.check.mjs.example');
+    expect(paths(ctx({ ci: 'github' }))).toContain('checks/ops/ci-coverage.check.mjs.example');
   });
 
   it('and omitted where there is none — it would reconcile a roster against an empty file', () => {
-    expect(paths(ctx({ ci: undefined })).some((p) => p.includes('gate-coverage'))).toBe(false);
+    expect(paths(ctx({ ci: undefined })).some((p) => p.includes('ci-coverage'))).toBe(false);
   });
 });
 
 describe('rules and requirements', () => {
   it('every live check states its own rule, so a fresh tree has no orphan', () => {
-    for (const f of ops.files(ctx()).filter((x) => x.path.endsWith('.check.mjs')))
+    for (const f of opsTemplate.files(ctx()).filter((x) => x.path.endsWith('.check.mjs')))
       expect(f.body, `${f.path} states no rule`).toMatch(/^\s+rule: '/m);
   });
 
   it('reads every tracked document — the README is where an operator starts', () => {
-    expect(ops.files(ctx({ docs: 'docs/**/*.md' })).find((f) => f.path.includes('doc-paths'))?.body).toContain(
+    expect(opsTemplate.files(ctx({ docs: 'docs/**/*.md' })).find((f) => f.path.includes('doc-paths'))?.body).toContain(
       "docs: '**/*.md'",
     );
   });
@@ -135,8 +136,8 @@ describe('rules and requirements', () => {
               ?.replace(/\.check\.mjs(\.example)?$/, '') as string,
         ),
     );
-    for (const rule of ops.rules(ctx())) {
-      for (const id of (rule.enforcement as { checkIds: readonly string[] }).checkIds) {
+    for (const rule of opsTemplate.rules(ctx())) {
+      for (const id of (rule.enforcement as { enforcedBy: readonly string[] }).enforcedBy) {
         expect(written.has(id), `rule ${rule.id} names ${id}, which is not written`).toBe(true);
       }
     }
@@ -144,7 +145,7 @@ describe('rules and requirements', () => {
 
   it('imports only from packages it declares it requires', () => {
     const allowed = new Set(['specwarden', ...requires()]);
-    for (const f of ops.files(ctx())) {
+    for (const f of opsTemplate.files(ctx())) {
       for (const [, pkg] of f.body.matchAll(/^import .* from '([^']+)';$/gm)) {
         expect(allowed.has(pkg), `${f.path} imports ${pkg}`).toBe(true);
       }

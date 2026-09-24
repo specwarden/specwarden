@@ -8,7 +8,7 @@ import { ChildProcessRunner, GitVcs, NodeFileSource, NodeFileWriter } from '../.
 import { CONFIG_VERSION } from '../../../contracts/version/version.constant';
 import {
   CheckContractVersionError,
-  CheckRegistry,
+  CheckRoster,
   DuplicateCheckError,
   UnknownTierError,
   UnnamedCheckError,
@@ -16,7 +16,7 @@ import {
 import { PluginContractError } from '../../plugin-loader';
 import { CheckDiscoveryError, loadConsumerTree } from '../../consumer-tree';
 import { describeError } from '../../consumer-tree/discover-checks/discover-checks.util';
-import type { IWardenConfig } from '../../config/config.model';
+import type { ISpecwardenConfig } from '../../config/config.model';
 import { adopt } from '../adopt/adopt.command';
 import { check } from '../check/check.command';
 import { doctor } from '../doctor/doctor.command';
@@ -26,9 +26,9 @@ import { perimeter } from '../perimeter/perimeter.command';
 import { planStatus } from '../plan/plan.command';
 import { suggest } from '../suggest/suggest.command';
 import { syncInvariants } from '../sync-invariants/sync-invariants.command';
-import { type ICliIo, defaultIo } from '../_shared/cli-io/cli-io.model';
+import { type ICliIo, defaultIo, refusal } from '../_shared/cli-io/cli-io.model';
 import { CONFIG_DIR, CONFIG_FILE, findConfig } from '../_shared/find-config/find-config.util';
-import { parseArgs } from '../_shared/parse-args/parse-args.util';
+import { flagProblems, parseArgs } from '../_shared/parse-args/parse-args.util';
 import { didYouMean } from '../../_shared/did-you-mean/did-you-mean.util';
 
 const COMMANDS_NEEDING_CONFIG = ['check', 'doctor', 'migrate', 'sync-invariants'];
@@ -50,7 +50,7 @@ function vcsAt(cwd: string): IVcs | undefined {
 const FIRST_CONFIG_VERSION = 1;
 
 /** Errors that mean "this roster cannot be assembled" — a load error, exit 2, never a
- * stack: the run did not start, so no gate failed. */
+ * stack: the run did not start, so no check failed. */
 const LOAD_ERRORS = [
   PluginContractError,
   CheckDiscoveryError,
@@ -60,14 +60,22 @@ const LOAD_ERRORS = [
   UnnamedCheckError,
 ];
 
+/**
+ * Config keys the glossary retired, and what to write instead. A config is an object the
+ * engine reads by key, so an old key was not an error — it was a setting that silently
+ * stopped applying: `harness: false` left every self-check running, `concurrency: 4` ran
+ * serially. Refused, naming the key to write.
+ */
+const RETIRED_CONFIG_KEYS: Readonly<Record<string, string>> = { harness: 'selfChecks', concurrency: 'jobs' };
+
 export const USAGE =
-  'usage: specwarden <command>\n\n' +
+  'usage: specwarden <command>        (spw is the same command)\n\n' +
   '  starting out\n' +
   '    adopt                            report what this repository already is\n' +
   '    suggest                          propose rules it already follows, armed at reality\n' +
   '    init   [--template <name>]       write the starting tree\n\n' +
   '  every day\n' +
-  '    check  [--tier <name>] [--id <id>] [--base <ref>] [--shard i/N] [--jobs N]\n' +
+  '    check  [<id>...] [--tier <name>] [--id <id>] [--base <ref>] [--shard i/N] [--jobs N]\n' +
   '           [--all] [--if-relevant] [--relevance] [--list] [--fix] [--tighten]\n' +
   '           [--reporter tty|json|github] [--json] [--show-skipped]\n' +
   '    new    <check-id> [--family <folder>]   scaffold a check and its test\n' +
@@ -78,9 +86,13 @@ export const USAGE =
   '    sync-invariants                  reconcile requirements against deposited invariants\n' +
   '    migrate                          move the config to this engine’s version\n' +
   '    perimeter                        evaluate one action on stdin (agent hook entry)\n\n' +
+  '  flags\n' +
+  '    --flag value and --flag=value are one flag; --json is --reporter json;\n' +
+  '    a flag belongs to one command, and is refused on any other\n\n' +
   '  exit\n' +
-  '    0 every gate held, or the question was answered   1 a gate failed\n' +
-  '    2 the line, the config or a check file could not be used\n\n' +
+  '    0 every check held, or the question was answered\n' +
+  '    1 the answer is no: a check failed, doctor found a defect, a plan is not ready\n' +
+  '    2 the line, the config or a file could not be used\n\n' +
   '  environment\n' +
   '    CI, GITHUB_ACTIONS   a CI run: no base means a full run, SPECWARDEN_SKIP is ignored;\n' +
   '                         under GITHUB_ACTIONS the reporter defaults to github\n' +
@@ -89,6 +101,17 @@ export const USAGE =
   '    SPECWARDEN_SKIP      ids to skip, comma-separated, or `all` — honoured locally only\n' +
   '    SPECWARDEN_SHELL     the shell a command check and a plan acceptance run under\n';
 
+/** The config, or why there is none to use — the old name refused, naming the rename. */
+function configAt(cwd: string, io: ICliIo): { configPath: string; root: string } | undefined | 'refused' {
+  try {
+    return findConfig(cwd);
+  } catch (err) {
+    // A `RetiredConfigError`, the one refusal the search makes.
+    io.err(refusal((err as Error).message));
+    return 'refused';
+  }
+}
+
 /**
  * The dispatcher, and nothing else.
  *
@@ -96,17 +119,20 @@ export const USAGE =
  * order is not alphabetical but a gradient of how much the command needs to exist —
  * `adopt`, `suggest` and `perimeter` run on a raw repository with no config at all
  * (they are what a repository runs BEFORE it has one), then the config is found and
- * version-checked, then the registry is built, and only what survives all of that
+ * version-checked, then the roster is built, and only what survives all of that
  * reaches `check`.
  *
  * Keeping the dispatch here and the work in the command folders is what stops this
  * file growing back: a new command is a new folder plus one line, never a new branch
  * in a function that already does six things.
  *
- * EXIT CODES. 0 every gate held (or the question was answered); 1 a gate failed; 2 the
- * line, the config or the roster could not be used — a usage error or a load error.
- * Nothing is reported as 1 that is not a gate's verdict, which is why a config that does
- * not parse and a check file that throws are caught here rather than left to crash.
+ * EXIT CODES. 0 every check held (or the question was answered); 1 the answer is no — a
+ * check failed, doctor found a defect, a plan is not ready; 2 the line, the config or a
+ * file could not be used — a usage error or a load error. Nothing is reported as 1 that
+ * is not an answer, which is why a config that does not parse and a check file that
+ * throws are caught here rather than left to crash.
+ *
+ * EVERY REFUSAL goes to stderr as one sentence ending with a period (`refusal`).
  */
 export async function main(
   argv: readonly string[],
@@ -121,10 +147,12 @@ export async function main(
     io.out(USAGE);
     return 0;
   }
-  // `plan` reads its own flags (`--verify`); every other command refuses a line the
-  // grammar does not know, by name, before anything runs.
-  if (args.command !== 'plan' && args.problems.length > 0) {
-    io.err(`${args.problems.join('; ')}.\n\n${USAGE}`);
+  // The line is refused before anything runs: a flag the grammar does not know, a value
+  // flag with none, and — for a command that exists — a flag another command owns.
+  const known = args.command !== undefined && COMMANDS.includes(args.command);
+  const problems = [...args.problems, ...(known ? flagProblems(args) : [])];
+  if (problems.length > 0) {
+    io.err(`${refusal(problems.join('; '))}\n${USAGE}`);
     return 2;
   }
 
@@ -139,14 +167,17 @@ export async function main(
   // Scaffolding a check needs a consumer directory, not a loaded config: the point is
   // to work on the repository that is still assembling one.
   if (args.command === 'new') {
-    const found = findConfig(cwd);
+    const found = configAt(cwd, io);
+    if (found === 'refused') return 2;
     // Refused before a config exists: it wrote a check under a `.specwarden/` that `check`
     // then refused as having no config — a file run by nothing, with no word of why.
     // An id is asked for first — a missing one is the usage, not a missing config.
     if (!found && args.positionals[0] !== undefined) {
       io.err(
-        `no ${CONFIG_DIR}/${CONFIG_FILE} found from ${cwd} upward — run \`specwarden init\` first; ` +
-          'a check written now would be run by nothing.\n',
+        refusal(
+          `no ${CONFIG_DIR}/${CONFIG_FILE} found from ${cwd} upward — run \`specwarden init\` first; ` +
+            'a check written now would be run by nothing',
+        ),
       );
       return 2;
     }
@@ -160,36 +191,51 @@ export async function main(
   if (args.command === 'perimeter') return perimeter(cwd, () => readFileSync(0, 'utf8'), io);
   if (args.command === 'plan') return planStatus(argv, cwd, io);
 
-  if (args.command === undefined || !COMMANDS.includes(args.command)) {
+  if (!known) {
     // The command that was not understood, named: the reader should not have to diff
     // what they typed against the list below.
     const named =
-      args.command === undefined ? '' : `unknown command "${args.command}"${didYouMean(args.command, COMMANDS)}\n\n`;
+      args.command === undefined
+        ? ''
+        : refusal(`unknown command "${args.command}"${didYouMean(args.command, COMMANDS)}`) + '\n';
     io.err(`${named}${USAGE}`);
     return 2;
   }
-  const found = findConfig(cwd);
+  const found = configAt(cwd, io);
+  if (found === 'refused') return 2;
   if (!found) {
-    io.err(`no ${CONFIG_DIR}/${CONFIG_FILE} found from ${cwd} upward — nothing to run.\n`);
+    io.err(refusal(`no ${CONFIG_DIR}/${CONFIG_FILE} found from ${cwd} upward — nothing to run`));
     return 2;
   }
   const configName = relative(found.root, found.configPath).replace(/\\/g, '/');
 
   // A config that does not parse, or imports a package that is not installed, is a load
   // error — exit 2 with the file named. It crashed with a node stack and exit 1, the code
-  // a red gate uses, so a CI reading the exit could not tell a broken config from a
+  // a failed check uses, so a CI reading the exit could not tell a broken config from a
   // failed check.
-  let loaded: { default?: IWardenConfig };
+  let loaded: { default?: ISpecwardenConfig };
   try {
-    loaded = (await import(pathToFileURL(found.configPath).href)) as { default?: IWardenConfig };
+    loaded = (await import(pathToFileURL(found.configPath).href)) as { default?: ISpecwardenConfig };
   } catch (err) {
-    io.err(`${configName} failed to load: ${describeError(err)}\n`);
+    io.err(refusal(`${configName} failed to load: ${describeError(err)}`));
     return 2;
   }
   const config = loaded.default;
   if (!config || typeof config !== 'object') {
     io.err(
-      `${found.configPath} must default-export a config object (see defineConfig). Checks are read from checks/ by convention.\n`,
+      refusal(
+        `${configName} must default-export a config object (see defineConfig). Checks are read from checks/ by convention`,
+      ),
+    );
+    return 2;
+  }
+  const retired = Object.keys(RETIRED_CONFIG_KEYS).filter((key) => key in config);
+  if (retired.length > 0) {
+    io.err(
+      refusal(
+        `${configName}: ${retired.map((key) => `\`${key}\` is now \`${RETIRED_CONFIG_KEYS[key]}\``).join('; ')} — ` +
+          'rename it; under the old name it applies nothing',
+      ),
     );
     return 2;
   }
@@ -200,7 +246,13 @@ export async function main(
   // than silently selecting no checks and reporting a green run over an empty set.
   const tiers: readonly string[] = config.tiers ?? TIERS;
   if (args.tier && !tiers.includes(args.tier)) {
-    io.err(`unknown tier "${args.tier}" — expected one of: ${tiers.join(', ')}\n`);
+    io.err(refusal(`unknown tier "${args.tier}" — expected one of: ${tiers.join(', ')}`));
+    return 2;
+  }
+
+  // doctor prints for a person or for a script; annotations have nothing to annotate.
+  if (args.command === 'doctor' && args.reporter !== undefined && args.reporter !== 'json' && args.reporter !== 'tty') {
+    io.err(refusal(`doctor prints tty or json, not "${args.reporter}"`));
     return 2;
   }
 
@@ -212,7 +264,9 @@ export async function main(
     }
     if (configVersion > CONFIG_VERSION) {
       io.err(
-        `config declares version ${configVersion}, newer than this engine (v${CONFIG_VERSION}). Upgrade specwarden.\n`,
+        refusal(
+          `config declares version ${configVersion}, newer than this engine (v${CONFIG_VERSION}). Upgrade specwarden`,
+        ),
       );
       return 2;
     }
@@ -220,8 +274,10 @@ export async function main(
     // FROM — and a zero exit over a migration that did not happen reads as done.
     if (configVersion < FIRST_CONFIG_VERSION) {
       io.err(
-        `config declares version ${configVersion}, which no engine ever spoke — the first config version is ` +
-          `${FIRST_CONFIG_VERSION}. Set \`version: ${CONFIG_VERSION}\`, or remove the key.\n`,
+        refusal(
+          `config declares version ${configVersion}, which no engine ever spoke — the first config version is ` +
+            `${FIRST_CONFIG_VERSION}. Set \`version: ${CONFIG_VERSION}\`, or remove the key`,
+        ),
       );
       return 2;
     }
@@ -230,8 +286,10 @@ export async function main(
   }
   if (configVersion > CONFIG_VERSION) {
     io.err(
-      `${found.configPath} declares config version ${configVersion}, but this engine speaks v${CONFIG_VERSION}. ` +
-        `Upgrade specwarden, or pin the config to v${CONFIG_VERSION}.\n`,
+      refusal(
+        `${configName} declares config version ${configVersion}, but this engine speaks v${CONFIG_VERSION}. ` +
+          `Upgrade specwarden, or pin the config to v${CONFIG_VERSION}`,
+      ),
     );
     return 2;
   }
@@ -245,20 +303,20 @@ export async function main(
   }
 
   // The roster comes from the TREE, by convention: checks discovered under
-  // `<consumer>/checks/`, then the config's own, then plugins, then the harness's
+  // `<consumer>/checks/`, then the config's own, then plugins, then the engine's
   // self-checks assembled from defaults. The config names only what the tree cannot.
   // The ASSEMBLED register, not `config.rules`: a rule may be declared on the check
   // that enforces it, and the audits read the assembled set. `doctor` read the config's
   // list directly and reported the three checks carrying their own rule as orphans —
-  // a diagnostic saying the harness was broken in exactly the way it was not.
+  // a diagnostic saying the self-checks were broken in exactly the way they were not.
   let rules = config.rules;
-  let registry: CheckRegistry;
+  let roster: CheckRoster;
   try {
     const tree = await loadConsumerTree(new NodeFileSource(found.root), CONFIG_DIR, config);
     // A tier is held to the vocabulary HERE, where the vocabulary is known: a factory
     // cannot know a repository's custom tiers.
-    registry = new CheckRegistry({ tiers, originOf: (c) => tree.origins.get(c) });
-    registry.registerAll(tree.checks);
+    roster = new CheckRoster({ tiers, originOf: (c) => tree.origins.get(c) });
+    roster.registerAll(tree.checks);
     rules = tree.rulesDeclared ? tree.rules : undefined;
     // What the loader decided answers a question ABOUT the roster — `doctor`, `check
     // --list` — and is not news on every run: two `ℹ` lines on each hook and each CI
@@ -267,12 +325,15 @@ export async function main(
     if (aboutTheRoster && !args.json) for (const note of tree.notes) io.err(`ℹ ${note}\n`);
   } catch (err) {
     if (LOAD_ERRORS.some((kind) => err instanceof kind)) {
-      io.err(`${(err as Error).message}\n`);
+      io.err(refusal((err as Error).message));
       return 2;
     }
     throw err;
   }
 
-  if (args.command === 'doctor') return doctor({ ...config, rules }, registry, io, { json: args.json });
-  return check(args, config, registry, found.root, env, io);
+  if (args.command === 'doctor') return doctor({ ...config, rules }, roster, io, { json: args.json });
+  // `check <id>` is `check --id <id>`: the id is what the line is about, and the flag was
+  // the only way to say it.
+  const line = args.positionals.length ? { ...args, ids: [...args.positionals, ...args.ids] } : args;
+  return check(line, config, roster, found.root, env, io);
 }

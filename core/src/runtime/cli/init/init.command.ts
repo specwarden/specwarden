@@ -1,8 +1,8 @@
 import type { IFileSource, IFileWriter, IRule, IVcs } from '../../../domain';
 import { detectRepo, type IRepoShape } from '../adopt/detect-repo/detect-repo.util';
-import type { ICliIo } from '../_shared/cli-io/cli-io.model';
-import { CONFIG_DIR, CONFIG_FILE } from '../_shared/find-config/find-config.util';
-import { loadTemplate } from './load-template/load-template.util';
+import { type ICliIo, refusal } from '../_shared/cli-io/cli-io.model';
+import { CONFIG_DIR, CONFIG_FILE, RETIRED_CONFIG_FILE } from '../_shared/find-config/find-config.util';
+import { listInstalledTemplates, loadTemplate } from './load-template/load-template.util';
 import {
   type IWrittenFile,
   availableModules,
@@ -33,10 +33,10 @@ const stemOf = (path: string): string | undefined => /([^/]+)\.check\.mjs(\.exam
  * The owner of a template rule the template left empty: the file that holds its
  * reasoning. For a rule a check enforces, that check's file — renamed, for an example,
  * since the rule only goes live once the file is. For one enforced by something else (a
- * perimeter rule), the file declaring that enforcer. The README only when neither exists.
+ * perimeter policy), the file declaring that enforcer. The README only when neither exists.
  */
 function ownerOf(rule: IRule, written: readonly IWrittenFile[]): string {
-  const enforcers = 'checkIds' in rule.enforcement ? rule.enforcement.checkIds : [];
+  const enforcers = 'enforcedBy' in rule.enforcement ? rule.enforcement.enforcedBy : [];
   const file =
     written.find((f) => enforcers.includes(stemOf(f.path) ?? '')) ??
     written.find((f) => enforcers.some((id) => f.body.includes(`id: '${id}'`)));
@@ -45,7 +45,7 @@ function ownerOf(rule: IRule, written: readonly IWrittenFile[]): string {
 
 /** A rule every enforcer of which is a switched-off example: it is written commented out. */
 const onlyExamples = (rule: IRule, written: readonly IWrittenFile[]): boolean => {
-  const enforcers = 'checkIds' in rule.enforcement ? rule.enforcement.checkIds : [];
+  const enforcers = 'enforcedBy' in rule.enforcement ? rule.enforcement.enforcedBy : [];
   const examples = new Set(written.filter((f) => f.path.endsWith('.example')).map((f) => stemOf(f.path)));
   return enforcers.length > 0 && enforcers.every((id) => examples.has(id));
 };
@@ -103,10 +103,36 @@ export async function init(
   templateName?: string,
   vcs?: IVcs,
 ): Promise<number> {
+  // `--template` with no name: a listing, not a refusal — the commonest way to ask "what
+  // can I pass here" before deciding anything, so it answers even a repository that is
+  // already configured, and writes nothing either way.
+  if (templateName === '') {
+    const installed = await listInstalledTemplates(files);
+    if (installed.length === 0) {
+      io.out(
+        'No template installed. Install one — @specwarden/template-<name> — then run init --template <name>,\n' +
+          'or omit --template for a minimal tree.\n',
+      );
+    } else {
+      io.out('Installed templates:\n');
+      for (const t of installed) io.out(`  ${t.name} — ${t.describe}\n`);
+      io.out('\nspecwarden init --template <name>\n');
+    }
+    return 0;
+  }
+
   const configPath = `${CONFIG_DIR}/${CONFIG_FILE}`;
   if (files.exists(configPath)) {
-    io.err(`${configPath} already exists — init refuses to overwrite a config.\n`);
-    io.err('Delete it first if that is really what you want, or edit it directly.\n');
+    io.err(refusal(`${configPath} already exists — init refuses to overwrite a config; delete it first, or edit it`));
+    return 2;
+  }
+  // A config under its old name is still this repository's config: a second one beside it
+  // would be refused on the very next command, with nothing written that it could use.
+  const retired = `${CONFIG_DIR}/${RETIRED_CONFIG_FILE}`;
+  if (files.exists(retired)) {
+    io.err(
+      refusal(`${retired} is the config's old name — rename it to ${configPath}, rather than writing a second one`),
+    );
     return 2;
   }
 
@@ -147,7 +173,7 @@ export async function init(
   if (templateName !== undefined) {
     const { template, problem } = await loadTemplate(templateName, files, context);
     if (problem) {
-      io.err(`${problem}\n`);
+      io.err(refusal(problem));
       return 2;
     }
     written = template!.files(context);
@@ -205,7 +231,7 @@ export async function init(
   if (written.some((f) => f.path === 'perimeter.mjs')) {
     io.out(`  wire the perimeter — until a hook runs it, ${CONFIG_DIR}/perimeter.mjs enforces nothing.\n`);
     io.out('    Claude Code: in .claude/settings.json, a hooks.PreToolUse command running\n');
-    io.out('    node "$CLAUDE_PROJECT_DIR/node_modules/specwarden/bin/warden.mjs" perimeter\n');
+    io.out('    node "$CLAUDE_PROJECT_DIR/node_modules/specwarden/bin/specwarden.mjs" perimeter\n');
   }
   if (examples.length > 0) {
     io.out('  switch an example on — fill it in, rename it to .check.mjs, AND uncomment its rule\n');

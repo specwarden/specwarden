@@ -72,6 +72,16 @@ describe('what it adds beside the seam', () => {
     ]);
   });
 
+  // Speckit wraps the manifest's own linter and suite; an OpenSpec repository is
+  // otherwise the same kind of codebase, and the two templates disagreeing here was the
+  // inconsistency this test pins.
+  it('wraps the linter and the suite the manifest declares, the same as the Spec Kit twin', () => {
+    expect(paths(ctx({ scripts: ['lint', 'test'] }))).toEqual(
+      expect.arrayContaining(['checks/workspace/lint.check.mjs', 'checks/workspace/unit.check.mjs']),
+    );
+    expect(paths(ctx({ scripts: [] })).some((p) => p.includes('workspace/'))).toBe(false);
+  });
+
   it('every check it writes states its own rule, so a fresh tree has no orphan', () => {
     for (const f of openspecTemplate.files(ctx()).filter((x) => x.path.endsWith('.check.mjs')))
       expect(f.body, `${f.path} states no rule`).toMatch(/^\s+rule: '/m);

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { type IVerdict, errorsOf, runCheck } from 'specwarden';
 import { decisionLogShape } from './decision-log-shape.check';
 
-const ID = { id: 'decision-log-shape', title: 'decisions state why', tier: 'fast' as const };
+const ID = { id: 'decision-log-shape' };
 
 const run = (tree: Record<string, string>, docs = '**/*.md', tracked?: readonly string[]): Promise<IVerdict> =>
   runCheck(decisionLogShape({ ...ID, docs }), { tree, tracked });
@@ -43,7 +43,7 @@ describe('decisionLogShape', () => {
     const check = decisionLogShape({ ...ID, docs: '**/*.md', ratchet: 1 });
 
     expect((await runCheck(check, { tree })).ok).toBe(true);
-    expect((await runCheck(check, { tree, ratchet: 0 })).ok).toBe(false);
+    expect((await runCheck(check, { tree, threshold: 0 })).ok).toBe(false);
   });
 
   it('ignores a document with no decision log', async () => {
@@ -64,19 +64,39 @@ describe('decisionLogShape', () => {
     const v = await run({ 'src/index.ts': '' }, 'docs/_plans/*.md');
 
     expect(v.ok).toBe(false);
-    expect(errorsOf(v)[0]).toContain('no document matched `docs/_plans/*.md`');
+    expect(errorsOf(v)[0]).toContain('examined 0 document(s) — `docs/_plans/*.md` matched nothing to read');
+  });
+
+  it('leaves out what `except` names, and says when it emptied the corpus', async () => {
+    const tree = { 'a.md': '# a', 'old/b.md': '### Decision: x\n- Rejected: y\n' };
+
+    expect((await runCheck(decisionLogShape({ docs: '**/*.md', except: ['old'] }), { tree })).ok).toBe(true);
+    const emptied = await runCheck(decisionLogShape({ docs: 'old/*.md', except: ['old'] }), { tree });
+    expect(errorsOf(emptied)[0]).toContain('`except` exempted all of them');
+  });
+
+  it('accepts an empty corpus when the floor says so, and reads several pathspecs as one', async () => {
+    expect((await runCheck(decisionLogShape({ corpus: { atLeast: 0 } }), { tree: { 'a.ts': '' } })).ok).toBe(true);
+    const tree = { 'a.md': '### Decision: x\n- Rejected: y\n', 'b/c.md': '### Decision: z\n- Rejected: w\n' };
+    expect(errorsOf(await runCheck(decisionLogShape({ docs: ['a.md', 'b/*.md'] }), { tree }))).toHaveLength(2);
+  });
+
+  it('prints the engine’s pass line, naming how many documents it read', async () => {
+    expect((await run({ 'a.md': '# a' })).findings.map((f) => f.message)).toEqual([
+      '✓ decision-log-shape — 1 document(s) examined, clean',
+    ]);
   });
 });
 
 describe('decisionLogShape — its defaults and options', () => {
   it('reads the plans in `docs/_plans` in the fast tier when nothing is said', async () => {
-    const check = decisionLogShape({ id: 'decision-log-shape', title: 't' });
+    const check = decisionLogShape();
     const tree = {
       'docs/_plans/a.md': '### Decision: x\n- Rejected: y\n',
       'docs/other.md': '### Decision: z\n- Rejected: w\n',
     };
 
-    expect(check.tier).toBe('fast');
+    expect(check).toMatchObject({ id: 'decision-log-shape', tier: 'fast' });
     expect(errorsOf(await runCheck(check, { tree }))).toEqual([
       'docs/_plans/a.md:1 — decision "x" rejects "y" with no reason. State why: a rejection without a reason is the fact that gets lost.',
     ]);

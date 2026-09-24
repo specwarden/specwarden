@@ -42,7 +42,7 @@ describe('the seam it exists for', () => {
   });
 
   it('leaves every path commented rather than pinned, because a layout moves in a minor release', () => {
-    expect(bodyOf('spec-source.mjs')).toContain("// root: 'specs'");
+    expect(bodyOf('spec-source.mjs')).toContain("// featuresDir: 'specs'");
   });
 });
 

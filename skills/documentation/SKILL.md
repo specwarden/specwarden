@@ -26,6 +26,19 @@ points.
 | `skills/<rule>/SKILL.md` | how to write the thing being added right now            | a contributor or an agent                |
 | a docblock               | why this code is shaped this way                        | whoever edits it next                    |
 
+## 2a. Every GUIDE has the same sections
+
+A package's `GUIDE.md` answers the same questions in the same order: **what it catches**
+(the defect, in one paragraph); **the wiring** — the smallest working check file, writing
+nothing the engine derives (`id`, `title`, `tier`); **the options** — one table, each option
+with its kind and the code's REAL default; and **what fails and what passes** — each verdict,
+and what a consumer does about it. A module with several checks repeats the last three per
+check. A reader who has used one module's guide finds the options table in the next one
+without reading it from the top.
+
+Every term is the glossary's (`core/GLOSSARY.md`); a word it retired is refused by the
+`vocabulary` check.
+
 ## 3. A comment carries the WHY
 
 Reading code answers questions about mechanics most of the time and about intent almost
@@ -51,5 +64,5 @@ regeneration with nothing to explain where it went.
 ## 6. English, and the same voice everywhere
 
 Published documentation is English. Not a style preference: these packages are consumed
-by strangers, and a document half its readers cannot read is a document that does not
+by people who have never seen this repository, and a document half its readers cannot read is a document that does not
 exist for them.

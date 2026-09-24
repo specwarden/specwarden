@@ -1,7 +1,7 @@
 ---
 name: template-author
 description: >
-  Changes what a template writes into a stranger's repository — a template's list of parts,
+  Changes what a template writes into a consumer's repository — a template's list of parts,
   a part in templates/_parts, the prose a generated file carries — and keeps each template's
   playground honest. MUST trigger when a template or a part changes, when a module option a
   part writes is renamed, or when a playground repository needs to model a new detection.
@@ -27,7 +27,7 @@ Three things stand between a template and that first run, and you keep all three
 2. **The committed tree** — `templates/<name>/_playground/repository/.specwarden/` — is
    exactly what `init --template <name>` writes into that repository today. You regenerate
    it; you never edit it. `node scripts/playgrounds.mjs --write <name>`, then review the
-   diff: it is the review of what a stranger will receive.
+   diff: it is the review of what a consumer will receive.
 3. **The template's playground proof** — green on the first run, a defect listed for EVERY
    check the template writes, each defect turning exactly its own check red. A new part
    fails that proof until its defect exists, by design.

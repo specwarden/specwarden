@@ -13,20 +13,20 @@ export interface IDocPathsOptions extends IPartOptions {
    * docs-directory glob leaves exactly those unread.
    */
   readonly docs?: string;
-  /** Trees whose paths are history — an archive of finished plans names files as they were. */
-  readonly skipDirs?: readonly string[];
+  /** Pathspecs of trees whose paths are history — an archive of finished plans names files as they were. */
+  readonly except?: readonly string[];
 }
 
 /** The documentation-path check: documentation rots through paths before anything else. */
 export const docPathsPart = (ctx: ITemplateContext, o: IDocPathsOptions = {}): IPart => {
-  const skip = o.skipDirs?.length ? `  skipDirs: [${o.skipDirs.map(literal).join(', ')}],\n` : '';
+  const skip = o.except?.length ? `  except: [${o.except.map(literal).join(', ')}],\n` : '';
   return {
     files: [
       {
         path: 'checks/docs/doc-paths.check.mjs',
         body: `${header(
           '`doc-paths` — every repository-relative path named in documentation resolves.',
-          `${o.header ?? WHY}\n\`docs\` is what is read; \`skipDirs\` leaves out a tree whose paths are history.`,
+          `${o.header ?? WHY}\n\`docs\` is what is read; \`except\` leaves out a tree whose paths are history.`,
         )}
 import { docPaths } from '@specwarden/docs';
 

@@ -8,7 +8,7 @@ const ID = { id: 'doc-paths', title: 'paths resolve', tier: 'fast' as const };
 const run = (
   tree: Record<string, string>,
   opts: Partial<Parameters<typeof docPaths>[0]> = {},
-  extra: { ratchet?: number } = {},
+  extra: { threshold?: number } = {},
 ): Promise<IVerdict> =>
   runCheck(
     docPaths({
@@ -108,11 +108,19 @@ describe('docPaths — the exemptions and the ratchet', () => {
     expect(v.ok).toBe(true);
   });
 
-  it('skips the configured trees, and still reads the rest', async () => {
+  it('leaves out what `except` names, and still reads the rest', async () => {
     const tree = { 'docs/_plans/p.md': 'we will create `server/src/new.ts`', 'docs/a.md': 'see `server/src/gone.ts`' };
-    const v = await run(tree, { skipDirs: ['docs/_plans/'] });
 
-    expect(errorsOf(v).map((m) => m.split(' ')[0])).toEqual(['docs/a.md']);
+    expect(errorsOf(await run(tree, { except: ['docs/_plans'] })).map((m) => m.split(' ')[0])).toEqual(['docs/a.md']);
+    // A pathspec, as git reads one: a trailing slash names the same directory, a glob its matches.
+    expect(errorsOf(await run(tree, { except: ['docs/_plans/'] }))).toHaveLength(1);
+    expect(errorsOf(await run(tree, { except: ['**/_plans/*.md'] }))).toHaveLength(1);
+  });
+
+  it('reads several pathspecs as one corpus', async () => {
+    const tree = { 'README.md': 'see `src/gone.ts`', 'docs/a.md': 'see `src/lost.ts`', 'vendor/b.md': '`src/x.ts`' };
+
+    expect(errorsOf(await run(tree, { docs: ['README.md', 'docs/**/*.md'] }))).toHaveLength(2);
   });
 
   it('holds under a ratchet and fails on an increase', async () => {
@@ -127,7 +135,7 @@ describe('docPaths — the exemptions and the ratchet', () => {
     // loosen the check past what the store says.
     const tree = { 'docs/a.md': '`server/src/x.ts` and `server/src/y.ts`' };
 
-    expect((await run(tree, { ratchet: 5 }, { ratchet: 1 })).ok).toBe(false);
+    expect((await run(tree, { ratchet: 5 }, { threshold: 1 })).ok).toBe(false);
   });
 });
 
@@ -136,16 +144,27 @@ describe('docPaths — what it examined', () => {
     const v = await run({ 'src/index.ts': '' }, { docs: 'handbook/**/*.md' });
 
     expect(v.ok).toBe(false);
-    expect(errorsOf(v)[0]).toContain('no document matched `handbook/**/*.md`');
+    expect(errorsOf(v)[0]).toContain('examined 0 document(s) — `handbook/**/*.md` matched nothing to read');
   });
 
-  it('fails when the skipped trees swallowed the whole corpus', async () => {
-    // A skip list that covers everything leaves the check as unable to fail as an empty
+  it('fails when `except` swallowed the whole corpus, and says so', async () => {
+    // An exemption that covers everything leaves the check as unable to fail as an empty
     // pathspec does.
-    const v = await run({ 'docs/_plans/p.md': '`server/src/gone.ts`' }, { skipDirs: ['docs/'] });
+    const v = await run({ 'docs/_plans/p.md': '`server/src/gone.ts`' }, { except: ['docs'] });
 
     expect(v.ok).toBe(false);
-    expect(errorsOf(v)[0]).toContain('examined nothing');
+    expect(errorsOf(v)[0]).toContain('`except` exempted all of them');
+  });
+
+  it('holds to the floor it is given — `atLeast: 0` accepts an empty corpus, a higher one refuses a thin one', async () => {
+    expect((await run({ 'src/index.ts': '' }, { docs: 'handbook/**/*.md', corpus: { atLeast: 0 } })).ok).toBe(true);
+    expect((await run({ 'a.md': '# a' }, { corpus: { atLeast: 2 } })).ok).toBe(false);
+  });
+
+  it('prints the engine’s pass line, naming how many documents it read', async () => {
+    const v = await run({ 'a.md': '# a', 'b.md': '# b' });
+
+    expect(v.findings.map((f) => f.message)).toEqual(['✓ doc-paths — 2 document(s) examined, clean']);
   });
 
   it('reads the root README under `**/*.md` — the pathspec spans zero directories too', async () => {

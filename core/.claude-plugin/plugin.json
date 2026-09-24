@@ -1,6 +1,6 @@
 {
   "name": "specwarden",
-  "description": "specwarden — A repository declares its rules; the warden proves which hold.",
+  "description": "specwarden — A repository declares its rules; specwarden proves which hold.",
   "version": "0.0.0",
   "author": {
     "name": "specwarden"

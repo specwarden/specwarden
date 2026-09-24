@@ -11,7 +11,7 @@ import { forbidPattern, type IForbidPatternOptions } from './forbid-pattern.prim
  */
 const ID = { id: 'no-banned', title: 'no banned tokens', tier: 'fast' as const };
 const check = (over: Partial<IForbidPatternOptions> = {}) =>
-  forbidPattern({ ...ID, in: 'src/**/*.ts', pattern: /BANNED-[0-9]{4}/, ...over });
+  forbidPattern({ ...ID, files: 'src/**/*.ts', pattern: /BANNED-[0-9]{4}/, ...over });
 
 describe('forbidPattern — the refusing verdict', () => {
   it('fails on a match and says where: file, line, rule', async () => {
@@ -83,7 +83,7 @@ describe('forbidPattern — the passing verdict', () => {
   });
 
   it('lets an allowed lookalike through while still catching the real thing beside it', async () => {
-    const verdict = await runCheck(check({ allow: /BANNED-0000/ }), {
+    const verdict = await runCheck(check({ allowMatch: /BANNED-0000/ }), {
       tree: { 'src/a.ts': 'BANNED-0000 is the documented example\nBANNED-9999 is not\n' },
     });
 
@@ -96,7 +96,7 @@ describe('forbidPattern — the passing verdict', () => {
    * gets a rule deleted.
    */
   it('treats every lookalike the same when `allow` is itself global', async () => {
-    const verdict = await runCheck(check({ allow: /BANNED-0000/g }), {
+    const verdict = await runCheck(check({ allowMatch: /BANNED-0000/g }), {
       tree: { 'src/a.ts': 'BANNED-0000\nBANNED-0000\nBANNED-0000\nBANNED-0000\n' },
     });
 
@@ -125,14 +125,14 @@ describe('forbidPattern — the passing verdict', () => {
   it('lets a stored ratchet override the inline one', async () => {
     const tree = { 'src/a.ts': 'BANNED-0001\nBANNED-0002\n' };
 
-    expect((await runCheck(check({ ratchet: 5 }), { tree, ratchet: 1 })).ok).toBe(false);
-    expect((await runCheck(check(), { tree, ratchet: 2 })).ok).toBe(true);
+    expect((await runCheck(check({ ratchet: 5 }), { tree, threshold: 1 })).ok).toBe(false);
+    expect((await runCheck(check(), { tree, threshold: 2 })).ok).toBe(true);
   });
 
   it('states the violation count as its measurement, tolerated or not', async () => {
     const verdict = await runCheck(check({ ratchet: 9 }), { tree: { 'src/a.ts': 'BANNED-0001\nBANNED-0002\n' } });
 
-    expect(verdict.ratchet).toEqual({ value: 2 });
+    expect(verdict.measured).toBe(2);
   });
 });
 
@@ -144,14 +144,16 @@ describe('forbidPattern — an empty corpus', () => {
    */
   it('refuses a glob that matched nothing, naming the glob — a ban over zero files bans nothing', async () => {
     // The tree HAS the banned token; the glob just does not reach it. This passed.
-    const verdict = await runCheck(check({ in: 'src/**/*.tsx' }), { tree: { 'src/a.ts': 'BANNED-1234' } });
+    const verdict = await runCheck(check({ files: 'src/**/*.tsx' }), { tree: { 'src/a.ts': 'BANNED-1234' } });
 
     expect(verdict.ok).toBe(false);
     expect(errorsOf(verdict)).toEqual([expect.stringContaining('`src/**/*.tsx` matched nothing to scan')]);
   });
 
   it('accepts an empty corpus only when the check says so in writing', async () => {
-    const verdict = await runCheck(check({ in: 'src/**/*.tsx', corpus: { atLeast: 0 } }), { tree: { 'src/a.ts': '' } });
+    const verdict = await runCheck(check({ files: 'src/**/*.tsx', corpus: { atLeast: 0 } }), {
+      tree: { 'src/a.ts': '' },
+    });
 
     expect(verdict.ok).toBe(true);
   });
@@ -160,7 +162,9 @@ describe('forbidPattern — an empty corpus', () => {
     const verdict = await runCheck(check(), { tree: { 'src/a.ts': 'clean', 'src/b.ts': 'clean' } });
 
     expect(verdict.ok).toBe(true);
-    expect(verdict.findings).toEqual([{ severity: 'info', message: '✓ no-banned — 2 file(s) examined, clean' }]);
+    expect(verdict.findings).toEqual([
+      { severity: 'info', message: '✓ no-banned — 2 file(s) examined, clean', ruleId: 'no-banned' },
+    ]);
   });
 });
 

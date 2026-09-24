@@ -5,7 +5,7 @@ import { InMemoryFileSource } from '../../../infrastructure';
 import { testContext } from '../../../testing';
 import { init } from './init.command';
 
-async function harness(files: Record<string, string>, vcs?: IVcs) {
+async function setup(files: Record<string, string>, vcs?: IVcs) {
   const written = new Map<string, string>();
   const writer: IFileWriter = { write: (p, c) => void written.set(p, c) };
   let out = '';
@@ -23,7 +23,7 @@ async function harness(files: Record<string, string>, vcs?: IVcs) {
  */
 describe('what init says it detected', () => {
   it('names the package manager, runner, workspace packages, docs, CI, spec framework, compose file and proxy', async () => {
-    const h = await harness({
+    const h = await setup({
       'pnpm-lock.yaml': '',
       'pnpm-workspace.yaml': 'packages:\n  - apps/*\n  - libs/*\n',
       'apps/web/package.json': '{}',
@@ -39,14 +39,14 @@ describe('what init says it detected', () => {
     });
     expect(h.code).toBe(0);
     // Packages the globs MATCH — two globs said "2 workspace(s)" over three packages — and
-    // the workflow a gate-coverage example is pointed at.
+    // the workflow a ci-coverage example is pointed at.
     expect(h.out).toContain(
       'Detected: pnpm, test runner vitest, 3 workspace packages, docs in docs, github actions (.github/workflows/ci.yml), openspec specs, compose.yaml, deploy/Caddyfile\n',
     );
   });
 
   it('says one package in the singular, and names no workflow it did not find', async () => {
-    const h = await harness({
+    const h = await setup({
       'pnpm-workspace.yaml': 'packages:\n  - apps/*\n',
       'apps/web/package.json': '{}',
       '.github/workflows/README.md': 'the workflows live elsewhere',
@@ -55,25 +55,25 @@ describe('what init says it detected', () => {
   });
 
   it('names a test runner it does not recognise by the script, rather than a bare "other"', async () => {
-    const h = await harness({ 'package.json': '{ "scripts": { "test": "node --test test/" } }' });
+    const h = await setup({ 'package.json': '{ "scripts": { "test": "node --test test/" } }' });
     expect(h.out).toContain('test script `node --test test/`');
     expect(h.out).not.toContain(', other');
   });
 
   it('says "unknown package manager" and "no documentation directory" rather than leaving a blank', async () => {
-    const h = await harness({});
+    const h = await setup({});
     expect(h.out).toContain('Detected: unknown package manager, no documentation directory found\n');
   });
 
   it('lists the modules it wired, or says none is installed', async () => {
-    expect((await harness({ 'package.json': '{ "devDependencies": { "@specwarden/docs": "1" } }' })).out).toContain(
+    expect((await setup({ 'package.json': '{ "devDependencies": { "@specwarden/docs": "1" } }' })).out).toContain(
       'Wired: @specwarden/docs\n',
     );
-    expect((await harness({})).out).toContain('No optional module installed');
+    expect((await setup({})).out).toContain('No optional module installed');
   });
 
   it('prints no switched-off section when every file it wrote is live', async () => {
-    expect((await harness({})).out).not.toContain('Switched OFF');
+    expect((await setup({})).out).not.toContain('Switched OFF');
   });
 });
 
@@ -82,9 +82,9 @@ describe('init degrades rather than crashes on a repository it cannot fully read
     // Every other reader of the manifest degrades to "unknown"; the scripts list threw
     // a SyntaxError instead, so `init` on a repository with a half-edited manifest
     // crashed with a stack trace as the first thing the tool ever said.
-    const h = await harness({ 'package.json': '{ "name": "x", ' });
+    const h = await setup({ 'package.json': '{ "name": "x", ' });
     expect(h.code).toBe(0);
-    expect(h.written.has('.specwarden/warden.config.mjs')).toBe(true);
+    expect(h.written.has('.specwarden/config.mjs')).toBe(true);
     expect(h.err).toBe('');
   });
 
@@ -101,7 +101,7 @@ describe('init degrades rather than crashes on a repository it cannot fully read
         return [];
       },
     };
-    await harness({ 'deploy.sh': 'echo' }, vcs);
+    await setup({ 'deploy.sh': 'echo' }, vcs);
     expect(asked).toContain('*.sh');
   });
 });

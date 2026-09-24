@@ -1,8 +1,8 @@
 # @specwarden/template-monorepo
 
-⚒ **template** — A pnpm workspace — lockfile, build order, dependency pins, CI coverage.
+⚒ **template** — A pnpm workspace — lockfile, credential scan, documentation paths; build order, dependency pins and CI coverage as examples.
 
-What a workspace can get wrong that a single package cannot: a stale lockfile, a Dockerfile that builds out of order, a heavy gate with no CI job.
+What a workspace can get wrong that a single package cannot: a stale lockfile, a Dockerfile that builds out of order, a heavy check with no CI job.
 
 ## What a template is
 
@@ -11,7 +11,7 @@ A starting tree for one kind of repository, so day one is one command rather tha
 ## Install
 
 ```bash
-npm install @specwarden/template-monorepo specwarden
+pnpm add -D specwarden @specwarden/template-monorepo @specwarden/ops @specwarden/security @specwarden/docs
 ```
 
 It depends on [`specwarden`](https://github.com/specwarden/specwarden/tree/main/core#readme), [`@specwarden/scaffold-parts`](https://github.com/specwarden/specwarden/tree/main/templates/_parts#readme), [`@specwarden/ops`](https://github.com/specwarden/specwarden/tree/main/modules/ops#readme), [`@specwarden/security`](https://github.com/specwarden/specwarden/tree/main/modules/security#readme), [`@specwarden/docs`](https://github.com/specwarden/specwarden/tree/main/modules/docs#readme).

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { IActionIntent } from '../../domain';
 import { formatBlock, parseClaudeToolCall, perimeterExitCode } from '../../infrastructure';
-import { commandRule, writeRule } from './command-rule/command-rule.factory';
+import { commandPolicy, writePolicy } from './command-policy/command-policy.factory';
 import { PerimeterEngine } from './perimeter-engine/perimeter-engine.service';
 import { commandWords, parseCommand, segments, stripHeredocs, tokens } from './bash-parse/bash-parse.util';
 
@@ -39,7 +39,7 @@ describe('bash-parse', () => {
 });
 
 // A protected-branch rule, the same shape as the real one, to exercise the property.
-const protectedBranch = commandRule({
+const protectedBranch = commandPolicy({
   id: 'push-protected-branch',
   match(words) {
     if (words[0] !== 'git' || !words.includes('push')) return null;
@@ -95,13 +95,13 @@ describe('PerimeterEngine fails open', () => {
   });
   it('the first blocking rule wins and carries its id', () => {
     const verdict = new PerimeterEngine([protectedBranch]).evaluate(bash('git push origin prod'));
-    expect(verdict.ruleId).toBe('push-protected-branch');
+    expect(verdict.policyId).toBe('push-protected-branch');
     expect(formatBlock(verdict)).toContain('push-protected-branch');
   });
 });
 
-describe('writeRule', () => {
-  const journal = writeRule({ id: 'migration-journal', match: (fp) => (/_journal\.json$/.test(fp) ? fp : null) });
+describe('writePolicy', () => {
+  const journal = writePolicy({ id: 'migration-journal', match: (fp) => (/_journal\.json$/.test(fp) ? fp : null) });
   it('blocks a write to the forbidden file and ignores a shell', () => {
     expect(journal.evaluate({ tool: 'Write', writePath: 'server/drizzle/meta/_journal.json' }).blocked).toBe(true);
     expect(journal.evaluate({ tool: 'Write', writePath: 'src/x.ts' }).blocked).toBe(false);

@@ -39,8 +39,8 @@ const MANIFESTS: Record<string, string> = {
   'packages/i18n/package.json': JSON.stringify({ name: '@org/i18n' }),
 };
 
-/** A workflow that runs the cheap tier, fans the heavy gates out, and gathers them. */
-const WORKFLOW = (gates: readonly string[]): string => `name: ci
+/** A workflow that runs the cheap tier, fans the heavy checks out, and gathers them. */
+const WORKFLOW = (ids: readonly string[]): string => `name: ci
 
 on:
   push:
@@ -49,14 +49,14 @@ on:
 jobs:
   guards:
     steps:
-      - run: node node_modules/specwarden/bin/warden.mjs check --tier fast
+      - run: node node_modules/specwarden/bin/specwarden.mjs check --tier fast
 
   gates:
     strategy:
       matrix:
-        gate: [${gates.join(', ')}]
+        gate: [${ids.join(', ')}]
     steps:
-      - run: node node_modules/specwarden/bin/warden.mjs check --id \${{ matrix.gate }}
+      - run: node node_modules/specwarden/bin/specwarden.mjs check --id \${{ matrix.gate }}
 
   ci-ok:
     needs: [guards, gates]
@@ -93,31 +93,46 @@ export const BROKEN: Record<string, string> = {
   // env-pairing: the SENDER has the secret and the VERIFIER does not. This is the defect
   // the check was written for — both services start, and every signed request is refused.
   'api/.env.prod': 'API_PORT=3000\n',
-  // caddy-upstreams: a container service name in the file whose proxy runs on the host.
+  // proxy-upstreams: a container service name in the file whose proxy runs on the host.
   // DNS for `api` does not exist there, so it is a 502 on a page that never opened.
   'caddy/Caddyfile.local': 'reverse_proxy api:3000\n',
-  // workspace-build-order: contracts built before the package it imports. Compiles from a
+  // build-order: contracts built before the package it imports. Compiles from a
   // warm local checkout, fails in a clean image — which is the only place it runs.
   Dockerfile:
     'FROM node:24-alpine\nRUN pnpm --filter @org/contracts run build\nRUN pnpm --filter @org/i18n run build\n',
-  // gate-coverage: a heavy gate no job names. It is not run, and nothing says so.
+  // ci-coverage: a heavy check no job names. It is not run, and nothing says so.
   '.github/workflows/ci.yml': WORKFLOW(['api-unit']),
-  // shell-local-scope: `local` in the main block, which is not a function. Bash refuses
+  // shell-scope: `local` in the main block, which is not a function. Bash refuses
   // it at run time, in the deploy script, on the deploy.
   'scripts/deploy.sh': '#!/usr/bin/env bash\nset -Eeuo pipefail\n\nlocal target\ntarget="$1"\necho "$target"\n',
 };
 
-/** The heavy gates CI is reconciled against. */
-export const GATES = [
+/** The heavy checks CI is reconciled against. */
+export const CHECKS = [
   { id: 'api-unit', title: 'API unit', tier: 'heavy' },
   { id: 'web-unit', title: 'web unit', tier: 'heavy' },
 ];
 
 /** The factories this playground claims to exercise. */
-export const COVERED = [
-  'envFilesAgree',
-  'upstreamsResolve',
-  'gatesHaveCiJobs',
-  'buildOrderFollowsDeps',
-  'shellLocalScope',
-];
+export const COVERED = ['buildOrder', 'ciCoverage', 'envPairing', 'opsChecks', 'proxyUpstreams', 'shellScope'];
+
+/**
+ * The argument every export is called with: the union of the options the factories take.
+ * A factory refuses what is not its own by name, which is how the audit tells it from a
+ * helper — and a helper handed this throws something else, or returns no check.
+ */
+export const PROBE = {
+  composeFile: 'docker-compose.yml',
+  modes: ['prod'],
+  verifierService: 'api',
+  declaredKeys: () => new Set<string>(),
+  fileFor: () => 'Caddyfile',
+  hostModes: [],
+  workflowFile: '.github/workflows/ci.yml',
+  requiredJob: 'ci-ok',
+  packagesDir: 'packages',
+  scopePrefix: '@org/',
+  containerFiles: 'Dockerfile',
+  buildInvocation: /(x)/,
+  scripts: '**/*.sh',
+};

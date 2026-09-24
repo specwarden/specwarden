@@ -9,7 +9,15 @@ import {
   type TTier,
   satisfiesRatchet,
 } from '../../domain';
-import { type TWhen, buildCheck, checkOptions, frameTolerated, resolveWhen } from '../_shared';
+import {
+  type ICorpusFloor,
+  type TWhen,
+  buildCheck,
+  checkOptions,
+  frameTolerated,
+  resolveWhen,
+  thresholdOf,
+} from '../_shared';
 
 /**
  * Adapt a plain function that returns a list of problems into a check.
@@ -69,13 +77,11 @@ const RESULT_KEYS: readonly string[] = ['errors', 'failures', 'notes', 'examined
 
 export interface IFromResultOptions extends ICheckDeclaration {
   /** Which tier this runs in. Optional, defaulting to the cheapest — a check with no
-   * stated schedule should run OFTEN rather than rarely. */
+   * stated tier should run OFTEN rather than rarely. */
   readonly tier?: TTier;
   /** What the check may touch. Defaults to `read`. A plain function that shells out
    * needs `exec` here, or the runner hands it a process port that throws. */
   readonly capabilities?: readonly TCapability[];
-  /** The rule this check enforces, when it is not the check's own id. */
-  readonly ruleId?: string;
   /** When this check matters — a predicate over the changed set, or the declarative
    * form. Absent means always relevant. */
   readonly when?: TWhen;
@@ -85,7 +91,7 @@ export interface IFromResultOptions extends ICheckDeclaration {
    * there was no way to say how much it should have seen. The function reports
    * `examined`; a count below `atLeast`, or no count at all, is a failure.
    */
-  readonly corpus?: { readonly atLeast: number; readonly why?: string };
+  readonly corpus?: ICorpusFloor;
   /**
    * Repair the findings, under `--fix`. Declaring it adds the `write` capability.
    *
@@ -106,14 +112,14 @@ export interface IFromResultOptions extends ICheckDeclaration {
   readonly run: (ctx: ICheckContext) => IPlainResult | Promise<IPlainResult>;
 }
 
-const toFinding = (problem: TProblem, ruleId: string): IFinding => {
-  if (typeof problem === 'string') return { severity: 'error', message: problem, ruleId };
+const toFinding = (problem: TProblem): IFinding => {
+  if (typeof problem === 'string') return { severity: 'error', message: problem };
   if ('message' in problem && problem.message !== undefined) {
-    return { severity: 'error', file: problem.file, message: problem.message, ruleId };
+    return { severity: 'error', file: problem.file, message: problem.message };
   }
   const { where, what, fix } = problem as { where?: string; what?: string; fix?: string };
   const message = [what, fix].filter(Boolean).join(' → ') || JSON.stringify(problem);
-  return { severity: 'error', file: where, message, ruleId };
+  return { severity: 'error', file: where, message };
 };
 
 /**
@@ -143,7 +149,6 @@ export function fromResult(options: IFromResultOptions): ICheck {
   checkOptions('fromResult', options, {
     run: { kind: 'function', required: true },
     capabilities: { kind: 'array' },
-    ruleId: { kind: 'string' },
     corpus: { kind: 'object' },
     fix: { kind: 'function' },
   });
@@ -157,28 +162,30 @@ export function fromResult(options: IFromResultOptions): ICheck {
     options,
     capabilities,
     async (ctx: ICheckContext, self: ICheck): Promise<IVerdict> => {
-      const ruleId = options.ruleId ?? self.id;
       const result = (await options.run(ctx)) as unknown;
       const problem = unreadable(result);
       if (problem !== undefined) {
-        return { ok: false, findings: [{ severity: 'error', message: `${self.id} ${problem}`, ruleId }] };
+        return { ok: false, findings: [{ severity: 'error', message: `${self.id} ${problem}` }] };
       }
       const plain = result as IPlainResult;
       const problems = plain.errors ?? plain.failures ?? [];
       const unit = plain.unit ?? 'items';
 
-      if (options.corpus !== undefined && (plain.examined === undefined || plain.examined < options.corpus.atLeast)) {
+      if (
+        options.corpus !== undefined &&
+        (plain.examined === undefined || plain.examined < (options.corpus.atLeast ?? 1))
+      ) {
         const message =
           plain.examined === undefined
-            ? `${self.id} declares \`corpus: { atLeast: ${options.corpus.atLeast} }\`, and its function reported no ` +
+            ? `${self.id} declares \`corpus: { atLeast: ${options.corpus.atLeast ?? 1} }\`, and its function reported no ` +
               '`examined` count, so the floor has nothing to hold. Return `{ errors, examined }`.'
-            : `examined ${plain.examined} ${unit}, below the declared floor of ${options.corpus.atLeast}. ` +
+            : `examined ${plain.examined} ${unit}, below the declared floor of ${options.corpus.atLeast ?? 1}. ` +
               (options.corpus.why ??
                 'A check that examined nothing cannot fail, so it reports success — this is that state, caught.');
-        return { ok: false, findings: [{ severity: 'error', message, ruleId }], ratchet: { value: problems.length } };
+        return { ok: false, findings: [{ severity: 'error', message }], measured: problems.length };
       }
 
-      const findings: IFinding[] = problems.map((p) => toFinding(p, ruleId));
+      const findings: IFinding[] = problems.map((p) => toFinding(p));
       for (const note of plain.notes ?? []) findings.push({ severity: 'info', message: note });
 
       // A verdict with no findings prints as a blank pass, which reads as "did not run" —
@@ -192,12 +199,16 @@ export function fromResult(options: IFromResultOptions): ICheck {
 
       // The threshold a stored ratchet supplies wins over the inline one, which is the
       // value the check was armed at. Both absent means strict.
-      const threshold = ctx.ratchet ?? options.ratchet ?? 0;
-      const framed = frameTolerated(satisfiesRatchet(problems.length, threshold), findings, `ratchet ${threshold}`);
+      const { threshold, direction } = thresholdOf(ctx, self);
+      const framed = frameTolerated(
+        satisfiesRatchet(problems.length, threshold, direction),
+        findings,
+        `ratchet ${threshold}`,
+      );
       // Stated, not inferred. The count here is the PROBLEM count rather than the error
       // findings, and the two are the same today — but they are the same by construction,
       // not by coincidence, and saying so is what keeps `--tighten` from re-deriving it.
-      return { ...framed, ratchet: { value: problems.length } };
+      return { ...framed, measured: problems.length };
     },
     resolveWhen(options.when),
   );

@@ -23,13 +23,13 @@ describe('ruleCoverage', () => {
   });
 
   it('passes when every rule is enforced or has a reason', () => {
-    expect(runCoverage([rule('a', { checkIds: ['x'] }), rule('b', { notMechanizable: 'a real reason' })]).ok).toBe(
+    expect(runCoverage([rule('a', { enforcedBy: ['x'] }), rule('b', { notMechanizable: 'a real reason' })]).ok).toBe(
       true,
     );
   });
 
   it('fails on an unenforced rule with no reason, and holds it under a ratchet', () => {
-    const rules = [rule('a', { checkIds: [] })];
+    const rules = [rule('a', { enforcedBy: [] })];
     expect(runCoverage(rules).ok).toBe(false);
     expect(runCoverage(rules, 1).ok).toBe(true);
   });
@@ -42,7 +42,7 @@ describe('ruleOwnerResolves', () => {
       id: 'rule-owner-resolves',
       title: 'owner',
       tier: 'fast',
-      rules: () => [rule('gone', { checkIds: ['x'] }, 'docs/missing.md')],
+      rules: () => [rule('gone', { enforcedBy: ['x'] }, 'docs/missing.md')],
     });
     const v = check.run({ changed: [], files } as unknown as ICheckContext) as IVerdict;
     expect(v.ok).toBe(false);
@@ -55,7 +55,7 @@ describe('ruleOwnerResolves', () => {
       id: 'rule-owner-resolves',
       title: 'owner',
       tier: 'fast',
-      rules: () => [rule('ok', { checkIds: ['x'] })],
+      rules: () => [rule('ok', { enforcedBy: ['x'] })],
     });
     expect((check.run({ changed: [], files } as unknown as ICheckContext) as IVerdict).ok).toBe(true);
   });

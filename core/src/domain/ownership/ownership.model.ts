@@ -1,9 +1,9 @@
 /**
  * The ownership map — who owns each artifact of work, DECLARED rather than
- * implied. Three roles are contested between SpecWarden and a spec-driven tool
+ * implied. Three roles are contested between specwarden and a spec-driven tool
  * (the task list, the lifecycle of finished work, the agent's context), and two
  * lists of tasks in one repository is precisely the partial-second-copy defect the
- * whole harness is written against. So ownership is stated, and a conflict is a
+ * whole engine is written against. So ownership is stated, and a conflict is a
  * loud refusal, not silent coexistence.
  */
 export type TOwnableRole = 'requirements' | 'tasks' | 'plans' | 'invariants' | 'agentContext';
@@ -40,8 +40,8 @@ export function validateOwnership(map: TOwnershipMap, knownOwners: readonly stri
   return findings;
 }
 
-/** Whether SpecWarden's own subsystem for a role is active — i.e. the role is
- * unassigned or assigned to SpecWarden itself. When a role is owned by a foreign
+/** Whether specwarden's own subsystem for a role is active — i.e. the role is
+ * unassigned or assigned to specwarden itself. When a role is owned by a foreign
  * tool, the matching subsystem (planning, router generation) stands down. */
 export function ownsRole(map: TOwnershipMap, role: TOwnableRole): boolean {
   const owner = map[role];

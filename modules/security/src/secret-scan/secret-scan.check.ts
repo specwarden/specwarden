@@ -1,12 +1,15 @@
-import type { ICheck, ICheckIdentity, IFinding, TTier } from 'specwarden';
+import type { ICheck, ICorpusFloor, IFinding, IModuleCheckDeclaration, TPathspecs } from 'specwarden';
 import {
   CheckOptionsError,
   type ICatalogOptions,
+  belowCorpusFloor,
   buildCheck,
   catalogNotes,
   checkOptions,
   resolveCatalog,
+  thresholdOf,
   verdictFrom,
+  withExaminedNote,
 } from 'specwarden';
 
 export interface ISecretAllowEntry {
@@ -20,23 +23,21 @@ export interface ISecretAllowEntry {
   readonly why?: string;
 }
 
-export interface ISecretScanOptions extends Omit<ICheckIdentity, 'tier' | 'title'> {
-  /** Absent: the rule's statement — every check here names the rule it enforces. */
-  readonly title?: string;
-  /** Default: `fast` — the scan only reads files. */
-  readonly tier?: TTier;
-  /** git pathspec of the corpus to scan. Tracked files only — a pasted credential
-   * in an untracked file is caught once it is added, and node_modules never is. */
-  readonly scan?: string;
-  /** Path prefixes/fragments skipped (lockfiles, build output). */
-  readonly skipPaths?: readonly string[];
-  /** File extensions skipped (binary, media). */
-  readonly skipExtensions?: readonly string[];
-  /** Known-safe matches, each pinned to an exact file. */
+export interface ISecretScanOptions extends IModuleCheckDeclaration {
+  /** git pathspec(s) of the corpus to scan. Tracked files only — a pasted credential in an
+   * untracked file is caught once it is added, and node_modules never is. Default: every
+   * tracked file. */
+  readonly files?: TPathspecs;
+  /** Pathspecs left out, ON TOP of `DEFAULT_SECRET_EXCEPT` (lockfiles, build output, binary
+   * and media files) — a file that is left out is never read, whatever it holds. */
+  readonly except?: readonly string[];
+  /** Known-safe matches, each pinned to an exact file and a pattern. Not an exemption: the
+   * file is still scanned for every other pattern. */
   readonly allowlist?: readonly ISecretAllowEntry[];
   /** Files larger than this are not where a pasted secret hides. */
   readonly maxBytes?: number;
-  readonly ratchet?: number;
+  /** How many files a run must scan. Default: at least 1. */
+  readonly corpus?: ICorpusFloor;
   /** Add to, disable, or replace `BUILT_IN_SECRET_PATTERNS`. Every deviation is
    * reported as an info finding — a scanner that quietly stopped looking for
    * something reads exactly like one that found nothing. */
@@ -106,15 +107,6 @@ export const DEFAULT_PLACEHOLDER_MARKERS =
   /\$\{|<[a-z_-]+>|PLACEHOLDER|NOT_CONFIGURED|EXAMPLE|CHANGEME|YOUR_|\bxxx+\b|\bXXX+\b/;
 
 /**
- * Refuses a credential-shaped string in the repository. GitHub push protection
- * covers this on public repos with Advanced Security; this is free, sub-second, and
- * matches the formats a project actually handles. A pattern is anchored to a format
- * specific enough that a match means something — a noisy guard is a disabled guard.
- *
- * A PRODUCT check: the credential library and placeholder suppression are universal;
- * the allowlist, the skipped paths and the corpus are options.
- */
-/**
  * The nested options a scan's author writes by hand, checked by name like the top level.
  *
  * `patterns.add` was the GUIDE's spelling of `patterns.extra`. Nothing read `add`, so the
@@ -146,46 +138,52 @@ function checkNested(options: ISecretScanOptions): void {
   if (problems.length > 0) throw new CheckOptionsError(`${who}: ${problems.join('; ')}.`);
 }
 
-export function secretScan(options: ISecretScanOptions): ICheck {
+/**
+ * What a scan never reads: lockfiles (integrity hashes are credential-shaped noise), build
+ * and dependency output, and binary or media files. A consumer's `except` is ADDED to these.
+ *
+ * They were two lists — path fragments and file extensions — each of which a consumer could
+ * replace, and replacing one to add a folder dropped every lockfile from the other's
+ * protection. One list of pathspecs, the engine's spelling of "leave these out", is the
+ * whole of it.
+ */
+export const DEFAULT_SECRET_EXCEPT: readonly string[] = [
+  '**/pnpm-lock.yaml',
+  '**/package-lock.json',
+  '**/yarn.lock',
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/coverage/**',
+  ...['png', 'jpg', 'jpeg', 'gif', 'ico', 'pdf', 'zip', 'gz', 'woff', 'woff2', 'ttf', 'eot', 'mp4', 'webp', 'avif'].map(
+    (ext) => `**/*.${ext}`,
+  ),
+  '**/*.tsbuildinfo',
+];
+
+/**
+ * Refuses a credential-shaped string in the repository. GitHub push protection
+ * covers this on public repos with Advanced Security; this is free, sub-second, and
+ * matches the formats a project actually handles. A pattern is anchored to a format
+ * specific enough that a match means something — a noisy guard is a disabled guard.
+ *
+ * A PRODUCT check: the credential library and placeholder suppression are universal;
+ * the corpus, what it leaves out and the allowlist are options.
+ */
+export function secretScan(options: ISecretScanOptions = {}): ICheck {
   checkOptions('secretScan', options, {
-    scan: { kind: 'string' },
-    skipPaths: { kind: 'array' },
-    skipExtensions: { kind: 'array' },
+    files: { kind: ['string', 'array'], nonEmpty: true },
+    except: { kind: 'array' },
     allowlist: { kind: 'array' },
     maxBytes: { kind: 'number' },
     patterns: { kind: 'object' },
     placeholderMarkers: { kind: 'regexp' },
+    corpus: { kind: 'object' },
+    zone: { refused: "a module's check speaks for its module, so its zone is `product`" },
   });
   checkNested(options);
-  const skipPaths = options.skipPaths ?? [
-    'pnpm-lock.yaml',
-    'package-lock.json',
-    'yarn.lock',
-    '.git/',
-    'node_modules/',
-    'dist/',
-    'coverage/',
-  ];
-  const skipExt = new Set(
-    options.skipExtensions ?? [
-      '.png',
-      '.jpg',
-      '.jpeg',
-      '.gif',
-      '.ico',
-      '.pdf',
-      '.zip',
-      '.gz',
-      '.woff',
-      '.woff2',
-      '.ttf',
-      '.eot',
-      '.mp4',
-      '.webp',
-      '.avif',
-      '.tsbuildinfo',
-    ],
-  );
+  const pathspecs =
+    options.files === undefined ? [''] : typeof options.files === 'string' ? [options.files] : options.files;
+  const except = [...DEFAULT_SECRET_EXCEPT, ...(options.except ?? [])];
   const allowlist = options.allowlist ?? [];
   const maxBytes = options.maxBytes ?? 1024 * 1024;
 
@@ -200,33 +198,28 @@ export function secretScan(options: ISecretScanOptions): ICheck {
 
   const allowed = (file: string, patternId: string): boolean =>
     allowlist.some((e) => e.file === file && (e.patternId === '*' || e.patternId === patternId));
-  const extOf = (f: string): string => {
-    const b = f.slice(f.lastIndexOf('/') + 1);
-    const d = b.lastIndexOf('.');
-    return d === -1 ? '' : b.slice(d).toLowerCase();
-  };
-  const skip = (f: string): boolean =>
-    skipPaths.some((p) => f.startsWith(p) || f.includes(`/${p}`)) || skipExt.has(extOf(f));
 
   return buildCheck(
     {
       ...options,
+      id: options.id ?? 'secret-scan',
       rule: options.rule ?? {
         statement: 'no credential is committed to the repository',
         owner: '@specwarden/security',
         implied: true,
       },
-      tier: options.tier ?? 'fast',
       zone: 'product',
     },
     ['read'],
-    (ctx) => {
+    (ctx, self) => {
       // The deviations lead, before any match: a scanner that stopped looking for
       // something must not read like one that looked and found nothing.
       const findings: IFinding[] = [...catalogNotes(catalog.notes)];
+      const exempt = new Set(except.flatMap((spec) => [...ctx.vcs.trackedFiles(spec)]));
+      const selected = [...new Set(pathspecs.flatMap((spec) => [...ctx.vcs.trackedFiles(spec)]))].sort();
       let scanned = 0;
-      for (const file of ctx.vcs.trackedFiles(options.scan ?? '')) {
-        if (skip(file)) continue;
+      for (const file of selected) {
+        if (exempt.has(file)) continue;
         const content = ctx.files.tryRead(file);
         if (content === undefined || content.length > maxBytes || content.includes('\0')) continue;
         scanned++;
@@ -238,28 +231,22 @@ export function secretScan(options: ISecretScanOptions): ICheck {
               file,
               line: index + 1,
               message: `${file}:${index + 1} — ${pattern.label} [${pattern.id}]. If real, ROTATE it before deleting the line; if a placeholder, add it to the allowlist with a reason.`,
-              ruleId: options.id,
             });
           }
         });
       }
-      // Zero files scanned is a failure, not a clean tree: a `scan` pathspec that matched
-      // nothing, or a skip list that swallowed everything, reports "no credentials" about a
+      // Zero files scanned is a failure, not a clean tree: a `files` pathspec that matched
+      // nothing, or an `except` that swallowed everything, reports "no credentials" about a
       // corpus of none — the one verdict a credential scan must never give falsely.
-      if (scanned === 0) {
-        return {
-          ok: false,
-          findings: [
-            ...findings,
-            {
-              severity: 'error',
-              ruleId: options.id,
-              message: `no file matched \`${options.scan ?? '(every tracked file)'}\` after the skipped paths — this scan examined nothing, and a scan that examined nothing cannot fail.`,
-            },
-          ],
-        };
-      }
-      return verdictFrom(findings, ctx.ratchet ?? options.ratchet);
+      const named = options.files === undefined ? 'every tracked file' : pathspecs.map((p) => `\`${p}\``).join(', ');
+      const floor = belowCorpusFloor(
+        self.id,
+        scanned,
+        options.corpus,
+        `${named}, less \`except\` and the default exemptions, left nothing to scan`,
+      );
+      if (floor) return { ...floor, findings: [...findings, ...floor.findings] };
+      return verdictFrom(withExaminedNote(findings, self.id, scanned), thresholdOf(ctx, self));
     },
   );
 }

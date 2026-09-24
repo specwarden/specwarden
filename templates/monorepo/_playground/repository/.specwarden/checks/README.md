@@ -9,7 +9,7 @@ has to import or list it.
 | `workspace/` | lockfile, build-order (example, off), dependency-pins (example, off), lint, unit | `specwarden`, `@specwarden/ops` |
 | `security/` | secret-scan | `@specwarden/security` |
 | `docs/` | doc-paths | `@specwarden/docs` |
-| `harness/` | gate-coverage (example, off) | `@specwarden/ops` |
+| `ops/` | ci-coverage (example, off) | `@specwarden/ops` |
 
 ## Adding a check
 

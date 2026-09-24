@@ -51,8 +51,8 @@ export interface ITemplateContext {
   /**
    * The CI system, when the repository has one.
    *
-   * A gate-coverage check ("every heavy gate has a job") needs a workflow to reconcile
-   * against: written where there is none, it compares a gate list to an empty set and
+   * A CI-coverage check ("every heavy check has a job") needs a workflow to reconcile
+   * against: written where there is none, it compares a check list to an empty set and
    * reports success — the exact failure this engine exists against.
    */
   readonly ci?: 'github' | 'gitlab';
@@ -108,9 +108,9 @@ export interface ITemplate {
    * something about it.
    *
    * The case that forced it: a template that writes a perimeter declares rules whose
-   * enforcers are perimeter rule ids, not check ids. The engine resolves those through
-   * `harness.otherEnforcerIds`, and without it `enforcement-resolves` fails on a tree
-   * the template just wrote — the harness reporting the scaffold as a defect.
+   * enforcers are perimeter policy ids, not check ids. The engine resolves those through
+   * `selfChecks.enforcers`, and without it `enforcement-resolves` fails on a tree
+   * the template just wrote — the self-checks reporting the scaffold as a defect.
    *
    * Source rather than an object because it is spliced into a file a person then edits:
    * a serialised object would arrive with no comments and no imports.

@@ -2,7 +2,7 @@
  * The wrapped commands: everything whose logic is somebody else's program.
  *
  * Each one carries `refuse` or `expect` where a zero exit would not prove the command
- * did anything — which is this engine's own central claim, applied to its own gates
+ * did anything — which is this engine's own central claim, applied to its own checks
  * first. `pnpm -r` in particular reports an empty selection as success, so a filter that
  * matched no package and a suite that passed look identical from the exit code alone.
  */

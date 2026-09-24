@@ -28,12 +28,12 @@ function dependsOn(files: IFileSource): ReadonlySet<string> {
  */
 
 /** Check ids that no rule names as an enforcer. */
-export function orphanChecks(checkIds: readonly string[], rules: readonly IRule[]): readonly string[] {
+export function orphanChecks(ids: readonly string[], rules: readonly IRule[]): readonly string[] {
   const enforcing = new Set<string>();
   for (const rule of rules) {
-    if ('checkIds' in rule.enforcement) for (const id of rule.enforcement.checkIds) enforcing.add(id);
+    if ('enforcedBy' in rule.enforcement) for (const id of rule.enforcement.enforcedBy) enforcing.add(id);
   }
-  return checkIds.filter((id) => !enforcing.has(id));
+  return ids.filter((id) => !enforcing.has(id));
 }
 
 /** Findings for rules whose owner document does not exist. */

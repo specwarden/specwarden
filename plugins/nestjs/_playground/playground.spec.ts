@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { nestjs } from '@specwarden/plugin-nestjs';
-import { type ICheck, type IPlugin, errorsOf, runCheck } from 'specwarden';
+import { CheckOptionsError, type ICheck, type IPlugin, errorsOf, runCheck, uncoveredFactories } from 'specwarden';
 
 /**
  * Everything this package publishes, wired the way a consumer wires it.
@@ -19,11 +19,8 @@ import { type ICheck, type IPlugin, errorsOf, runCheck } from 'specwarden';
  * reports success.
  */
 
-const OPTIONS = {
-  modulesRoot: 'src/modules',
-  ormPackage: 'drizzle-orm',
-  ruleDocument: 'docs/ARCHITECTURE.md',
-};
+/** The minimal wiring: the two facts the plugin cannot know, and nothing else. */
+const OPTIONS = { modulesDir: 'src/modules', ormPackage: 'drizzle-orm' };
 
 /** A codebase where the query lives in the repository layer, as the rule intends. */
 const CLEAN: Record<string, string> = {
@@ -50,21 +47,26 @@ const tracked = Object.keys(BROKEN);
  * rather than "there is no check" — a whole plugin silently contributing nothing, which
  * the engine has no way to notice either.
  */
-function checksOf(plugin: IPlugin): readonly ICheck[] {
-  const checks = plugin.checks ?? [];
-  if (checks.length === 0) throw new Error(`plugin "${plugin.name}" declares no checks`);
-  return checks;
+function checkOf(plugin: IPlugin): ICheck {
+  const [check] = plugin.checks ?? [];
+  if (!check) throw new Error(`plugin "${plugin.name}" declares no checks`);
+  return check;
 }
 
 describe('@specwarden/plugin-nestjs', () => {
-  it('declares its checks, each with an id a consumer can name on the command line', () => {
+  it('exercises every factory the package publishes', async () => {
+    const mod = (await import('@specwarden/plugin-nestjs')) as Record<string, unknown>;
+
+    expect(uncoveredFactories(mod, { covered: ['nestjs'], probe: OPTIONS })).toEqual([]);
+  });
+
+  it('declares its check under an id a consumer can name on the command line — one with no slash', () => {
     const plugin = nestjs(OPTIONS);
 
     expect(plugin.name).toBe('nestjs');
-    // `checks` is optional on the port — a plugin may declare other things — so a
-    // plugin that stopped declaring any would read as `undefined` here rather than as
-    // an empty list, which is the difference between this failing and this passing.
-    expect(plugin.checks?.map((c) => c.id)).toEqual(['nestjs/db-access-through-repositories']);
+    // It was `nestjs/db-access-through-repositories`: the only id in the product with a
+    // slash, read by every tool as a path.
+    expect(plugin.checks?.map((c) => c.id)).toEqual(['nestjs-db-access']);
   });
 
   it('supplies no port adapter — a plugin that could reach the filesystem is a way round the gating', () => {
@@ -74,25 +76,26 @@ describe('@specwarden/plugin-nestjs', () => {
     expect(nestjs(OPTIONS)).not.toHaveProperty('ports');
   });
 
-  it('passes a codebase where the query lives behind a repository', async () => {
-    const [check] = checksOf(nestjs(OPTIONS));
+  it('passes a codebase where the query lives behind a repository, saying what it examined', async () => {
+    const verdict = await runCheck(checkOf(nestjs(OPTIONS)), { tree: CLEAN, tracked });
 
-    expect((await runCheck(check, { tree: CLEAN, tracked })).ok).toBe(true);
+    expect(verdict.ok).toBe(true);
+    expect(verdict.findings.map((f) => f.message)).toEqual(['✓ nestjs-db-access — 1 file(s) examined, clean']);
   });
 
   it('fails the service that reaches the ORM directly, and names the file', async () => {
-    const [check] = checksOf(nestjs(OPTIONS));
-
-    const verdict = await runCheck(check, { tree: BROKEN, tracked });
+    const verdict = await runCheck(checkOf(nestjs(OPTIONS)), { tree: BROKEN, tracked });
 
     expect(verdict.ok).toBe(false);
     expect(errorsOf(verdict).join(' ')).toContain('gaps.service.ts');
+    expect(verdict.findings.find((f) => f.severity === 'error')).toMatchObject({
+      file: 'src/modules/gaps/gaps.service.ts',
+      line: 1,
+    });
   });
 
   it('exempts the repository layer, the entities and the tests, which is what makes the rule livable', async () => {
-    const [check] = checksOf(nestjs(OPTIONS));
-
-    const verdict = await runCheck(check, { tree: BROKEN, tracked });
+    const verdict = await runCheck(checkOf(nestjs(OPTIONS)), { tree: BROKEN, tracked });
     const errors = errorsOf(verdict).join(' ');
 
     expect(errors).not.toContain('gap.repository.ts');
@@ -100,11 +103,21 @@ describe('@specwarden/plugin-nestjs', () => {
     expect(errors).not.toContain('gap.entity.ts');
   });
 
+  it('a `modulesDir` that matches nothing fails on the corpus floor — unless declared', async () => {
+    const moved = checkOf(nestjs({ ...OPTIONS, modulesDir: 'apps/api/src/modules' }));
+    const verdict = await runCheck(moved, { tree: CLEAN, tracked });
+
+    expect(verdict.ok).toBe(false);
+    expect(errorsOf(verdict)[0]).toContain('`apps/api/src/modules/**` matched nothing to scan');
+    const declared = checkOf(nestjs({ ...OPTIONS, modulesDir: 'apps/api/src/modules', corpus: { atLeast: 0 } }));
+    expect((await runCheck(declared, { tree: CLEAN, tracked })).ok).toBe(true);
+  });
+
   it('the ratchet is the CONSUMER’s: a tree with existing debt is told what it may keep', async () => {
     // The plugin ships no number. One violation with a ratchet of 1 is tolerated debt;
     // the same tree with a ratchet of 0 is a failure. A plugin asserting a count would be
     // asserting something about a repository it has never seen.
-    const [armed] = checksOf(nestjs({ ...OPTIONS, ratchet: 1 }));
+    const armed = checkOf(nestjs({ ...OPTIONS, ratchet: 1 }));
 
     expect((await runCheck(armed, { tree: BROKEN, tracked })).ok).toBe(true);
 
@@ -112,9 +125,45 @@ describe('@specwarden/plugin-nestjs', () => {
     expect((await runCheck(armed, { tree: second, tracked: Object.keys(second) })).ok).toBe(false);
   });
 
-  it('names the host’s own rule document, so a reader can go where the decision lives', async () => {
-    const [check] = checksOf(nestjs(OPTIONS));
+  it('honours the declaration any module check takes — `id`, `tier`, `when`', () => {
+    // Each was accepted and dropped: a `tier: 'heavy'` ran in `fast`, a `when` never filtered.
+    const check = checkOf(
+      nestjs({ ...OPTIONS, id: 'db-layer', tier: 'heavy', when: (changed) => changed.some((f) => f.endsWith('.ts')) }),
+    );
 
-    expect(check.hint).toContain('docs/ARCHITECTURE.md');
+    expect(check.id).toBe('db-layer');
+    expect(check.tier).toBe('heavy');
+    expect(check.when(['README.md'])).toBe(false);
+    expect(check.when(['src/modules/a.ts'])).toBe(true);
+  });
+
+  it('refuses an option it does not have, the old spellings, and an empty fact — by name', () => {
+    expect(() => nestjs({ ...OPTIONS, allowedFrom: [] } as never)).toThrow(CheckOptionsError);
+    expect(() => nestjs({ ...OPTIONS, allowedFrom: [] } as never)).toThrow('`allowedFrom` is not an option of nestjs');
+    expect(() => nestjs({ modulesRoot: 'src/modules', ormPackage: 'x' } as never)).toThrow(
+      '`modulesRoot` is not an option of nestjs; `modulesDir` is required',
+    );
+    expect(() => nestjs({ ...OPTIONS, ruleDocument: 'docs/A.md' } as never)).toThrow('`ruleDocument` is not an option');
+    expect(() => nestjs({ ...OPTIONS, ormPackage: '' })).toThrow('`ormPackage` is empty');
+    expect(() => nestjs({ ...OPTIONS, zone: 'consumer' } as never)).toThrow('`zone` is not an option of nestjs');
+  });
+});
+
+// Wired with no `rule`, the plugin's check was an orphan the moment a register existed.
+describe('@specwarden/plugin-nestjs — its check names the rule it enforces', () => {
+  it('carries an implied rule owned by the package, in the product zone, and a rule the consumer writes wins', () => {
+    const check = checkOf(nestjs(OPTIONS));
+
+    expect(check.rule).toEqual({
+      statement: 'a module reaches the database only through a repository',
+      owner: '@specwarden/plugin-nestjs',
+      implied: true,
+    });
+    expect(check.zone).toBe('product');
+    expect(check.title).toBe('a module reaches the database only through a repository');
+    const ours = checkOf(nestjs({ ...OPTIONS, rule: { statement: 'ours', owner: 'docs/ARCHITECTURE.md' } }));
+    expect(ours.rule).toEqual({ statement: 'ours', owner: 'docs/ARCHITECTURE.md' });
+    // …and the hint names where the consumer wrote the decision down.
+    expect(ours.hint).toContain('Rule: docs/ARCHITECTURE.md.');
   });
 });

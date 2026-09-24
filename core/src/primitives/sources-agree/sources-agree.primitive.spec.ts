@@ -90,7 +90,9 @@ describe('sourcesAgree — the passing verdict', () => {
 
     expect(verdict.ok).toBe(true);
     expect(errorsOf(verdict)).toEqual([]);
-    expect(verdict.findings).toEqual([{ severity: 'info', message: '✓ services-agree — 2 name(s) examined, clean' }]);
+    expect(verdict.findings).toEqual([
+      { severity: 'info', message: '✓ services-agree — 2 name(s) examined, clean', ruleId: 'services-agree' },
+    ]);
   });
 
   it('compares SETS — a name listed twice on one side is not a disagreement', async () => {

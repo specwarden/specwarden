@@ -28,7 +28,7 @@ shape is not a matter of taste — `pnpm gate --id plans` refuses a plan that br
   — an active plan whose branch no longer resolves is work that landed and was not
   harvested;
 - every `## Phase …` heading carries a runnable acceptance command, and a `--id` it names
-  must be a gate that exists;
+  must be a check that exists;
 - nothing in it sizes work — no hours, days or points;
 - a rejected alternative in a decision log carries its reason.
 
@@ -39,7 +39,7 @@ how to read it, **where the numbers come from**, one section per phase, the orde
 and **the harvest list**. Those two bolded sections are the ones most often left out:
 
 - **Where the numbers come from.** Every measurement the plan rests on and how it was taken
-  — a coverage figure, a gate's runtime, a count of affected files. A phase sized by
+  — a coverage figure, a check's runtime, a count of affected files. A phase sized by
   guesswork produces work sized by guesswork.
 - **The harvest list.** Each fact that will live nowhere else once the plan is gone, with the
   permanent document that takes it — a skill, a docblock, a changeset. An unharvested plan

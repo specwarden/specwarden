@@ -10,7 +10,7 @@ import { inScratchRepository, planted, provePlayground } from '../../../scripts/
  * archived plan with its harvest header.
  *
  * This playground found a crash the moment it was written. The plan-shape check read a
- * heading's depth from a capture group of `phaseHeadingRe`, and the regex this template
+ * heading's depth from a capture group of `phaseHeading`, and the regex this template
  * writes has none — so every repository scaffolded with it threw on its first plan with a
  * phase. The playground this replaced had no plans, so the check had never once been run
  * over one through the CLI.
@@ -81,15 +81,15 @@ provePlayground(
 /**
  * The perimeter the template writes, fed the payload Claude Code's PreToolUse hook sends.
  *
- * A perimeter rule is not a check — no `check` run ever reaches it — so the proof above
+ * A perimeter policy is not a check — no `check` run ever reaches it — so the proof above
  * cannot see it. These run the real hook command in the scaffolded repository.
  */
 describe('the perimeter the agentic template writes, as the hook runs it', () => {
   const bash = (command: string) => JSON.stringify({ tool_name: 'Bash', tool_input: { command } });
 
   it('blocks a force-push with exit 2, and says what to do instead', () => {
-    const run = inScratchRepository('agentic', { branches: BRANCHES }, ({ warden }) =>
-      warden(['perimeter'], { input: bash('git push --force origin main') }),
+    const run = inScratchRepository('agentic', { branches: BRANCHES }, ({ specwarden }) =>
+      specwarden(['perimeter'], { input: bash('git push --force origin main') }),
     );
 
     // Exit 2 is the ONLY code Claude Code treats as a block; anything else lets it run.
@@ -98,16 +98,16 @@ describe('the perimeter the agentic template writes, as the hook runs it', () =>
   }, 60_000);
 
   it('lets an ordinary push through', () => {
-    const run = inScratchRepository('agentic', { branches: BRANCHES }, ({ warden }) =>
-      warden(['perimeter'], { input: bash('git push origin feat/burst-allowance') }),
+    const run = inScratchRepository('agentic', { branches: BRANCHES }, ({ specwarden }) =>
+      specwarden(['perimeter'], { input: bash('git push origin feat/burst-allowance') }),
     );
 
     expect(run.status).toBe(0);
   }, 60_000);
 
   it('fails OPEN on a payload it cannot read — a fault must never wear the face of a rule', () => {
-    const run = inScratchRepository('agentic', { branches: BRANCHES }, ({ warden }) =>
-      warden(['perimeter'], { input: '{not json' }),
+    const run = inScratchRepository('agentic', { branches: BRANCHES }, ({ specwarden }) =>
+      specwarden(['perimeter'], { input: '{not json' }),
     );
 
     expect(run.status).toBe(0);

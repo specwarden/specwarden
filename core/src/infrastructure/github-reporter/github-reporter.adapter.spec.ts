@@ -65,7 +65,7 @@ describe('GithubReporter', () => {
       1000,
     );
 
-    expect(c.out()).toBe('::notice title=specwarden::2 gate(s) passed (1 warned) in 1.0s\n');
+    expect(c.out()).toBe('::notice title=specwarden::2 check(s) passed (1 warned) in 1.0s\n');
   });
 
   it('prints an info finding as a plain line, never as an annotation', () => {
@@ -151,7 +151,7 @@ describe('GithubReporter', () => {
       1500,
     );
 
-    expect(c.out()).toContain('::notice title=specwarden::1 gate(s) failed: lint');
+    expect(c.out()).toContain('::notice title=specwarden::1 check(s) failed: lint');
     expect(c.out()).not.toContain('::error');
   });
 
@@ -166,6 +166,6 @@ describe('GithubReporter', () => {
     const c = capture();
     new GithubReporter(c.write).runFinished([result([])], 2000);
 
-    expect(c.out()).toContain('1 gate(s) passed in 2.0s');
+    expect(c.out()).toContain('1 check(s) passed in 2.0s');
   });
 });

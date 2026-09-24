@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { type IVerdict, errorsOf, runCheck } from 'specwarden';
 import { secretScan } from './secret-scan.check';
 
-const ID = { id: 'secret-scan', title: 'no secrets', tier: 'fast' as const };
+const ID = { title: 'no secrets' };
 
 // Fixtures are built by CONCATENATION so this spec file's own source never contains
 // a literal credential-shaped string — otherwise the repository's secret scan would
@@ -18,7 +18,7 @@ const ORDINARY = { 'src/index.ts': 'export const answer = 42;\n' };
 const run = (
   tree: Record<string, string>,
   opts: Partial<Parameters<typeof secretScan>[0]> = {},
-  extra: { tracked?: readonly string[]; ratchet?: number } = {},
+  extra: { tracked?: readonly string[]; threshold?: number } = {},
 ): Promise<IVerdict> => runCheck(secretScan({ ...ID, ...opts }), { tree, ...extra });
 
 describe('secretScan — what it catches', () => {
@@ -63,7 +63,7 @@ describe('secretScan — what it catches', () => {
     const tree = { 'a.ts': `const k = "${AWS}"` };
 
     expect((await run(tree, { ratchet: 1 })).ok).toBe(true);
-    expect((await run(tree, { ratchet: 1 }, { ratchet: 0 })).ok).toBe(false);
+    expect((await run(tree, { ratchet: 1 }, { threshold: 0 })).ok).toBe(false);
   });
 });
 
@@ -102,10 +102,18 @@ describe('secretScan — what it lets through, and why', () => {
     expect((await run({ Dockerfile: `ENV TOKEN=${TELEGRAM}` })).ok).toBe(false);
   });
 
-  it('takes the skip lists a house chooses, replacing the defaults', async () => {
-    const tree = { 'pnpm-lock.yaml': `k=${AWS}`, 'secrets.bin': `k=${AWS}`, ...ORDINARY };
+  it('leaves out what `except` names, on top of the defaults it keeps', async () => {
+    const tree = { 'fixtures/leak.env': `k=${AWS}`, 'pnpm-lock.yaml': `k=${AWS}`, ...ORDINARY };
 
-    expect((await run(tree, { skipPaths: [], skipExtensions: [] })).ok).toBe(false);
+    expect((await run(tree)).ok).toBe(false);
+    // Replacing the defaults to add one folder dropped every lockfile from them; `except` adds.
+    expect((await run(tree, { except: ['fixtures/**'] })).ok).toBe(true);
+  });
+
+  it('refuses the old `skipPaths`, `skipExtensions` and `scan` by name', () => {
+    expect(() => secretScan({ skipPaths: [] } as never)).toThrow('`skipPaths` is not an option of secretScan');
+    expect(() => secretScan({ skipExtensions: [] } as never)).toThrow('`skipExtensions` is not an option');
+    expect(() => secretScan({ scan: 'src' } as never)).toThrow('`scan` is not an option of secretScan');
   });
 
   it('skips a file larger than maxBytes', async () => {
@@ -132,23 +140,32 @@ describe('secretScan — what it examined', () => {
   it('scans only what a narrowed pathspec selects', async () => {
     const tree = { 'config/a.env': 'A=1', 'scratch/b.env': `TOKEN=${TELEGRAM}` };
 
-    expect((await run(tree, { scan: 'config' })).ok).toBe(true);
+    expect((await run(tree, { files: 'config' })).ok).toBe(true);
+    expect((await run(tree, { files: ['config', 'scratch'] })).ok).toBe(false);
   });
 
   it('fails, naming the pathspec, when it matched no file — "no credentials" about nothing is the worst false green', async () => {
-    const v = await run(ORDINARY, { scan: 'deploy/**' });
+    const v = await run(ORDINARY, { files: 'deploy/**' });
 
     expect(v.ok).toBe(false);
-    expect(errorsOf(v)).toEqual([
-      'no file matched `deploy/**` after the skipped paths — this scan examined nothing, and a scan that examined nothing cannot fail.',
-    ]);
+    expect(errorsOf(v)).toHaveLength(1);
+    expect(errorsOf(v)[0]).toContain(
+      'examined 0 file(s) — `deploy/**`, less `except` and the default exemptions, left nothing to scan — below the floor of 1.',
+    );
   });
 
   it('fails when the skipped paths swallowed every file', async () => {
     const v = await run({ 'pnpm-lock.yaml': 'lockfileVersion: 9', 'logo.png': '' });
 
     expect(v.ok).toBe(false);
-    expect(errorsOf(v)[0]).toContain('`(every tracked file)`');
+    expect(errorsOf(v)[0]).toContain('every tracked file, less `except` and the default exemptions');
+  });
+
+  it('prints the engine’s pass line, and accepts an empty corpus only when it is said in writing', async () => {
+    const v = await run(ORDINARY);
+    expect(v.findings[0]?.message).toBe('✓ secret-scan — 1 file(s) examined, clean');
+
+    expect((await run({ 'logo.png': '' }, { corpus: { atLeast: 0 } })).ok).toBe(true);
   });
 });
 

@@ -84,7 +84,7 @@ export function commandWords(tks: readonly string[]): string[] {
   return tks.slice(i);
 }
 
-/** The full pipeline: a raw command to the list of word-arrays a perimeter rule sees. */
+/** The full pipeline: a raw command to the list of word-arrays a perimeter policy sees. */
 export function parseCommand(command: string): string[][] {
   return segments(command)
     .map((segment) => commandWords(tokens(segment)))

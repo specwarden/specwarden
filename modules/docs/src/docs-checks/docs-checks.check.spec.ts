@@ -17,6 +17,8 @@ const CLEAN = {
   'src/a/A_MODULE.md': '# a\n',
 };
 
+const IDS = ['doc-paths', 'doc-symbols', 'doc-counts', 'doc-placement', 'doc-hygiene'];
+
 const byId = (checks: readonly ICheck[], id: string): ICheck => {
   const found = checks.find((c) => c.id === id);
   if (!found) throw new Error(`no ${id} in ${checks.map((c) => c.id).join(', ')}`);
@@ -24,11 +26,14 @@ const byId = (checks: readonly ICheck[], id: string): ICheck => {
 };
 
 describe('docsChecks — the module in one call', () => {
-  it('returns the five checks, with their conventional ids, in the fast tier', () => {
+  it('returns the five checks, each under its own id, in the fast tier, titled by the rule it enforces', () => {
     const checks = docsChecks(FACTS);
 
-    expect(checks.map((c) => c.id)).toEqual(['doc-paths', 'doc-symbols', 'doc-counts', 'doc-placement', 'doc-hygiene']);
+    expect(checks.map((c) => c.id)).toEqual(IDS);
     expect(new Set(checks.map((c) => c.tier))).toEqual(new Set(['fast']));
+    // The preset wrote a title of its own for each, which said something slightly different
+    // from the rule the check carried — two statements of one check.
+    for (const check of checks) expect(check.title, check.id).toBe(check.rule?.statement);
   });
 
   it('is green over a clean tree', async () => {
@@ -42,35 +47,74 @@ describe('docsChecks — the module in one call', () => {
 
     for (const check of checks) {
       const v = await runCheck(check, { tree: CLEAN });
-      expect(errorsOf(v)[0], check.id).toContain('no document matched `docs/**/*.md`');
+      expect(errorsOf(v)[0], check.id).toContain('`docs/**/*.md` matched nothing to read');
     }
   });
 
-  it('skips the same directories in every check that reads prose for claims', async () => {
+  it('says the corpus floor once, and every check holds it', async () => {
+    const checks = docsChecks({
+      ...FACTS,
+      docs: 'docs/**/*.md',
+      corpus: { atLeast: 0 },
+      placement: { allowed: [/.*/] },
+    });
+
+    for (const check of checks.filter((c) => c.id !== 'doc-symbols')) {
+      expect((await runCheck(check, { tree: CLEAN })).ok, check.id).toBe(true);
+    }
+  });
+
+  it('leaves out what `except` names, in every check', async () => {
     const tree = {
       ...CLEAN,
-      'docs/_archive/old.md': 'There were 4 services; `GoneService` lived in `src/gone.ts`.\n',
+      'docs/_archive/old.md':
+        'There were 4 services; `GoneService` lived in `src/gone.ts`, see [x](./gone.md).\n' +
+        `| ${'x'.repeat(400)} |\n`,
     };
-    const checks = docsChecks({ ...FACTS, skipDirs: ['docs/_archive/'] });
+    const checks = docsChecks({ ...FACTS, except: ['docs/_archive'], placement: { allowed: [/^README/, /^src\//] } });
 
-    for (const id of ['doc-paths', 'doc-symbols', 'doc-counts']) {
-      expect(errorsOf(await runCheck(byId(checks, id), { tree })), id).toEqual([]);
-    }
-    for (const id of ['doc-paths', 'doc-symbols', 'doc-counts']) {
-      expect((await runCheck(byId(docsChecks(FACTS), id), { tree })).ok, id).toBe(false);
+    for (const check of checks) expect(errorsOf(await runCheck(check, { tree })), check.id).toEqual([]);
+    const unexempt = docsChecks({ ...FACTS, placement: { allowed: [/^README/, /^src\//] } });
+    for (const check of unexempt) expect((await runCheck(check, { tree })).ok, check.id).toBe(false);
+  });
+
+  // `tier` and `when` were accepted and dropped: every check was built in `fast` and ran on
+  // every change, whatever the preset was told.
+  it('applies `tier` and `when` to every check it builds, and a check’s own wins', () => {
+    const when = { under: ['docs/'] };
+    const checks = docsChecks({ ...FACTS, tier: 'heavy', when, paths: { tier: 'nightly' } });
+
+    expect(checks.map((c) => c.tier)).toEqual(['nightly', 'heavy', 'heavy', 'heavy', 'heavy']);
+    for (const check of checks) {
+      expect(check.when(['docs/a.md']), check.id).toBe(true);
+      expect(check.when(['src/a.ts']), check.id).toBe(false);
     }
   });
 
-  it('lays a check’s own options over the preset’s — an id, a tier, an option of its own', () => {
-    const checks = docsChecks({ ...FACTS, paths: { id: 'paths', tier: 'heavy', illustrative: ['a/b.ts'] } });
+  it('refuses the identity of ONE check — five cannot share an id, a title, a rule or a ratchet', () => {
+    for (const option of ['id', 'title', 'rule', 'ratchet']) {
+      expect(() => docsChecks({ ...FACTS, [option]: 'x' } as never), option).toThrow(
+        `\`${option}\` is not an option of docsChecks — a preset builds five checks, and ${option} belongs to one of them`,
+      );
+    }
+  });
 
-    expect(byId(checks, 'paths').tier).toBe('heavy');
+  it('lays a check’s own options over the preset’s — an id, a ratchet, an option of its own', async () => {
+    const checks = docsChecks({ ...FACTS, paths: { id: 'paths', ratchet: 1, illustrative: ['a/b.ts'] } });
+    const tree = { ...CLEAN, 'README.md': `${CLEAN['README.md']}\nSee \`src/gone.ts\`.\n` };
+
+    expect((await runCheck(byId(checks, 'paths'), { tree })).ok).toBe(true);
   });
 
   it('leaves a check out only when told `false`', () => {
     const checks = docsChecks({ code: ['src/**/*.ts'], suffixes: ['Service'], counts: false, placement: false });
 
     expect(checks.map((c) => c.id)).toEqual(['doc-paths', 'doc-symbols', 'doc-hygiene']);
+    expect(docsChecks({ ...FACTS, symbols: false, hygiene: false }).map((c) => c.id)).toEqual([
+      'doc-paths',
+      'doc-counts',
+      'doc-placement',
+    ]);
   });
 
   it('takes a fact from the check’s own options as well as from the top level', () => {
@@ -97,9 +141,12 @@ describe('docsChecks — the module in one call', () => {
     );
   });
 
-  it('refuses an option it does not have, and hands a check’s refusal through', () => {
+  it('refuses an option it does not have, the retired `skipDirs` among them, and hands a check’s refusal through', () => {
     expect(() => docsChecks({ ...FACTS, suffix: ['Service'] } as never)).toThrow(
       '`suffix` is not an option of docsChecks',
+    );
+    expect(() => docsChecks({ ...FACTS, skipDirs: ['docs/'] } as never)).toThrow(
+      '`skipDirs` is not an option of docsChecks',
     );
     expect(() => docsChecks({ ...FACTS, countableNouns: [] })).toThrow('`countableNouns` is empty');
     expect(() => docsChecks({ ...FACTS, paths: { skipped: [] } as never })).toThrow(

@@ -23,7 +23,7 @@ describe('fromResult', () => {
 
     expect(verdict.ok).toBe(true);
     // A verdict with no findings renders as a blank line, which reads as "did not run" —
-    // indistinguishable from the failure mode this whole harness exists against.
+    // indistinguishable from the failure mode this whole engine exists against.
     expect(verdict.findings).toHaveLength(1);
     expect(verdict.findings[0]?.message).toContain('clean');
   });
@@ -83,7 +83,7 @@ describe('fromResult', () => {
     const withRule = fromResult({
       id: 'x',
       title: 'x',
-      ruleId: 'the-rule',
+      rule: { id: 'the-rule', statement: 'the thing holds' },
       when: () => true,
       run: () => ({ failures: ['bad'] }),
     });
@@ -91,9 +91,9 @@ describe('fromResult', () => {
     expect((await withRule.run(ctx)).findings[0]?.ruleId).toBe('the-rule');
   });
 
-  it('declares the contract version the engine speaks, so the registry accepts it', async () => {
+  it('declares the contract version the engine speaks, so the roster accepts it', async () => {
     // A hard-coded number here is how a check silently stops being registerable after a
-    // contract bump — the registry refuses it, and the gate it implements disappears.
+    // contract bump — the roster refuses it, and the gate it implements disappears.
     expect(check(() => ({ failures: [] })).contractVersion).toBe(CHECK_CONTRACT_VERSION);
   });
 

@@ -7,7 +7,7 @@ description: The three kinds of playground — inside each package, inside each 
 
 ## 1. One at the root; every other one inside its package
 
-| Where                           | Question it answers                                                                                                               | Gates                         |
+| Where                           | Question it answers                                                                                                               | Checks                        |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
 | `<pkg>/_playground/`            | does THIS package work, imported by name, the way a consumer wires it                                                             | `package-playgrounds`, `unit` |
 | `templates/<name>/_playground/` | does `init --template <name>` write a tree that is green over a real repository of its kind — and can every check it wrote go red | `playgrounds`, `unit`         |
@@ -19,7 +19,7 @@ one.
 
 They are not tiers of one thing. A package playground passing says nothing about two
 packages minting one check id; the root playground says nothing about what a template
-writes into a stranger's repository; a green template says nothing about a factory that
+writes into a consumer's repository; a green template says nothing about a factory that
 was renamed. Each failure is invisible to the other two.
 
 ## 2. `<pkg>/_playground/` — the package, as a consumer wires it
@@ -29,7 +29,7 @@ A `playground.spec.ts`, and usually a `repository.ts` holding the fixture.
 **It imports the package BY NAME**, through its own `exports` map — `@specwarden/docs`,
 never a relative path into `src`. A unit suite imports by path, so it keeps passing over a
 factory that was renamed and never re-exported from the barrel — the first thing a consumer
-meets. The gate checks the import style, not just that the file exists.
+meets. The `package-playgrounds` check reads the import style, not just that the file exists.
 
 **Every check runs twice** — over `CLEAN` and `BROKEN`. `BROKEN` carries one defect per
 rule, each commented with the shape its check looks for. **One repository, not one per
@@ -40,7 +40,7 @@ those angles drift until the playground describes a repository nobody could have
 tells a factory from a helper by what it RETURNS (a value carrying `id` and `run`). A list
 kept by hand goes stale the first time a factory is added.
 
-## 3. `templates/<name>/_playground/` — a stranger's repository, and the proof over it
+## 3. `templates/<name>/_playground/` — a consumer's repository, and the proof over it
 
 ```
 templates/<name>/_playground/
@@ -78,13 +78,13 @@ a run in place would answer differently before and after somebody's `git add`. T
 copy links exactly what installing the template brings — the template and its own
 dependencies — so a generated check importing a module the template never declared fails
 here as it would for a consumer. A pnpm workspace is installed by pnpm instead: it declares
-the engine with `link:` paths relative to where it is committed, and the harness rebases
+the engine with `link:` paths relative to where it is committed, and the proof rebases
 them onto the scratch copy and installs offline.
 
 **Why committed, not produced in a temp directory.** A template emits STRINGS, and no
 compiler reads a string. Committed, the tree is in the diff, and "this template now writes a
 check nobody asked for" is a review comment rather than an archaeology exercise. The
-`playgrounds` gate holds the committed `.specwarden/` to what `init` writes today.
+`playgrounds` check holds the committed `.specwarden/` to what `init` writes today.
 
 **Changing one.** Change the template, `pnpm --filter @specwarden/template-<name> build`,
 then `node scripts/playgrounds.mjs --write <name>`, and review the `.specwarden/` diff. The
@@ -97,9 +97,9 @@ A private workspace package, `@specwarden-playgrounds/workspace`, that DECLARES 
 published package in its manifest — so it resolves them through their own `exports`, not
 through the root's hoisting.
 
-- `playground.spec.ts` builds one `defineConfig` naming every package and runs the registry
+- `playground.spec.ts` builds one `defineConfig` naming every package and runs the roster
   and the runner in-process: no two packages mint one id, a plugin's checks reach the
-  registry, every check speaks the current contract version.
+  roster, every check speaks the current contract version.
 - `cli.spec.ts` writes the same config as FILES — `consumer/` becomes the scratch
   repository's `.specwarden/` — and runs the CLI: discovery, loading from installed
   packages, the plugin registered from the config.
@@ -114,5 +114,5 @@ broken tree turns red — so the two ways of composing cannot describe different
 - **A defect that plants nothing** — use `planted()`.
 - **A default shell that is not the one you think.** On Windows a bare `bash` may be
   WSL's, where the Windows `node` does not exist. The engine resolves Git's own bash for a
-  command check (`resolveShell`; `SPECWARDEN_SHELL` overrides it), and the harness arranges
+  command check (`resolveShell`; `SPECWARDEN_SHELL` overrides it), and the proof arranges
   nothing about the PATH — a playground run from PowerShell is what proves that.

@@ -1,6 +1,7 @@
 import type { ICheck, ICheckDeclaration, IFinding } from '../../domain';
 import {
   type ICorpusFloor,
+  type TPathspecs,
   IMPORT_RE,
   belowCorpusFloor,
   buildCheck,
@@ -8,15 +9,16 @@ import {
   emptyCorpusReason,
   lineOf,
   matchesSpecifier,
+  thresholdOf,
   trackedCorpus,
   verdictFrom,
   withExaminedNote,
 } from '../_shared';
 
 export interface IForbidImportOptions extends ICheckDeclaration {
-  /** Pathspec of the TRACKED files the ban applies to. */
-  readonly from: string;
-  /** How many files `from` must match for a verdict to count. Defaults to one: a ban
+  /** The TRACKED files the ban applies to: a pathspec, or several whose matches are joined. */
+  readonly files: TPathspecs;
+  /** How many files `files` must match for a verdict to count. Defaults to one: a ban
    * over zero files bans nothing, and it passed in silence before this existed. */
   readonly corpus?: ICorpusFloor;
   /** The forbidden module: a string (exact, or a prefix when followed by `/`; one
@@ -32,18 +34,18 @@ export interface IForbidImportOptions extends ICheckDeclaration {
  */
 export function forbidImport(options: IForbidImportOptions): ICheck {
   checkOptions('forbidImport', options, {
-    from: { kind: 'string', required: true },
+    files: { kind: ['string', 'array'], required: true, nonEmpty: true },
     to: { kind: ['string', 'regexp'], required: true },
     except: { kind: 'array' },
     corpus: { kind: 'object' },
   });
   return buildCheck(options, ['read'], (ctx, self) => {
-    const corpus = trackedCorpus(ctx.vcs, options.from, options.except);
+    const corpus = trackedCorpus(ctx.vcs, options.files, options.except);
     const short = belowCorpusFloor(
       self.id,
       corpus.files.length,
       options.corpus,
-      emptyCorpusReason(options.from, corpus, 'scan'),
+      emptyCorpusReason(options.files, corpus, 'scan'),
     );
     if (short) return short;
 
@@ -59,12 +61,11 @@ export function forbidImport(options: IForbidImportOptions): ICheck {
             severity: 'error',
             file,
             line: lineOf(content, m.index ?? 0),
-            message: `${file} imports \`${m[1]}\`, which is forbidden from ${options.from}.`,
-            ruleId: self.id,
+            message: `${file} imports \`${m[1]}\`, which is forbidden from ${[options.files].flat().join(', ')}.`,
           });
         }
       }
     }
-    return verdictFrom(withExaminedNote(findings, self.id, examined), ctx.ratchet ?? options.ratchet);
+    return verdictFrom(withExaminedNote(findings, self.id, examined), thresholdOf(ctx, self));
   });
 }

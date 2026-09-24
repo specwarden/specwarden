@@ -28,7 +28,7 @@ describe('main over a temp consumer config', () => {
   /** A config authored as a plain object, so it needs no import from 'specwarden'
    * (the temp dir is outside the workspace and could not resolve it). */
   function writeConfig(body: string): void {
-    writeFileSync(join(dir, '.specwarden', 'warden.config.mjs'), body);
+    writeFileSync(join(dir, '.specwarden', 'config.mjs'), body);
   }
 
   it('finds the config by walking up from a nested cwd', () => {
@@ -155,7 +155,7 @@ describe(`tiers are the repository's to name`, () => {
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-  const config = (body: string) => writeFileSync(join(dir, '.specwarden', 'warden.config.mjs'), body);
+  const config = (body: string) => writeFileSync(join(dir, '.specwarden', 'config.mjs'), body);
 
   it('refuses a tier the config does not declare, and names the ones it does', async () => {
     config("export default { checks: [], tiers: ['pre-commit', 'pr'] };");
@@ -186,7 +186,7 @@ describe('check flags that used to be forwarded unread', () => {
     dir = mkdtempSync(join(tmpdir(), 'spw-flags-'));
     mkdirSync(join(dir, '.specwarden'));
     writeFileSync(
-      join(dir, '.specwarden', 'warden.config.mjs'),
+      join(dir, '.specwarden', 'config.mjs'),
       `export default { checks: [{ id: 'a', title: 'a', tier: 'fast', zone: 'consumer', capabilities: [], contractVersion: 1, when: () => true, run: () => ({ ok: true, findings: [] }) }] };`,
     );
   });

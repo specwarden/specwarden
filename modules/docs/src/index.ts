@@ -3,7 +3,7 @@
  * names exist, that its counts match reality, that it sits where it belongs, and that
  * it stays hygienic.
  *
- * A module rather than engine furniture because every one of them encodes a house
+ * A module rather than engine furniture because every one of them encodes one repository's
  * style — where documents live, what a symbol looks like, which words hedge a number.
  * A repository with no documentation to speak of should not be carrying any of it.
  */
@@ -32,6 +32,6 @@ export { docHygiene } from './doc-hygiene/doc-hygiene.check';
 export type { IDocHygieneOptions } from './doc-hygiene/doc-hygiene.check';
 export { DEFAULT_HEDGE, DEFAULT_ORDINAL_LEAD, DEFAULT_NUMBER, DEFAULT_DATED } from './doc-counts/doc-counts.check';
 export type { IClaimGrammar } from './doc-counts/doc-counts.check';
-export { DEFAULT_SYMBOL_REF_RE, DEFAULT_DECL_RE } from './doc-symbols/doc-symbols.check';
+export { DEFAULT_SYMBOL_REF, DEFAULT_DECLARATION } from './doc-symbols/doc-symbols.check';
 export { docsChecks } from './docs-checks/docs-checks.check';
 export type { IDocsChecksOptions, TDocsOverride } from './docs-checks/docs-checks.check';

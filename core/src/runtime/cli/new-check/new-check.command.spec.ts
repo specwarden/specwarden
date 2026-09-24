@@ -6,7 +6,7 @@ import { defineCheck, readTracked } from '../../../primitives';
 import { errorsOf, runCheck } from '../../../testing';
 import { newCheck } from './new-check.command';
 
-function harness(tree: Record<string, string> = {}) {
+function setup(tree: Record<string, string> = {}) {
   const written = new Map<string, string>();
   const writer: IFileWriter = { write: (path, content) => void written.set(path, content) };
   let out = '';
@@ -23,7 +23,7 @@ function harness(tree: Record<string, string> = {}) {
 
 describe('specwarden new', () => {
   it('writes the body and its test side by side in the checks folder — the layout every guide shows', () => {
-    const h = harness();
+    const h = setup();
 
     const code = newCheck(h.files, h.writer, h.io, 'doc-shape', { consumerDir: '.specwarden' });
 
@@ -35,7 +35,7 @@ describe('specwarden new', () => {
   });
 
   it('puts it under a family when one is named', () => {
-    const h = harness();
+    const h = setup();
 
     newCheck(h.files, h.writer, h.io, 'doc-shape', { consumerDir: '.specwarden', family: 'docs' });
 
@@ -48,7 +48,7 @@ describe('specwarden new', () => {
   it('scaffolds the SHAPE the engine wants, not a bare object literal', () => {
     // The whole value of a scaffold is that the defaults are already right. Sixteen
     // hand-written check files each re-derived these, and each got one of them wrong.
-    const h = harness();
+    const h = setup();
     newCheck(h.files, h.writer, h.io, 'doc-shape', { consumerDir: '.specwarden' });
     const body = h.written.get('.specwarden/checks/doc-shape.check.mjs') as string;
 
@@ -67,7 +67,7 @@ describe('specwarden new', () => {
     return new Function('defineCheck', 'readTracked', source)(defineCheck, readTracked) as ICheck;
   };
   const scaffolded = (): string => {
-    const h = harness();
+    const h = setup();
     newCheck(h.files, h.writer, h.io, 'doc-shape', { consumerDir: '.specwarden' });
     return h.written.get('.specwarden/checks/doc-shape.check.mjs') as string;
   };
@@ -103,7 +103,7 @@ describe('specwarden new', () => {
   });
 
   it('scaffolds a test whose failing case asserts the FAILURE, using the engine’s own kit', () => {
-    const h = harness();
+    const h = setup();
     newCheck(h.files, h.writer, h.io, 'doc-shape', { consumerDir: '.specwarden' });
     const test = h.written.get('.specwarden/checks/doc-shape.check.test.mjs') as string;
     const failing = test.slice(test.indexOf("test('fails,"), test.indexOf("test('refuses"));
@@ -116,35 +116,37 @@ describe('specwarden new', () => {
     expect(failing).not.toContain('assert.equal(verdict.ok, true);');
   });
 
-  it('refuses to overwrite, and writes nothing when it refuses', () => {
-    const h = harness({ '.specwarden/checks/doc-shape.check.mjs': 'existing' });
+  // Exit 2, "could not be used" — it was 1, the code a failed check answers with, so a
+  // script could not tell a scaffold refused from a check that ran and said no.
+  it('refuses to overwrite with exit 2, and writes nothing when it refuses', () => {
+    const h = setup({ '.specwarden/checks/doc-shape.check.mjs': 'existing' });
 
     const code = newCheck(h.files, h.writer, h.io, 'doc-shape', { consumerDir: '.specwarden' });
 
-    expect(code).toBe(1);
+    expect(code).toBe(2);
     expect(h.written.size).toBe(0);
     expect(h.err()).toContain('already exists');
   });
 
   it('refuses an id that is not a usable path segment or address', () => {
     for (const bad of ['Doc Shape', 'doc_shape', '-doc', 'doc--shape', 'docs/shape', '']) {
-      const h = harness();
+      const h = setup();
       expect(newCheck(h.files, h.writer, h.io, bad, { consumerDir: '.specwarden' }), bad).toBe(2);
       expect(h.written.size).toBe(0);
     }
   });
 
   it('asks for an id when none was given', () => {
-    const h = harness();
+    const h = setup();
 
     expect(newCheck(h.files, h.writer, h.io, undefined, { consumerDir: '.specwarden' })).toBe(2);
     expect(h.err()).toContain('usage:');
   });
 
   it('edits no declaration of the consumer’s — not the config, not the register', () => {
-    const h = harness();
+    const h = setup();
     newCheck(h.files, h.writer, h.io, 'doc-shape', { consumerDir: '.specwarden' });
 
-    expect([...h.written.keys()].some((p) => p.includes('warden.config') || p.includes('rules'))).toBe(false);
+    expect([...h.written.keys()].some((p) => p.includes('config.mjs') || p.includes('rules'))).toBe(false);
   });
 });

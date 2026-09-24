@@ -1,5 +1,5 @@
 import type { ICheck, ICheckIdentity, ICheckMeta, IFinding, TRatchetDirection } from '../../domain';
-import { buildCheck, verdictFrom } from '../../primitives/_shared';
+import { buildCheck, thresholdOf, verdictFrom } from '../../primitives/_shared';
 
 export interface IRatchetDirectionOptions extends ICheckIdentity {
   /** Glob of the persisted ratchet files (one JSON per check id). */
@@ -51,8 +51,8 @@ function ceilingsFrom(
  * hole where "the debt is capped" quietly stops being true.
  *
  * WHICH WAY IS WRONG depends on the ratchet. A debt count may not rise above its
- * ceiling; a score floor may not fall below it. The direction is the one the check
- * declares, so a floor stops having to be kept outside the mechanism — validating its
+ * ceiling; a rising score may not fall below it. The direction is the one the check
+ * declares, so a rising score stops having to be kept outside the mechanism — validating its
  * own JSON by hand, and covered by this audit not at all.
  *
  * A PRODUCT check: reading and validating a store of ratchets is universal; WHERE
@@ -60,7 +60,7 @@ function ceilingsFrom(
  * the checks themselves.
  */
 export function ratchetDirection(options: IRatchetDirectionOptions): ICheck {
-  return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx) => {
+  return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx, self) => {
     const findings: IFinding[] = [];
     const ceilings = ceilingsFrom(ctx.roster(), options.ceilings);
 
@@ -75,7 +75,6 @@ export function ratchetDirection(options: IRatchetDirectionOptions): ICheck {
           severity: 'error',
           file,
           message: `${file} is not valid JSON: ${(error as Error).message}. A ratchet that will not parse caps nothing.`,
-          ruleId: options.id,
         });
         continue;
       }
@@ -86,7 +85,6 @@ export function ratchetDirection(options: IRatchetDirectionOptions): ICheck {
           severity: 'error',
           file,
           message: `${file} declares id \`${String(record.id)}\` but its filename is \`${fileId}\` — the store is keyed by filename, so the two must agree.`,
-          ruleId: options.id,
         });
       }
 
@@ -96,7 +94,6 @@ export function ratchetDirection(options: IRatchetDirectionOptions): ICheck {
           severity: 'error',
           file,
           message: `${file} has value \`${String(value)}\` — a ratchet is a non-negative integer.`,
-          ruleId: options.id,
         });
         continue;
       }
@@ -107,8 +104,7 @@ export function ratchetDirection(options: IRatchetDirectionOptions): ICheck {
         findings.push({
           severity: 'error',
           file,
-          message: `${file} is ${value}, below the floor ${declared.ceiling} its check declares — this ratchet only turns up. Raise the file, or lower the check's declared floor deliberately.`,
-          ruleId: options.id,
+          message: `${file} is ${value}, below the ceiling ${declared.ceiling} its \`up\` ratchet declares — this ratchet only turns up. Raise the file, or lower the check's declared ceiling deliberately.`,
         });
         continue;
       }
@@ -117,10 +113,9 @@ export function ratchetDirection(options: IRatchetDirectionOptions): ICheck {
           severity: 'error',
           file,
           message: `${file} is ${value}, above the ceiling ${declared.ceiling} its check declares — a ratchet only turns down. Lower the file, or raise the check's declared ceiling deliberately.`,
-          ruleId: options.id,
         });
       }
     }
-    return verdictFrom(findings, ctx.ratchet);
+    return verdictFrom(findings, thresholdOf(ctx, self));
   });
 }

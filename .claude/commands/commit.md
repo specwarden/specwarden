@@ -49,5 +49,5 @@ English, always — code, comments, docs, changesets and commit messages.
 
 ## 5. Then
 
-Commit. Do not push unless asked. Report the subject line and the gates that were green
+Commit. Do not push unless asked. Report the subject line and the checks that were green
 when it landed.

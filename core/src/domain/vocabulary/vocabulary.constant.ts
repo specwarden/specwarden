@@ -1,6 +1,6 @@
 /**
  * The small closed vocabularies the rest of the domain is built from. String
- * unions with a companion `as const` array (the house preference over `enum`), so
+ * unions with a companion `as const` array (this codebase's preference over `enum`), so
  * a caller can both type-narrow and iterate.
  */
 
@@ -8,11 +8,11 @@
  * Execution tiers — WHEN a check runs, named.
  *
  * The three built-ins describe the rhythm most repositories have: `fast` on every
- * push and cheap enough that nobody skips it, `heavy` as the merge arbiter, `nightly`
+ * push and cheap enough that nobody skips it, `heavy` as the job CI requires before a merge, `nightly`
  * for what is too slow or too flaky-by-nature for per-push feedback. They were carried
- * over verbatim from the registry this engine first replaced, which is exactly why
- * they must not be the only ones allowed: they are one repository's schedule, and a
- * product zone may not hold a host's facts.
+ * over verbatim from the roster this engine first replaced, which is exactly why
+ * they must not be the only ones allowed: they are one repository's tiers, and a
+ * product zone may not hold a consumer's facts.
  *
  * A repository whose rhythm is `pre-commit` / `pr` / `release` declares `tiers` in its
  * config and uses those names throughout; the built-ins stay as the default so a

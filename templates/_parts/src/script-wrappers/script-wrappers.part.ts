@@ -4,8 +4,8 @@ import type { IPart } from '../_shared/part.model';
 import { header } from '../_shared/render.util';
 
 /**
- * The linter and the test suite the repository ALREADY has, run through the harness —
- * wrapped rather than reimplemented, so the harness only decides when each runs.
+ * The linter and the test suite the repository ALREADY has, run through specwarden —
+ * wrapped rather than reimplemented, so specwarden only decides when each runs.
  *
  * WRITTEN ONLY WHEN THE SCRIPT EXISTS. A wrapper generated blind fails on the first run
  * for a reason that has nothing to do with the repository's code, which is why this
@@ -22,7 +22,7 @@ export const scriptWrappersPart = (ctx: ITemplateContext): IPart => {
     files.push({
       path: 'checks/workspace/lint.check.mjs',
       body: `${header(
-        '`lint` — the linter this repository already has, run through the harness.',
+        '`lint` — the linter this repository already has, run as a check.',
         'Heavy, because a type-aware config builds the whole program on every run; move it to the\nfast tier if yours is quick — nothing else depends on where it sits.',
       )}
 import { commandCheck } from 'specwarden';
@@ -40,7 +40,7 @@ export const check = commandCheck({
     files.push({
       path: 'checks/workspace/unit.check.mjs',
       body: `${header(
-        '`unit` — the test suite this repository already has, run through the harness.',
+        '`unit` — the test suite this repository already has, run as a check.',
         'A suite that accepts `--shard=i/N` can say `shardable: true`; a shard sees only its own slice.',
       )}
 import { commandCheck } from 'specwarden';

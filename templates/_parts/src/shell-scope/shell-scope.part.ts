@@ -24,15 +24,15 @@ export const shellScopePart = (
   return {
     files: [
       {
-        path: 'checks/ops/shell-local-scope.check.mjs',
+        path: 'checks/ops/shell-scope.check.mjs',
         body: `${header(
-          '`shell-local-scope` — `local` is only legal inside a function.',
-          `${o.header ?? WHY}\n\`pathspecs\` are the scripts that are yours: a vendored script is not this repository's to style.`,
+          '`shell-scope` — `local` is only legal inside a function.',
+          `${o.header ?? WHY}\n\`scripts\` are the ones that are yours: a vendored script is not this repository's to style.`,
         )}
-import { shellLocalScope } from '@specwarden/ops';
+import { shellScope } from '@specwarden/ops';
 
-export const check = shellLocalScope({
-${tierOption(ctx)}  pathspecs: [${pathspecs.map(literal).join(', ')}],
+export const check = shellScope({
+${tierOption(ctx)}  scripts: [${pathspecs.map(literal).join(', ')}],
   rule: 'A shell script declares \`local\` only inside a function, so a mistake fails at the line that made it.',
   hint: 'Move the declaration inside a function, or drop \`local\` and name the variable so it cannot collide.',
 });

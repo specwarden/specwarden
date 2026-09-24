@@ -8,13 +8,14 @@ import {
   emptyCorpusReason,
   lineOf,
   matchesSpecifier,
+  thresholdOf,
   trackedCorpus,
   verdictFrom,
   withExaminedNote,
 } from '../../primitives/_shared';
 
-/** A host-repository token a product-zone source may never contain, with a human
- * label. WHICH tokens are "the host" is a fact about the host, so the set is
+/** A consumer-repository token a product-zone source may never contain, with a human
+ * label. WHICH tokens are the consumer's is a fact about the consumer, so the set is
  * supplied by the consumer — never baked into the engine. */
 export interface IForbiddenLiteral {
   readonly label: string;
@@ -27,7 +28,7 @@ export interface IZoneBoundaryOptions extends ICheckDeclaration {
   /** Globs exempt from the sweep — a product's own tests legitimately name the
    * literals they test against, exactly as this engine's zone.spec does. */
   readonly except?: readonly string[];
-  /** The host-repository literals a product source may never contain. */
+  /** The consumer-repository literals a product source may never contain. */
   readonly forbiddenLiterals: readonly IForbiddenLiteral[];
   /** An import specifier that reaches into the consumer zone — P must never import
    * C. A string prefix or a RegExp tested against the specifier. Optional: some
@@ -49,13 +50,13 @@ function firstMatch(content: string, pattern: RegExp): RegExpExecArray | null {
 /**
  * The zone barrier made runnable — the P→C boundary the whole product rests on,
  * enforced over a file source rather than only in the package's own test. A
- * product source may not name a host-repository literal (so the engine survives
+ * product source may not name a consumer-repository literal (so the engine survives
  * "rename the project") and may not import into the consumer zone (the dependency
  * is one-way — C reaches into P, never the reverse).
  *
  * This is itself a PRODUCT check: the MECHANISM (sweep a tree for a forbidden set)
  * is universal, and the repository facts — which tree is the product, which tokens
- * are the host — arrive as options, which is where consumer knowledge belongs.
+ * are the consumer's — arrive as options, which is where consumer knowledge belongs.
  */
 export function zoneBoundary(options: IZoneBoundaryOptions): ICheck {
   checkOptions('zoneBoundary', options, {
@@ -94,7 +95,6 @@ export function zoneBoundary(options: IZoneBoundaryOptions): ICheck {
               file,
               line: lineOf(content, m.index ?? 0),
               message: `${file} imports \`${m[1]}\`, reaching into the consumer zone — the dependency is one-way, P never imports C.`,
-              ruleId: self.id,
             });
           }
         }
@@ -107,12 +107,11 @@ export function zoneBoundary(options: IZoneBoundaryOptions): ICheck {
             severity: 'error',
             file,
             line: lineOf(content, hit.index),
-            message: `${file} names the host literal ${literal.label} — a product-zone source must survive renaming the project. Move the repository fact into .specwarden/ config.`,
-            ruleId: self.id,
+            message: `${file} names the consumer literal ${literal.label} — a product-zone source must survive renaming the project. Move the repository fact into .specwarden/ config.`,
           });
         }
       }
     }
-    return verdictFrom(withExaminedNote(findings, self.id, examined), ctx.ratchet ?? options.ratchet);
+    return verdictFrom(withExaminedNote(findings, self.id, examined), thresholdOf(ctx, self));
   });
 }

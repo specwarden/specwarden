@@ -1,7 +1,7 @@
 import type { IFileSource } from '../ports/file-source/file-source.port';
 
 /**
- * The harvest gate — archiving a plan refuses to run until its harvest is declared,
+ * The harvest guard — archiving a plan refuses to run until its harvest is declared,
  * meaning every fact that lives ONLY in the plan has moved to the document that
  * owns it. Today "harvest first" is discipline and cannot be checked; here it is a
  * precondition of the state transition.
@@ -28,7 +28,7 @@ const BARE_CLAIM_RE = /^\s*[-*]?\s*harvested\s*[:=]\s*(yes|true|done)\s*$/i;
 export interface IHarvestParse {
   readonly entries: readonly IHarvestEntry[];
   /** Lines under the harvest heading that assert completion without naming a
-   * destination — the un-falsifiable claim the gate refuses. */
+   * destination — the un-falsifiable claim the guard refuses. */
   readonly bareClaims: readonly number[];
   /** Whether a harvest section was present at all. */
   readonly present: boolean;

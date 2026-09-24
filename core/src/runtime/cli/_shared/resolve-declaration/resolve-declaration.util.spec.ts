@@ -18,9 +18,10 @@ describe('declarationCandidates', () => {
   });
 
   it('names the folder for the stem, so every dotted concern of one unit shares it', () => {
-    // `warden.config.mjs` is ONE unit with a concern, not a unit called `warden.config`:
-    // the folder is `warden/`, exactly as `x.service.ts` folders under `x/`.
-    expect(declarationCandidates('/z', 'warden.config.mjs')[1]).toBe(join('/z', 'warden', 'warden.config.mjs'));
+    // `rules.test.mjs` is ONE unit with a concern, not a unit called `rules.test`:
+    // the folder is `rules/`, exactly as `x.service.ts` folders under `x/`.
+    expect(declarationCandidates('/z', 'rules.test.mjs')[1]).toBe(join('/z', 'rules', 'rules.test.mjs'));
+    expect(declarationCandidates('/z', 'config.mjs')[1]).toBe(join('/z', 'config', 'config.mjs'));
     expect(declarationCandidates('/z', 'dependency-pins.check.mjs')[1]).toBe(
       join('/z', 'dependency-pins', 'dependency-pins.check.mjs'),
     );

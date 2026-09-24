@@ -5,4 +5,4 @@
  * "node-ts, run once per package": a drifted lockfile, a build order contradicting the
  * dependency graph, and two majors of one library across workspaces all fail QUIETLY.
  */
-export { monorepo } from './monorepo/monorepo.template';
+export { monorepoTemplate } from './monorepo/monorepo.template';

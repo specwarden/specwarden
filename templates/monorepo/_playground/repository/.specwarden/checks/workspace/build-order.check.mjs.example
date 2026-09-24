@@ -1,10 +1,10 @@
 // `build-order` — a package is built after everything it depends on.
 // A package built before its dependency ships the PREVIOUS build's output, and nothing errors.
-// OFF until the prefix, the files that declare the order and the build invocation are yours.
+// Switched off until the prefix, the files that declare the order and the build invocation are yours.
 // Switch it on: rename to build-order.check.mjs AND uncomment its rule in rules.mjs.
-import { buildOrderFollowsDeps } from '@specwarden/ops';
+import { buildOrder } from '@specwarden/ops';
 
-export const check = buildOrderFollowsDeps({
+export const check = buildOrder({
   id: 'build-order',
   packagesDir: 'packages',
   // REPLACE: the workspace packages' name prefix; anything else is an external dependency.
@@ -12,5 +12,5 @@ export const check = buildOrderFollowsDeps({
   // REPLACE: the files that DECLARE the order — a Dockerfile, a CI workflow, a build script.
   containerFiles: 'Dockerfile*',
   // Matches one build invocation and captures the package name.
-  buildInvocation: String.raw`pnpm --filter (\S+) run build`,
+  buildInvocation: /pnpm --filter (\S+) run build/,
 });

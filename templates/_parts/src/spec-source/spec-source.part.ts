@@ -23,8 +23,9 @@ export const specSourcePart = (framework: TSpecFramework): IPart => {
 import { openspec } from '@specwarden/openspec';
 
 export const source = openspec({
-  // root: 'openspec',
-  // requirementHeading: /^#{2,4}\\s+Requirement:\\s*(.+?)\\s*$/,
+  // specsDir: 'openspec/specs',
+  // changesDir: 'openspec/changes',
+  // requirementPattern: /^#{2,4}\\s+Requirement:\\s*(.+?)\\s*$/,
 });
 `
       : `// The spec source — Spec Kit: requirements from each feature's spec.md (\`**FR-001**: …\`),
@@ -33,7 +34,7 @@ export const source = openspec({
 import { speckit } from '@specwarden/speckit';
 
 export const source = speckit({
-  // root: 'specs',
+  // featuresDir: 'specs',
   // specFile: 'spec.md',
   // tasksFile: 'tasks.md',
 });

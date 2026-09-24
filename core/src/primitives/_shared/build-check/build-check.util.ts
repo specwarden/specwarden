@@ -6,6 +6,7 @@ import {
   type ICheckRule,
   type IVerdict,
   type TCapability,
+  ratchetDeclaration,
   resolveWhen,
 } from '../../../domain';
 
@@ -13,7 +14,7 @@ import {
  * The id a check carries until something names it.
  *
  * A factory accepts a missing id because discovery can supply one: a file exporting a
- * single check is named after itself. Anywhere else nothing can, so the registry refuses
+ * single check is named after itself. Anywhere else nothing can, so the roster refuses
  * a check still carrying this, by name. It is not a usable id on purpose — angle brackets
  * are not in the id grammar — so no author can write it by accident and slip past.
  */
@@ -55,7 +56,7 @@ export function buildCheck(
 ): ICheck {
   const id = identity.id ?? UNNAMED_CHECK_ID;
   const rule = normaliseRule(identity.rule);
-  const ratcheted = identity.ratchetId !== undefined || identity.ratchet !== undefined;
+  const ratchet = ratchetDeclaration(identity.ratchet);
   const check: ICheck = {
     id,
     title: identity.title ?? rule?.statement ?? id,
@@ -68,13 +69,35 @@ export function buildCheck(
     hint: identity.hint,
     timeoutSec: identity.timeoutSec,
     rule,
-    ratchet: ratcheted
-      ? { id: identity.ratchetId ?? id, direction: identity.ratchetDirection, ceiling: identity.ratchet }
-      : undefined,
+    ratchet: ratchet === undefined ? undefined : { ...ratchet, id: ratchet.id ?? id },
     when: when ?? resolveWhen(identity.when),
-    run: (ctx) => run(ctx, check),
+    run: (ctx) => {
+      const verdict = run(ctx, check);
+      return verdict instanceof Promise ? verdict.then((v) => attributed(v, check)) : attributed(verdict, check);
+    },
   };
   return check;
+}
+
+/**
+ * The id a check's findings are attributed to: the rule it enforces, else the check itself.
+ * Read at run time, because discovery may name the check — and its rule — after it was built.
+ */
+export function attributionOf(check: Pick<ICheck, 'id' | 'rule'>): string {
+  return check.rule?.id ?? check.id;
+}
+
+/**
+ * Every finding, stamped with the rule it proves.
+ *
+ * It was typed out per finding, by every body, as `ruleId: options.id` — which is
+ * `undefined` for a check named by its file, so a module's findings were attributed to no
+ * check at all — or `self.id`, which is not the rule when the check names one. Stamped here,
+ * one derivation holds for every factory; a body no longer writes it.
+ */
+function attributed(verdict: IVerdict, check: ICheck): IVerdict {
+  const ruleId = attributionOf(check);
+  return { ...verdict, findings: verdict.findings.map((f) => ({ ...f, ruleId })) };
 }
 
 /**

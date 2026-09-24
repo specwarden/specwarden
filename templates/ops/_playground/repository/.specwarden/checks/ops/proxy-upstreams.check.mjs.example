@@ -1,0 +1,15 @@
+// `proxy-upstreams` — every proxy upstream resolves where the proxy runs.
+// Switched off until `modes` and `hostModes` say where YOUR proxy runs: in a container,
+// `localhost` is the proxy itself; on the host, a service name resolves to nothing.
+// It reads Caddy `reverse_proxy` lines, not nginx's: over this file it finds no upstream and fails.
+// Switch it on: rename to proxy-upstreams.check.mjs AND uncomment its rule in rules.mjs.
+import { proxyUpstreams } from '@specwarden/ops';
+
+export const check = proxyUpstreams({
+  id: 'proxy-upstreams',
+  modes: ['prod'],
+  // The config init found. Several modes? Return each one's file.
+  fileFor: () => 'deploy/nginx/upstreams.conf',
+  // REPLACE: the modes whose proxy runs on the HOST — only these may name a loopback address.
+  hostModes: [],
+});

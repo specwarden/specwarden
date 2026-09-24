@@ -16,7 +16,7 @@
  *   list carrying only `dist` installs a `specwarden` command that cannot start;
  * - **a `workspace:` range that reached what shipped** — pnpm substitutes a real version
  *   at pack time, and the one case where it does not is the one nobody would notice
- *   until `npm install` failed for a stranger.
+ *   until `npm install` failed for a consumer.
  *
  * ## Tarballs, not folder links
  *
@@ -45,7 +45,7 @@ const ENTRY_SYMBOL = {
   specwarden: 'defineCheck',
   '@specwarden/docs': 'docPaths',
   '@specwarden/plans': 'planShape',
-  '@specwarden/ops': 'envFilesAgree',
+  '@specwarden/ops': 'envPairing',
   '@specwarden/security': 'secretScan',
   '@specwarden/agents': 'agentDefinitions',
   '@specwarden/openspec': 'openspec',
@@ -138,7 +138,7 @@ try {
   // whose files are NOT compiled. It exits 2 with no arguments by design; what is being
   // proved is that node could load the shim at all.
   try {
-    run(process.execPath, [join(scratch, 'node_modules', 'specwarden', 'bin', 'warden.mjs')], scratch);
+    run(process.execPath, [join(scratch, 'node_modules', 'specwarden', 'bin', 'specwarden.mjs')], scratch);
   } catch (error) {
     const output = `${error.stdout ?? ''}${error.stderr ?? ''}`;
     if (!output.includes('usage: specwarden')) {

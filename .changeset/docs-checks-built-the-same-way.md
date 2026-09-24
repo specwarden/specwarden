@@ -1,0 +1,12 @@
+---
+'@specwarden/docs': minor
+---
+
+**Behaviour changes, fixes:** `docPlacement` and `docHygiene` are held to the stored ratchet threshold, and every check states what it measured — `docHygiene` reported no error line for the over-long rows it tolerated, so `--tighten` stored 0 and the next run failed. `docsChecks` applies `tier` and `when` to every check; it accepted both and built every check in `fast`, relevant to every change.
+
+- **Identity.** Every factory takes the engine's module declaration (`IModuleCheckDeclaration`): the id defaults to the factory's name in kebab case (`doc-paths`, `doc-symbols`, `doc-counts`, `doc-placement`, `doc-hygiene`), the title to the rule the package implies. `zone` is refused. `docPaths()` and `docHygiene()` need no options at all.
+- **Corpus.** Every check names its documents `docs` — a pathspec, or a list — and leaves files out with `except`, pathspecs read as git reads them. `skipDirs`, `skipped` (RegExps), `excludeCode` (substrings) and `renderedSources` are gone; write `except: ['docs/_archive']`, or `except: ['**/dist/**']` for built output at any depth. `docSymbols.code` takes a pathspec or a list. Every check takes `corpus: { atLeast }` (default one document), fails below it naming the pathspec and whether `except` emptied it, and prints the engine's pass line, `✓ doc-paths — 12 document(s) examined, clean`.
+- **One ratchet.** `ratchet` is the engine's, on every check. `docCounts` counts restated counts and unlabelled menu numbers against it together — `countRatchet` and `menu.ordinalRatchet` are gone — and a tolerated finding is listed under a line saying so. `docHygiene` reports each over-long table row, by file and line, instead of one summary.
+- **Options.** `docCounts.numberPattern` → `number`; `DEFAULT_SYMBOL_REF_RE` → `DEFAULT_SYMBOL_REF`, `DEFAULT_DECL_RE` → `DEFAULT_DECLARATION`. The `menu` object's keys are checked at load. `scanCounts` and `scanOrdinals` no longer take `skipped`: hand them the files to read.
+- **Findings.** Every `docCounts` finding carries `file` and `line`; a duplicate dispatch arm names the arm that never runs. Every message says what to do and ends with a period.
+- **The preset.** `docsChecks` takes `docs`, `except`, `corpus`, `tier` and `when` for every check (`skipDirs` is `except`, and reaches all five), and refuses `id`, `title`, `rule` and `ratchet` — give them in a check's own entry. It no longer writes a title of its own for each check.

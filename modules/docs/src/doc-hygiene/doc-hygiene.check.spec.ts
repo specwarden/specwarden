@@ -20,7 +20,10 @@ describe('docHygiene — relative links', () => {
     const v = await run({ 'docs/a.md': 'intro\nsee [x](./gone.md) here' });
 
     expect(v.ok).toBe(false);
-    expect(errorsOf(v)).toEqual(['docs/a.md:2 links to `./gone.md`, which does not exist.']);
+    expect(errorsOf(v)).toEqual([
+      'docs/a.md:2 links to `./gone.md`, which does not exist. Point the link at where the file is now.',
+    ]);
+    expect(v.findings[0]).toMatchObject({ file: 'docs/a.md', line: 2 });
   });
 
   it('accepts a relative link that resolves', async () => {
@@ -100,12 +103,24 @@ describe('docHygiene — the fat-cell ratchet', () => {
     expect((await run(fat, { ratchet: 0 })).ok).toBe(false);
   });
 
-  it('says nothing about a count the ratchet tolerates — no error line under a green verdict', async () => {
-    // An error-severity line printed beneath a pass reads as a failure to whoever scans
-    // the log, and a gate that cries wolf stops being read.
+  it('lists the rows the ratchet tolerates under a line saying so, and states the count it measured', async () => {
+    // An error line printed beneath a pass reads as a failure unless the verdict says it is
+    // the tolerated set; and a count that is never reported is a count `--tighten` cannot read.
     const v = await run({ 'a.md': `${FAT_ROW}\n` }, { ratchet: 1 });
 
-    expect(errorsOf(v)).toEqual([]);
+    expect(v.findings[0].message).toContain('1 pre-existing violation(s) tolerated under ratchet 1');
+    expect(v.measured).toBe(1);
+  });
+
+  // It read `options.ratchet` alone, and never reported the rows it tolerated: `--tighten`
+  // stored 0 off a passing run, and the next run failed over the debt it had been holding.
+  it('holds to the STORED threshold the run hands it, over the declared ceiling', async () => {
+    const fat = { 'a.md': `${FAT_ROW}\n${FAT_ROW}\n` };
+    const check = docHygiene({ ...ID, fatCellLimit: 40 });
+
+    expect((await runCheck(check, { tree: fat, threshold: 2 })).ok).toBe(true);
+    const armed = docHygiene({ ...ID, fatCellLimit: 40, ratchet: 5 });
+    expect((await runCheck(armed, { tree: fat, threshold: 1 })).ok).toBe(false);
   });
 
   it('still fails a broken link when the fat-cell count is within its ratchet', async () => {
@@ -115,11 +130,16 @@ describe('docHygiene — the fat-cell ratchet', () => {
     expect(v.ok).toBe(false);
   });
 
-  it('names the worst files first, so the fix starts where it pays most', async () => {
-    const v = await run({ 'a.md': `${FAT_ROW}\n`, 'b.md': `${FAT_ROW}\n${FAT_ROW}\n` });
+  it('names every over-long row by file and line, with its length and what to do', async () => {
+    const v = await run({ 'a.md': `${FAT_ROW}\n`, 'b.md': `# b\n${FAT_ROW}\n` });
 
     expect(errorsOf(v)).toEqual([
-      '3 table rows over 40 chars; the ratchet is 0. Fix the longest tables (2 b.md, 1 a.md).',
+      'a.md:1 is a table row of 68 characters, over the 40 a row stays readable at. Move the prose out of the table.',
+      'b.md:2 is a table row of 68 characters, over the 40 a row stays readable at. Move the prose out of the table.',
+    ]);
+    expect(v.findings.map((f) => [f.file, f.line])).toEqual([
+      ['a.md', 1],
+      ['b.md', 2],
     ]);
   });
 
@@ -144,7 +164,7 @@ describe('docHygiene — the fat-cell ratchet', () => {
   it('skips a rendered source so its cells are not counted twice', async () => {
     const tree = { 'overlay.md': `${FAT_ROW}\n`, 'CLAUDE.md': '# rendered' };
 
-    expect((await run(tree, { ratchet: 0, renderedSources: ['overlay.md'] })).ok).toBe(true);
+    expect((await run(tree, { ratchet: 0, except: ['overlay.md'] })).ok).toBe(true);
   });
 
   it('defaults the limit to 300 characters', async () => {
@@ -160,13 +180,18 @@ describe('docHygiene — what it examined', () => {
     const v = await run({ 'src/index.ts': '' }, { docs: 'handbook/**/*.md' });
 
     expect(v.ok).toBe(false);
-    expect(errorsOf(v)[0]).toContain('no document matched `handbook/**/*.md`');
+    expect(errorsOf(v)[0]).toContain('examined 0 document(s) — `handbook/**/*.md` matched nothing to read');
   });
 
-  it('fails when the rendered-source filter removed the whole corpus', async () => {
-    const v = await run({ 'overlay.md': '# x' }, { renderedSources: ['overlay.md'] });
+  it('fails when `except` removed the whole corpus, and accepts an empty one when told to', async () => {
+    expect((await run({ 'overlay.md': '# x' }, { except: ['overlay.md'] })).ok).toBe(false);
+    expect((await run({ 'overlay.md': '# x' }, { except: ['overlay.md'], corpus: { atLeast: 0 } })).ok).toBe(true);
+  });
 
-    expect(v.ok).toBe(false);
+  it('prints the engine’s pass line, naming how many documents it read', async () => {
+    expect((await run({ 'a.md': '# a' })).findings.map((f) => f.message)).toEqual([
+      '✓ doc-hygiene — 1 document(s) examined, clean',
+    ]);
   });
 
   it('reads the corpus the pathspec selects, and nothing else', async () => {

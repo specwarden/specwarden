@@ -57,16 +57,18 @@ describe('the generated tree actually loads', () => {
 });
 
 describe('it wires the plugin with the facts no engine can guess', () => {
-  it('names the modules root, the ORM package, and where the convention is written', () => {
+  it('names the modules directory, the ORM package, and the rule in the repository’s words', () => {
     const body = live().find((f) => f.path.includes('nestjs-conventions'))?.body ?? '';
-    expect(body).toContain('modulesRoot:');
+    expect(body).toContain('modulesDir:');
     expect(body).toContain('ormPackage:');
-    expect(body).toContain('ruleDocument:');
+    expect(body).toContain('rule:');
+    // `ruleDocument` was a second name for the rule's owner; the plugin refuses it now.
+    expect(body).not.toContain('ruleDocument');
   });
 
   it('starts the ratchet at zero and says it only turns down', () => {
     const body = live().find((f) => f.path.includes('nestjs-conventions'))?.body ?? '';
-    expect(body).toContain('ratchet: 0');
+    expect(body).toContain('ceiling: 0');
     expect(body).toMatch(/only turns DOWN/i);
   });
 });
@@ -75,8 +77,8 @@ describe('the migration guard is an example, because it is about a PIPELINE', ()
   it('ships as .example, not as a live check', () => {
     // Whether the old code meets the new schema depends on whether the deploy migrates
     // before or after the container swap — a fact about a pipeline, not about NestJS.
-    expect(paths()).toContain('checks/backend/migrations-backwards-compatible.check.mjs.example');
-    expect(paths()).not.toContain('checks/backend/migrations-backwards-compatible.check.mjs');
+    expect(paths()).toContain('checks/workspace/migrations-backwards-compatible.check.mjs.example');
+    expect(paths()).not.toContain('checks/workspace/migrations-backwards-compatible.check.mjs');
   });
 
   it('says when it is WRONG for you, not only how to switch it on', () => {
@@ -90,19 +92,19 @@ describe('every rule lives where it can be read', () => {
     const body = live().find((f) => f.path.includes('nestjs-conventions'))?.body ?? '';
     expect(body).toContain("rule: 'A module never imports the ORM directly; persistence goes through a repository.'");
     // An entity has to import the ORM; the plugin's default allows it, so the file does not restate it.
-    expect(body).not.toContain('allowedFrom');
+    expect(body).not.toContain('except:');
   });
 
   it("the register holds each example's rule, for init to write commented out, and nothing else", () => {
     expect(nestjsTemplate.rules(ctx({ composeFiles: ['compose.yaml'] })).map((r) => r.id)).toEqual([
       'migrations-backwards-compatible',
-      'env-files-agree',
+      'env-pairing',
     ]);
   });
 });
 
 describe('what it asks the repository to install', () => {
-  it('requires the ops module ONLY where a compose file made the env-file check worth writing', () => {
+  it('requires the ops module ONLY where a compose file made the env-pairing check worth writing', () => {
     const requires = nestjsTemplate.requires as (c: ITemplateContext) => readonly string[];
 
     expect(requires(ctx())).toEqual(['@specwarden/plugin-nestjs', '@specwarden/security']);
@@ -113,7 +115,7 @@ describe('what it asks the repository to install', () => {
     ]);
   });
 
-  it('writes the env-file example exactly where it requires the module that example imports', () => {
+  it('writes the env-pairing example exactly where it requires the module that example imports', () => {
     // A requirement with no file to import it is an install for nothing; a file with no
     // requirement is a tree that throws on its first run.
     for (const c of [ctx(), ctx({ composeFiles: ['compose.yaml'] })]) {
@@ -136,7 +138,7 @@ describe('every rule resolves to a file this tree writes', () => {
         ),
       );
       for (const rule of nestjsTemplate.rules(c)) {
-        for (const id of (rule.enforcement as { checkIds: readonly string[] }).checkIds) {
+        for (const id of (rule.enforcement as { enforcedBy: readonly string[] }).enforcedBy) {
           expect(written.has(id), `rule ${rule.id} names ${id}, which this tree does not write`).toBe(true);
         }
       }
@@ -158,8 +160,8 @@ describe('every example loads the day somebody renames it', () => {
     // The migration guard once escaped its own template literals twice and emitted `\``
     // into the file — a syntax error the day anybody switched it on.
     expect(examples().map((f) => f.path)).toEqual([
-      'checks/backend/migrations-backwards-compatible.check.mjs.example',
-      'checks/ops/env-files-agree.check.mjs.example',
+      'checks/workspace/migrations-backwards-compatible.check.mjs.example',
+      'checks/ops/env-pairing.check.mjs.example',
     ]);
     for (const file of examples()) {
       const check = await load(`example-${file.path.replace(/\//g, '-').replace(/\.example$/, '')}`, file.body);

@@ -4,7 +4,7 @@ import { PLAN_STATUSES } from '../../../domain';
 /**
  * The plan parser. Markdown stays the source — a readable artifact must not become
  * a derivative of YAML — and the price is that the shape of a plan becomes a
- * grammar. The risk that buys is contained by the rule the rest of the harness
+ * grammar. The risk that buys is contained by the rule the rest of the engine
  * already runs on: an unparsed structural line is a FINDING, not a silent skip. A
  * parser that sees half and says nothing is exactly the check that cannot fail.
  *
@@ -21,7 +21,7 @@ import { PLAN_STATUSES } from '../../../domain';
  * reasons that were not the phase's.
  *
  * The keywords are English and only English. A plan vocabulary in another language is a
- * house's decision, and the engine carries no house's decisions: a repository whose plans
+ * repository's decision, and the engine carries no repository's decisions: a repository whose plans
  * are written otherwise checks them with `@specwarden/plans`, whose patterns it supplies.
  */
 

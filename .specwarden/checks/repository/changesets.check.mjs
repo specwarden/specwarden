@@ -3,7 +3,7 @@
  * exists, and says something to whoever installs it.
  *
  * The logic is `scripts/check-changesets.mjs`, pure and tested there. This reads the
- * folder through the file port, so the gate sees what the engine sees.
+ * folder through the file port, so the check sees what the engine sees.
  */
 import { defineCheck } from 'specwarden';
 

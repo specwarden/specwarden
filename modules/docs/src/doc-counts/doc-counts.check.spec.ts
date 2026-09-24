@@ -12,7 +12,6 @@ import { claimPattern, duplicateMenuNumbers, menuLabels, scanCounts, scanOrdinal
  * the detector really produced: a range, a thousands separator, an ordinal, and a ratio.
  */
 const NOUNS = ['files', 'gates', 'tables', 'assertions', 'agents', 'rules'];
-const SKIPPED = [/^docs\/_codemap\//, /^docs\/_plans\//];
 
 const claims = (
   text: string,
@@ -22,7 +21,6 @@ const claims = (
     files: [options.file ?? 'skills/x/SKILL.md'],
     read: () => text,
     allowed: options.allowed ?? [],
-    skipped: SKIPPED,
     claim: claimPattern(NOUNS),
   }).map((hit) => hit.claim);
 
@@ -94,9 +92,10 @@ describe('scanCounts — the false positives that shaped it', () => {
     expect(claims('the constant `70 gates` is a literal')).toEqual([]);
   });
 
-  it('does not scan the trees where a frozen number is correct by construction', () => {
-    expect(claims('70 gates', { file: 'docs/_codemap/MAP.md' })).toEqual([]);
-    expect(claims('70 gates', { file: 'docs/_plans/thing.md' })).toEqual([]);
+  it('skips a file it cannot read', () => {
+    expect(scanCounts({ files: ['gone.md'], read: () => undefined, allowed: [], claim: claimPattern(NOUNS) })).toEqual(
+      [],
+    );
   });
 
   it('carries the location a reader needs', () => {
@@ -104,7 +103,6 @@ describe('scanCounts — the false positives that shaped it', () => {
       files: ['a.md'],
       read: () => 'intro\n\nThe registry has 70 gates.',
       allowed: [],
-      skipped: SKIPPED,
       claim: claimPattern(NOUNS),
     });
 
@@ -122,7 +120,7 @@ describe('the menu half', () => {
   const labels = menuLabels(MENU, ITEM);
 
   const ordinals = (text: string, file = 'maintenance/docs/RUNBOOK.md') =>
-    scanOrdinals({ files: [file], read: () => text, labels, skipped: SKIPPED, reference: REFERENCE });
+    scanOrdinals({ files: [file], read: () => text, labels, reference: REFERENCE });
 
   it('takes the item NAME, not its parenthetical gloss', () => {
     expect(labels.get('12')).toBe('Export globals');

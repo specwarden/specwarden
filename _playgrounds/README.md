@@ -10,7 +10,7 @@ lives inside the package it proves:
 
 ```
 _playgrounds/                 EVERY package, composed — the only one at the root
-├── playground.spec.ts        in-process: one config, the registry and the runner
+├── playground.spec.ts        in-process: one config, the roster and the runner
 ├── cli.spec.ts               the same config as FILES, discovered and run by the CLI
 ├── consumer/                 that config — a consumer's `.specwarden/`, as they write it
 ├── repository.ts             the clean and broken trees both specs run over
@@ -19,7 +19,7 @@ _playgrounds/                 EVERY package, composed — the only one at the ro
 <package>/_playground/        ONE package, as a consumer wires it
 templates/<name>/_playground/ ONE template, over a repository of its kind
 ├── playground.spec.ts        green on the first run, and every check red once
-└── repository/               the stranger's repository `init` is run in
+└── repository/               the consumer's repository `init` is run in
     └── .specwarden/          what `init --template <name>` writes there — GENERATED
 ```
 
@@ -29,10 +29,10 @@ templates/<name>/_playground/ ONE template, over a repository of its kind
 | ------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `<package>/_playground/`        | the package works imported **by name**, through its own `exports`         | a factory renamed and never re-exported from the barrel                      |
 | `templates/<name>/_playground/` | `init` writes a tree that is green over a real repository of its kind     | a generated check that throws, or is red on day one, or can never go red     |
-| `_playgrounds/` (this)          | every package works **together**, under one config, through the real CLI  | two packages minting one id; a plugin's checks never reaching the registry   |
+| `_playgrounds/` (this)          | every package works **together**, under one config, through the real CLI  | two packages minting one id; a plugin's checks never reaching the roster     |
 
 They are not tiers of one thing. A package playground passing says nothing about what a
-template writes into a stranger's repository, and a green template says nothing about two
+template writes into a consumer's repository, and a green template says nothing about two
 packages colliding under one config.
 
 ## The template playgrounds found three defects the day they were written
@@ -66,7 +66,7 @@ run in place would answer differently before and after somebody's `git add`.
 
 ## The journeys: what a consumer meets, kept as a regression suite
 
-`journeys/` is five suites, one per way somebody meets the product for the first time:
+`journeys/` is six suites, one per way somebody meets the product:
 
 - **A — day one, no template**: `adopt`, `suggest`, `init`, `new`, a primitive, a ratchet, a
   fix, and the mistakes a newcomer makes;
@@ -77,7 +77,10 @@ run in place would answer differently before and after somebody's `git add`.
 - **D — templates and agents**: whether what `init` wrote is TRUE of the repository it
   landed in, the next obvious edit, and whether the shipped skills describe the product;
 - **E — the command line**: every command, flag, reporter, exit code and environment
-  variable, from a shell and from a CI job.
+  variable, from a shell and from a CI job;
+- **F — the vocabulary**: a consumer's whole day through the command line, and every document
+  each package ships, held to `core/GLOSSARY.md` — no retired word in any output, file or
+  shipped skill, and a version on every JSON document.
 
 Every scene is the real CLI over a scratch git repository with the packages linked the way
 an install links them. The suites were written against the engine as it stood, to find
@@ -95,7 +98,7 @@ carrying a prefix is a decision on record, not an oversight.
 
 - **A template's output** — change the template, then
   `node scripts/playgrounds.mjs --write <name>` and review the `.specwarden/` diff. The
-  `playgrounds` gate fails on a hand edit there.
+  `playgrounds` check fails on a hand edit there.
 - **A template's repository** — edit it by hand; it is a fixture, and its README says what
   it pretends to be. Then regenerate, because `init` detects what it writes for.
 - **This one** — `consumer/` and `repository.ts` together. Both specs assert the same two

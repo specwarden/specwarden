@@ -1,6 +1,6 @@
 ---
 name: plans
-description: Where a working document for unfinished work lives, the shape the plans gate holds it to, and when it dies.
+description: Where a working document for unfinished work lives, the shape the plans checks hold it to, and when it dies.
 ---
 
 # plans
@@ -24,7 +24,7 @@ File and symbol names that do not exist yet are legal in a plan and nowhere else
 **nothing outside a plan links into one** — a README, a skill or a docblock pointing at a
 plan is a dangling pointer with a delayed fuse.
 
-## 3. The shape the gates hold it to
+## 3. The shape the checks hold it to
 
 `pnpm gate --id plans --id plan-staleness --id plan-decisions`:
 
@@ -33,7 +33,7 @@ plan is a dangling pointer with a delayed fuse.
 | `_plans/NN-<slug>.md`, flat; a number is never reused                       | a plan nobody can find by name is a plan nobody deletes; a folder inside means deletion stopped |
 | `**Status:** draft \| active \| done`, and `**Branch:** <name>` once active | an active plan whose branch is gone is work that landed unharvested                             |
 | every `## Phase …` ends with a runnable command                             | "phase 2 is done" is otherwise an opinion                                                       |
-| a `--id` in that command names a gate that exists                           | the roster is read from the run itself, so a renamed gate fails the plan, not the acceptance    |
+| a `--id` in that command names a check that exists                          | the roster is read from the run itself, so a renamed check fails the plan, not the acceptance   |
 | nothing sizes work — no hours, days or points                               | a size turns a work order into a bid, and the bid is what people then argue about               |
 | a rejected alternative carries its reason                                   | the reason is the one fact in a decision log that exists nowhere else                           |
 

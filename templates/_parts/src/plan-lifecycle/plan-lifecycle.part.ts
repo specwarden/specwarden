@@ -41,7 +41,7 @@ ${tierOption(ctx)}  plansDir: ${literal(plansDir)},
         path: 'checks/plans/plan-shape.check.mjs',
         body: `${header(
           '`plan-shape` — phases express dependency, not effort, and each says how it is accepted.',
-          'A sizing word turns a work order into a bid. The phase heading, sizing and acceptance patterns\nare English defaults: `phaseHeadingRe`, `sizingPatterns` and `commandRe` replace them.',
+          'A sizing word turns a work order into a bid. The phase heading, sizing and acceptance patterns\nare English defaults: `phaseHeading`, `sizing` and `command` replace them.',
         )}
 import { planShape } from '@specwarden/plans';
 

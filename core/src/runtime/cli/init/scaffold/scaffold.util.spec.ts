@@ -60,7 +60,7 @@ describe('renderRules round-trips through the module loader', () => {
       id: 'doc-counts',
       statement: "A count's source is the repository.",
       owner: 'x.mjs',
-      enforcement: { checkIds: ['doc-counts'] },
+      enforcement: { enforcedBy: ['doc-counts'] },
     };
     const source = renderRules([], [rule]);
     expect(await load(source)).toEqual([]);
@@ -70,21 +70,21 @@ describe('renderRules round-trips through the module loader', () => {
 
   it("keeps a template rule's wording exactly, apostrophes included", async () => {
     const statement = "A migration's down step is never empty.";
-    const [r] = await load(renderRules([{ id: 'x', statement, owner: 'O.md', enforcement: { checkIds: ['c'] } }]));
-    expect(r).toEqual({ id: 'x', statement, owner: 'O.md', enforcement: { checkIds: ['c'] } });
+    const [r] = await load(renderRules([{ id: 'x', statement, owner: 'O.md', enforcement: { enforcedBy: ['c'] } }]));
+    expect(r).toEqual({ id: 'x', statement, owner: 'O.md', enforcement: { enforcedBy: ['c'] } });
   });
 
   it('keeps a statement carrying a backslash or a line break, instead of emitting a file that does not parse', async () => {
     // `quote` escaped the apostrophe and nothing else. A backslash then either vanished
     // or — for `\x`, `\u` — made the generated file a SyntaxError on the first run.
     const statement = 'Paths are written C:\\x\\y, never\nwith a trailing slash.';
-    const [r] = await load(renderRules([{ id: 'x', statement, owner: 'O.md', enforcement: { checkIds: ['c'] } }]));
+    const [r] = await load(renderRules([{ id: 'x', statement, owner: 'O.md', enforcement: { enforcedBy: ['c'] } }]));
     expect(r.statement).toBe(statement);
   });
 
   it('keeps a template rule declared not-mechanizable, WITH its reason', async () => {
-    // It was rendered as `checkIds: []`, which is a rule that is neither enforced nor
-    // excused — exactly what the harness's coverage audit refuses. A template shipping
+    // It was rendered as `enforcedBy: []`, which is a rule that is neither enforced nor
+    // excused — exactly what the rule-coverage self-check refuses. A template shipping
     // an honest "this cannot be automated" produced a tree that was red on day one.
     const reason = 'Branch protection enforces it, in the forge.';
     const [r] = await load(
@@ -167,7 +167,7 @@ describe('renderChecksReadme', () => {
       { path: 'checks/docs/doc-paths.check.mjs', body: "import { docPaths } from '@specwarden/docs';" },
       { path: 'checks/docs/doc-counts.check.mjs.example', body: "import { docCounts } from '@specwarden/docs';" },
       { path: 'checks/workspace/lint.check.mjs', body: "import { commandCheck } from 'specwarden';" },
-      { path: 'perimeter.mjs', body: "import { commandRule } from 'specwarden';" },
+      { path: 'perimeter.mjs', body: "import { commandPolicy } from 'specwarden';" },
     ]);
     expect(readme).toContain('| `docs/` | doc-paths, doc-counts (example, off) | `@specwarden/docs` |');
     expect(readme).toContain('| `workspace/` | lint | `specwarden` |');
@@ -206,7 +206,7 @@ describe('renderReadme', () => {
 
   it('claims no zone check the tree does not run, and carries no note to the template maintainers', () => {
     // "fails its own zone check" — the consumer's run assembles no zone-boundary without
-    // `harness.zone`; and a paragraph on how the README dodges doc-paths was a note to us.
+    // `selfChecks.zone`; and a paragraph on how the README dodges doc-paths was a note to us.
     const readme = renderReadme([{ path: 'perimeter.mjs', body: '' }]);
     expect(readme).not.toMatch(/zone check/i);
     expect(readme).not.toContain('on purpose');

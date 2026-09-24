@@ -55,7 +55,7 @@ const DOCS: IKnownModule = {
     file: 'doc-paths.check.mjs',
     body: `// \`doc-paths\` — every repository-relative path named in documentation resolves.
 // A file moves, the prose does not, and a reader follows the old path to nothing.
-// \`docs\` is what is read; the module also has docSymbols, docCounts, docHygiene, docPlacement.
+// \`docs\` is what is read; \`except\` leaves out a tree whose paths are history.
 import { docPaths } from '@specwarden/docs';
 
 export const check = docPaths({
@@ -199,13 +199,13 @@ const quote = (s: string): string =>
   s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n');
 
 /**
- * A not-mechanizable rule keeps its REASON. Rendered as `checkIds: []` it became a rule
+ * A not-mechanizable rule keeps its REASON. Rendered as `enforcedBy: []` it became a rule
  * neither enforced nor excused — the one state the coverage audit refuses.
  */
 const enforcementSource = (e: IRule['enforcement']): string =>
   'notMechanizable' in e
     ? `{ notMechanizable: '${quote(e.notMechanizable)}' }`
-    : `{ checkIds: [${e.checkIds.map((c) => `'${quote(c)}'`).join(', ')}] }`;
+    : `{ enforcedBy: [${e.enforcedBy.map((c) => `'${quote(c)}'`).join(', ')}] }`;
 
 /**
  * `rules.mjs`: the register, for the rules no single check states.
@@ -248,7 +248,7 @@ ${declared}${declared ? '\n' : ''}${
 
 /** What each file init can write beside `checks/` is for, in one line. */
 const TOP_LEVEL: Readonly<Record<string, string>> = {
-  'warden.config.mjs': 'the entry — only what the tree cannot say for itself',
+  'config.mjs': 'the entry — only what the tree cannot say for itself',
   'rules.mjs': "the rules no single check states, and each example's rule, commented out",
   'README.md': 'this file',
   'perimeter.mjs': 'what an assistant may not do here, checked by a hook before the action runs',
@@ -260,7 +260,7 @@ export const describeTopLevel = (file: string): string => TOP_LEVEL[file] ?? 'wr
 
 /** The files written beside `checks/`, in the order the README lists them. */
 export function topLevelFiles(written: readonly IWrittenFile[]): readonly string[] {
-  return ['warden.config.mjs', 'rules.mjs', 'README.md', ...written.map((f) => f.path).filter((p) => !p.includes('/'))];
+  return ['config.mjs', 'rules.mjs', 'README.md', ...written.map((f) => f.path).filter((p) => !p.includes('/'))];
 }
 
 export function renderReadme(written: readonly IWrittenFile[] = []): string {

@@ -11,11 +11,13 @@ it inside somebody else's repository is
 
 ## Invariants
 
-1. **An absent agent directory FAILS, naming it; an empty one passes.** It was a pass, on
-   the reasoning that "nobody runs agents here" is not a broken roster — and the same pass
-   covered an `agentsDir` pointing at a roster that moved, and a skill's `agents:` for
-   `agentsDir`, forever. "Nobody runs agents here" is a repository that does not install
-   the module. A folder made before its first role still passes, saying it read none.
+1. **A roster that is not there FAILS, through the engine's corpus floor.** An absent
+   directory, a file at that path, and a folder with no definition are each below
+   `corpus: { atLeast: 1 }`. The first was a pass, on the reasoning that "nobody runs agents
+   here" is not a broken roster — and the same pass covered an `agentsDir` pointing at a
+   roster that moved, and a skill's `agents:` for `agentsDir`, forever. "Nobody runs agents
+   here" is a repository that does not install the module; a folder made before its first
+   role declares `corpus: { atLeast: 0 }`.
 
 2. **The spawn restriction is the reason this module exists.** Everything else here is
    frontmatter validation, which is cheap and mildly useful. A leaf role that can spawn
@@ -29,11 +31,15 @@ it inside somebody else's repository is
 4. **The assistant's vocabulary is an option.** `spawnTools` names tools that start
    another agent, and which tool does that is a fact about the assistant, not about this
    package. A hard-coded name makes the check wrong — silently, by matching nothing — for
-   every other harness.
+   every other assistant.
 
 5. **`name` must match the filename.** It is the one rule whose failure is invisible at
-   the file: the harness addresses agents by name, so a mismatch surfaces as an unknown
+   the file: an assistant addresses agents by name, so a mismatch surfaces as an unknown
    agent at a call site nowhere near the cause.
+
+6. **It honours `ratchet`, and takes `IModuleCheckDeclaration`.** It accepted `ratchet` and
+   dropped it. The id defaults to `agent-definitions`, the body reads it from `self`, and
+   `zone` is refused. Every finding carries its file, and the line of the field it is about.
 
 ## The parser
 
@@ -45,12 +51,12 @@ get a rule switched off.
 ## Changing the check
 
 - The fixtures live inline in
-  [`_playground/playground.spec.ts`](./_playground/playground.spec.ts): a roster a house
+  [`_playground/playground.spec.ts`](./_playground/playground.spec.ts): a roster a consumer
   would keep, and the same roster with one defect per rule.
 - Run `pnpm --filter @specwarden/agents test`.
 
 ## What belongs somewhere else
 
 - What an agent may DO in a repository is the engine's perimeter, not a frontmatter rule.
-- How many agents to spawn, and which model each deserves, is a host's own documentation
+- How many agents to spawn, and which model each deserves, is a consumer's own documentation
   — a check cannot decide it and should not pretend to.

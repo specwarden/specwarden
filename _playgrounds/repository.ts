@@ -121,7 +121,7 @@ export const EVERY_CHECK_ID = [
   'doc-hygiene',
   'doc-paths',
   'doc-symbols',
-  'nestjs/db-access-through-repositories',
+  'nestjs-db-access',
   'plan-staleness',
   'secret-scan',
   'shell-local-scope',
@@ -132,7 +132,7 @@ export const CAUGHT_IN_BROKEN = [
   'agent-definitions',
   'decision-log-shape',
   'doc-paths',
-  'nestjs/db-access-through-repositories',
+  'nestjs-db-access',
   'secret-scan',
   'shell-local-scope',
 ] as const;

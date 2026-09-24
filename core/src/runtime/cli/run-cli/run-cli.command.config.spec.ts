@@ -29,7 +29,7 @@ describe('main, once a config is found', () => {
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-  const config = (body: string) => writeFileSync(join(dir, '.specwarden', 'warden.config.mjs'), body);
+  const config = (body: string) => writeFileSync(join(dir, '.specwarden', 'config.mjs'), body);
   const checkFile = (rel: string, body: string) => {
     const abs = join(dir, '.specwarden', 'checks', rel);
     mkdirSync(join(abs, '..'), { recursive: true });
@@ -117,7 +117,55 @@ describe('main, once a config is found', () => {
       checkFile('broken.check.mjs', "throw new Error('broken at import');");
       const cap = captureIo();
       expect(await main(['check', '--all'], {}, dir, cap.io)).toBe(2);
-      expect(cap.err()).toBe('.specwarden/checks/broken.check.mjs failed to load: broken at import\n');
+      expect(cap.err()).toBe('.specwarden/checks/broken.check.mjs failed to load: broken at import.\n');
+    });
+
+    // An old key was not an error, it was a setting that silently stopped applying:
+    // `harness: false` left every self-check running, `concurrency: 4` ran serially.
+    it.each([
+      ['harness: false', '`harness` is now `selfChecks`'],
+      ['concurrency: 4', '`concurrency` is now `jobs`'],
+    ])('refuses the retired config key %s, naming the one to write — exit 2', async (field, said) => {
+      config(`export default { ${field} };`);
+      const cap = captureIo();
+      expect(await main(['check', '--all'], {}, dir, cap.io)).toBe(2);
+      expect(cap.err()).toBe(`.specwarden/config.mjs: ${said} — rename it; under the old name it applies nothing.\n`);
+    });
+
+    it('refuses a reporter doctor cannot print — annotations have nothing to annotate', async () => {
+      config('export default { selfChecks: false };');
+      const cap = captureIo();
+      expect(await main(['doctor', '--reporter', 'github'], {}, dir, cap.io)).toBe(2);
+      expect(cap.err()).toBe('doctor prints tty or json, not "github".\n');
+      const json = captureIo();
+      expect(await main(['doctor', '--reporter', 'json'], {}, dir, json.io)).toBe(0);
+      expect((JSON.parse(json.out()) as { version: number }).version).toBe(1);
+    });
+
+    // Read as "no config", the old file made every command say there was nothing to run.
+    it('refuses a config still under its old name, naming the rename — exit 2', async () => {
+      writeFileSync(join(dir, '.specwarden', 'warden.config.mjs'), 'export default {};');
+      for (const argv of [['check', '--all'], ['doctor'], ['new', 'x']]) {
+        const cap = captureIo();
+        expect(await main(argv, {}, dir, cap.io), argv.join(' ')).toBe(2);
+        expect(cap.err()).toContain("warden.config.mjs is the config's old name — rename it to .specwarden/config.mjs");
+      }
+    });
+
+    it('`check <id>` runs that id, exactly as `--id <id>` does', async () => {
+      config('export default { selfChecks: false };');
+      checkFile(
+        'a.check.mjs',
+        `export const check = { id: 'a', title: 'a', tier: 'fast', zone: 'consumer', capabilities: [], contractVersion: 1, when: () => true, run: () => ({ ok: true, findings: [] }) };`,
+      );
+      checkFile(
+        'b.check.mjs',
+        `export const check = { id: 'b', title: 'b', tier: 'fast', zone: 'consumer', capabilities: [], contractVersion: 1, when: () => true, run: () => ({ ok: true, findings: [] }) };`,
+      );
+      const cap = captureIo();
+      expect(await main(['check', 'b', '--json'], {}, dir, cap.io)).toBe(0);
+      const doc = JSON.parse(cap.out()) as { version: number; results: { id: string }[] };
+      expect([doc.version, doc.results.map((r) => r.id)]).toEqual([1, ['b']]);
     });
 
     it('runs a check discovered in the tree, and says how many it discovered', async () => {
@@ -133,21 +181,21 @@ describe('main, once a config is found', () => {
     });
 
     it('prints the tree notes for a question about the roster, never on a run', async () => {
-      config('export default { harness: false };');
+      config('export default { selfChecks: false };');
       const run = captureIo();
       await main(['check', '--all'], {}, dir, run.io);
       expect(run.err()).not.toContain('ℹ');
 
       const doctor = captureIo();
       await main(['doctor'], {}, dir, doctor.io);
-      expect(doctor.err()).toContain('ℹ harness self-checks disabled entirely (config.harness = false)');
+      expect(doctor.err()).toContain('ℹ self-checks disabled entirely (config.selfChecks = false)');
     });
 
     it('prints the tree notes on stderr, and none under --json, whose consumer is a machine', async () => {
-      config('export default { harness: false };');
+      config('export default { selfChecks: false };');
       const plain = captureIo();
       await main(['check', '--list'], {}, dir, plain.io);
-      expect(plain.err()).toContain('ℹ harness self-checks disabled entirely (config.harness = false)');
+      expect(plain.err()).toContain('ℹ self-checks disabled entirely (config.selfChecks = false)');
 
       const json = captureIo();
       await main(['check', '--list', '--json'], {}, dir, json.io);

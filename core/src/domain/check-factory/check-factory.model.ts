@@ -1,5 +1,5 @@
 import type { ICheck, ICheckRule } from '../check/check.model';
-import type { TRatchetDirection } from '../ratchet/ratchet.model';
+import type { TRatchetInput } from '../ratchet/ratchet.model';
 import type { TWhen } from '../relevance/relevance.model';
 import type { TTier } from '../vocabulary/vocabulary.constant';
 import type { TZone } from '../zone/zone.model';
@@ -51,24 +51,19 @@ export interface ICheckIdentity {
   /** Run this check alone under `--jobs` — see `exclusive` on ICheck for what
    * assuming isolation instead costs. */
   readonly exclusive?: boolean;
-  /** Ratchet the check's measurement to a file: the stored threshold is read into
-   * `ctx.ratchet`, and `--tighten` walks it towards the target. Defaults to the
-   * check id. */
-  readonly ratchetId?: string;
-  /** Which way that ratchet travels — `down` for a debt count (the default), `up`
-   * for a floor a score must stay above. */
-  readonly ratchetDirection?: TRatchetDirection;
   /**
-   * The tolerance the check declares INLINE — the count it was armed at, used when
-   * no stored ratchet overrides it.
+   * Ratchet the check's measurement: `ratchet: 3` tolerates three and fails on a fourth;
+   * `ratchet: { id, direction, ceiling }` when the store key is not the check's id or the
+   * measurement is a score that may only rise (`direction: 'up'`). The stored threshold is
+   * read into `ctx.threshold`, and `--tighten` walks it towards the target.
    *
-   * It lives on the identity rather than on each factory's own options because it is
-   * also what the at-rest audit compares a stored file against. Declared here, the
-   * engine can read every ceiling off the roster; declared only inside a factory, a
+   * It lives on the identity rather than on each factory's own options because the
+   * ceiling is also what the at-rest audit compares a stored file against. Declared here,
+   * the engine can read every ceiling off the roster; declared only inside a factory, a
    * repository has to keep a second copy of each one in its config, by hand, and that
    * copy is what drifts.
    */
-  readonly ratchet?: number;
+  readonly ratchet?: TRatchetInput;
   /** The rule this check enforces, declared beside it. It joins the register
    * enforced by this check, so the register stops being a second list of the same
    * fact. See `rule` on ICheckMeta.
@@ -85,7 +80,7 @@ export interface ICheckIdentity {
  *
  * A one-line check used to carry seven fields, three of which said something. The id
  * is the file's name when the file exports the check alone; the title is the rule's
- * statement, else the id; the tier is `fast` — a check with no stated schedule should
+ * statement, else the id; the tier is `fast` — a check with no stated tier should
  * run often rather than never. What is left is what only the author knows.
  *
  * `ICheckIdentity` stays the full form: a module declaring a factory of its own may
@@ -101,3 +96,12 @@ export interface ICheckDeclaration extends Omit<ICheckIdentity, 'id' | 'title' |
   /** Absent: `fast`. */
   readonly tier?: TTier;
 }
+
+/**
+ * What a MODULE's factory takes: the declaration, without `zone`.
+ *
+ * A module's check speaks for the module — its rule is the module's, owned by its package —
+ * so the zone is the factory's to set, never the consumer's. Every module factory takes
+ * this, so the identity a consumer may write is the same across all of them.
+ */
+export type IModuleCheckDeclaration = Omit<ICheckDeclaration, 'zone'>;

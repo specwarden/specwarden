@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { ICheckContext, IProcessResult } from '../../../domain';
 import { platformShell } from '../../../infrastructure';
 import { runCheck } from '../../../testing';
-import { CommandCheck, type ICommandCheckSpec } from './command-check.check';
+import { CommandCheck, type ICommandCheckOptions } from './command-check.check';
 
 /** A context carrying only what CommandCheck uses — a proc that records its last
  * invocation and returns a scripted result. */
@@ -130,8 +130,8 @@ describe('the shell is a setting, because not every machine has bash', () => {
  * In each one the command exited 0 and the gate reported success for months.
  */
 describe('CommandCheck — a zero exit is not evidence of work', () => {
-  const ran = (spec: Partial<ICommandCheckSpec>, result: IProcessResult, tree: Record<string, string> = {}) =>
-    runCheck(new CommandCheck({ id: 'x', title: 'x', tier: 'fast', cmd: 'true', ...spec } as ICommandCheckSpec), {
+  const ran = (spec: Partial<ICommandCheckOptions>, result: IProcessResult, tree: Record<string, string> = {}) =>
+    runCheck(new CommandCheck({ id: 'x', title: 'x', tier: 'fast', cmd: 'true', ...spec } as ICommandCheckOptions), {
       tree,
       exec: () => result,
     });
@@ -258,5 +258,15 @@ describe('CommandCheck — what a check file may leave out', () => {
 
   it('carries the unnamed placeholder until its file names it', () => {
     expect(new CommandCheck({ cmd: 'true' }).id).toBe('<unnamed>');
+  });
+});
+
+// Accepted and dropped, `ratchet` on a command check was a tolerance nobody had: its verdict
+// is the exit code, and there is no count to hold a threshold against.
+describe('CommandCheck — refuses what it cannot honour', () => {
+  it.each([[3], [{ id: 'x', ceiling: 1 }]])('refuses `ratchet: %j`, saying what to use instead', (ratchet) => {
+    expect(() => new CommandCheck({ id: 'lint', cmd: 'eslint .', ratchet } as never)).toThrow(
+      "commandCheck 'lint': `ratchet` is not an option of commandCheck — a command check has no count to tolerate",
+    );
   });
 });

@@ -61,8 +61,8 @@ export interface ITestContextOptions {
    * must treat as a reason to skip rather than a verdict. */
   readonly branches?: readonly string[] | null;
   readonly currentBranch?: string;
-  /** The stored ratchet threshold this check would receive. */
-  readonly ratchet?: number;
+  /** The stored ratchet threshold this check would receive — `ctx.threshold`. */
+  readonly threshold?: number;
   readonly shard?: string;
   /** The manifest the check sees through `ctx.roster()`. */
   readonly roster?: readonly ICheckMeta[];
@@ -147,7 +147,7 @@ export function testContext(options: ITestContextOptions = {}): ITestContext {
   return {
     changed: options.changed ?? [],
     shard: options.shard,
-    ratchet: options.ratchet,
+    threshold: options.threshold,
     roster: () => options.roster ?? [],
     files,
     // EVERY file in the tree, dotfiles included: git tracks a `.env` like anything else,
@@ -184,7 +184,7 @@ export async function runCheck(check: ICheck, options: ITestContextOptions = {})
     { files: ctx.files, vcs: ctx.vcs, proc: ctx.proc, clock: ctx.clock, writer: ctx.writer },
     ctx.changed,
     ctx.shard,
-    ctx.ratchet,
+    ctx.threshold,
     ctx.roster,
   );
   try {

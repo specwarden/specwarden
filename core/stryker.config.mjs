@@ -28,7 +28,7 @@ export default {
   // folder-per-unit: every check lives at 'src/checks/<id>/<id>.check.ts'. They matched NOTHING
   // but the two barrels, which are excluded, so stryker instrumented zero files and died with
   // "No tests were executed" — a configuration error wearing the face of a test failure, in the
-  // one gate whose whole job is to prove a check would notice being broken.
+  // one check whose whole job is to prove a check would notice being broken.
   mutate: [
     'src/checks/**/*.ts',
     'src/primitives/**/*.ts',

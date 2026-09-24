@@ -13,12 +13,12 @@ it inside somebody else's repository is
 
 1. **A plugin declares checks and supplies no port adapter.** The loader refuses one, and
    this package must never need the refusal: a plugin that could reach the filesystem
-   itself would be a way around the capability gating that makes a check safe to install
+   itself would be a way around the capabilities that make a check safe to install
    at all. Everything here is built from the engine's declarative primitives, so there is
-   no I/O to gate.
+   no I/O of its own for a capability to guard.
 
-2. **The ratchet is the consumer's.** The plugin takes an id; the host owns the file
-   behind it. A number shipped here would be asserting something about a repository this
+2. **The ratchet is the consumer's.** The plugin takes `ratchet`; the consumer owns the
+   threshold behind it. A number shipped here would be asserting something about a repository this
    package has never seen — and it would be wrong for every repository but one.
 
 3. **A rule belongs here only if it is a fact about the FRAMEWORK.** "A module reaches
@@ -28,17 +28,26 @@ it inside somebody else's repository is
 
 4. **The exemptions are what make a rule livable.** The repository layer is where the
    query belongs, an entity IS the ORM's schema, and the tests that exercise them
-   necessarily reach the same package. The entities were missing from
-   `DEFAULT_ALLOWED_FROM`, and every real service was red on its entity file on the first
+   necessarily reach the same package. The entities were missing from the defaults (now
+   `DEFAULT_NESTJS_EXCEPT`), and every real service was red on its entity file on the first
    run. A rule with no exemptions is a rule that gets a blanket ratchet and stops meaning
    anything.
 
-5. **The options are checked by name, and the check carries the host's `rule`.** A
-   misspelled `allowedFrom` was dropped and the defaults applied in silence; `checkOptions`
-   refuses it at load. Without `rule` the check was an orphan in every host that keeps a
-   register, with no way to fix it short of re-declaring the check.
+5. **Its check is built like every module's.** `nestjs` takes `IModuleCheckDeclaration`
+   beside its own options: `id`, `tier`, `when`, `hint`, `rule`, `ratchet` reach the check
+   (an `id`, `tier` or `when` was accepted and dropped), `zone` is refused, the id defaults
+   to `nestjs-db-access` — no slash, which every tool read as a path — and the rule
+   defaults to the one the package implies, owned by `@specwarden/plugin-nestjs`, in the
+   `product` zone. Without it the check was an orphan in every consumer that keeps a
+   register. `checkOptions` refuses a misspelled option at load: a misspelled exemption was
+   dropped and the defaults applied in silence.
 
-6. **The barrel is the only import path a consumer depends on.** A second rule is a
+6. **Exemptions are `except` pathspecs, and the rule's owner is the rule document.**
+   `allowedFrom` (suffixes under the modules directory) was a second spelling of "leave
+   these files out", and `ruleDocument` a second spelling of the rule's `owner`. One word
+   each, as everywhere else in the product.
+
+7. **The barrel is the only import path a consumer depends on.** A second rule is a
    sibling folder under `src/`, exported from the barrel — not a longer index file and
    not a deeper import.
 

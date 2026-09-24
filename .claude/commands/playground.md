@@ -1,5 +1,5 @@
 ---
-description: Change what a template writes, or the repository its playground models — then regenerate and review the tree a stranger receives.
+description: Change what a template writes, or the repository its playground models — then regenerate and review the tree a consumer receives.
 argument-hint: '<template name, and what should change>'
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash
 ---
@@ -30,8 +30,8 @@ pnpm --filter @specwarden/template-<name> test    # unit spec + playground proof
 pnpm gate --id playgrounds
 ```
 
-Read the `.specwarden/` diff line by line: it is exactly what a stranger's repository will
-receive, and no compiler has read it. Never edit it by hand — the gate fails on the next run.
+Read the `.specwarden/` diff line by line: it is exactly what a consumer's repository will
+receive, and no compiler has read it. Never edit it by hand — the `playgrounds` check fails on the next run.
 
 ## Planting a defect
 

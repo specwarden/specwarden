@@ -58,7 +58,7 @@ describe('plan archive', () => {
 
   it('refuses a plan with no harvest section, and says what archiving requires', async () => {
     plan('## Phase 1 — a', '**Acceptance.** true');
-    expect(await planStatus(['plan', 'archive', 'plans/p.md'], dir, io, noSpawn)).toBe(2);
+    expect(await planStatus(['plan', 'archive', 'plans/p.md'], dir, io, noSpawn)).toBe(1);
     expect(err).toContain('❌ plans/p.md is not ready to archive:');
     expect(err).toContain('• no Harvest section');
     expect(out).toBe('');
@@ -71,7 +71,7 @@ describe('plan archive', () => {
       join(dir, 'plans', 'p.md'),
       ['**Status:** done', '', '## Harvest', '- a → docs/ARCHITECTURE.md'].join('\n'),
     );
-    expect(await planStatus(['plan', 'archive', 'plans/p.md'], dir, io, noSpawn)).toBe(2);
+    expect(await planStatus(['plan', 'archive', 'plans/p.md'], dir, io, noSpawn)).toBe(1);
     expect(err).toContain(
       '• the archive header is missing **Started:**, **Finished:**, **Branch:**, **Harvested:**, **Left open:**',
     );
@@ -80,13 +80,13 @@ describe('plan archive', () => {
 
   it('refuses a bare "harvested: yes", which names nothing that could be checked', async () => {
     plan('## Harvest', 'harvested: yes');
-    expect(await planStatus(['plan', 'archive', 'plans/p.md'], dir, io, noSpawn)).toBe(2);
+    expect(await planStatus(['plan', 'archive', 'plans/p.md'], dir, io, noSpawn)).toBe(1);
     expect(err).toContain('"harvested: yes" is not accepted');
   });
 
   it('refuses a destination that does not exist, naming every one rather than the first', async () => {
     plan('## Harvest', '- a → docs/GONE.md', '- b → docs/ALSO-GONE.md');
-    expect(await planStatus(['plan', 'archive', 'plans/p.md'], dir, io, noSpawn)).toBe(2);
+    expect(await planStatus(['plan', 'archive', 'plans/p.md'], dir, io, noSpawn)).toBe(1);
     expect(err).toContain('"docs/GONE.md" does not exist');
     expect(err).toContain('"docs/ALSO-GONE.md" does not exist');
   });

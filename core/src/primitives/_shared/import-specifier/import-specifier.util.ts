@@ -15,7 +15,7 @@ export const IMPORT_RE =
 
 /** `re.test(s)` without the statefulness a global regex carries. A consumer may pass a
  * `/g` regex, and `.test` on one advances `lastIndex`, so the NEXT call against a
- * different string silently mismatches — a false negative on a red gate. Use this
+ * different string silently mismatches — a false negative where a check should be red. Use this
  * wherever a consumer-supplied regex is `.test`ed across more than one input. */
 export function testStateless(re: RegExp, s: string): boolean {
   return (re.flags.includes('g') ? new RegExp(re.source, re.flags.replace('g', '')) : re).test(s);

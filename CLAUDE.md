@@ -26,14 +26,14 @@ depends on.
 
 ```
 core/                 the engine — ports, primitives, the runner, the CLI, and only the
-                      checks that verify the harness ITSELF: zones, ratchets, the rules
+                      self-checks, which audit the declarations: zones, ratchets, the rules
 modules/<name>/       opinions a repository chooses, installed one at a time
 plugins/<name>/       one stack's conventions, declared against the engine's primitives
 templates/<name>/     a starting tree; `_parts/` is what templates are assembled from
 <pkg>/_playground/    the package proved the way a consumer uses it — every package has one
 _playgrounds/         the ONE root playground: every package composed, through the CLI
 skills/               the canon: one folder per rule, each a SKILL.md
-scripts/              the logic the gates wrap, each with its spec, plus the package registry
+scripts/              the logic this repository's checks wrap, each with its spec, plus the package registry
 .specwarden/          this repository checked by the engine it publishes
 .changeset/           pending changesets — how a version is cut
 .claude/agents/       the roster: one file per role
@@ -45,8 +45,8 @@ scripts/              the logic the gates wrap, each with its spec, plus the pac
 
 **If a check could be WRONG about a repository that has never heard of it, it is an
 opinion and it ships as a module.** A documentation layout, a plan lifecycle, a compose
-file, a vendor's credential format — each is a house's decision, and a house that
-disagrees should not inherit it. Zones, ratchets and the rule register are the engine's
+file, a vendor's credential format — each is one repository's decision, and a repository
+that disagrees should not inherit it. Zones, ratchets and the rule register are the engine's
 own mechanics, and nothing else can own them.
 
 The engine therefore **depends on nothing**. Everything depends on `core`; `core` imports
@@ -60,8 +60,8 @@ prefix it could not.
 | ---------------------------------------- | ------------------------------------------------------------ |
 | adding or moving a file                  | `skills/structure/SKILL.md`                                  |
 | adding a package                         | `skills/structure/SKILL.md` §5, then `scripts/registry.mjs`  |
-| writing a check, in a module or a gate   | `skills/checks/SKILL.md`                                     |
-| adding a gate to this repository         | `skills/gates/SKILL.md`                                      |
+| writing a check, in a module or here     | `skills/checks/SKILL.md`                                     |
+| adding a check to this repository        | `skills/gates/SKILL.md`                                      |
 | writing a test                           | `skills/testing/SKILL.md`                                    |
 | changing what a template writes          | `skills/playgrounds/SKILL.md`                                |
 | exporting a name, or changing a verdict  | `skills/publishing/SKILL.md` §2, then `.changeset/README.md` |
@@ -97,10 +97,10 @@ Every change goes the same way, and `/phase` runs it end to end:
 
 ## Rules that hold everywhere
 
-1. **A check that cannot fail reports success.** Every gate carries the declaration that
+1. **A check that cannot fail reports success.** Every check carries the declaration that
    makes its own silence impossible — `corpus`, `paths`, `expect`/`refuse` — and every check
    has been seen red. `skills/checks/SKILL.md` §3.
-2. **The canon owns the rule; the gate owns the enforcement.** If they disagree, one of them
+2. **The canon owns the rule; the check owns the enforcement.** If they disagree, one of them
    is a bug — say which, do not pick silently.
 3. **A ratchet only tightens.** Coverage thresholds (in the registry), the mutation `break`,
    every count ratchet. Moving one to make a run pass is the edit that ends the ratchet;
@@ -125,10 +125,10 @@ source:
   marketplace that lists them
 - `CLAUDE.md` — from this file
 - every `templates/<name>/_playground/repository/.specwarden/` — from its template, by
-  `node scripts/playgrounds.mjs --write <name>`; the `playgrounds` gate compares them
+  `node scripts/playgrounds.mjs --write <name>`; the `playgrounds` check compares them
 
 Change the source, regenerate. A direct edit does not survive the next run — which is the
-point, and why the window between the edit and the next run is closed by a gate rather
+point, and why the window between the edit and the next run is closed by a check rather
 than by memory.
 
 ## Running it
@@ -142,7 +142,7 @@ pnpm build             # the CLI refuses a dist older than its sources
 ```
 
 `pnpm gate` **is** the check list. There is no second place to add one: a file under
-`.specwarden/checks/` is a gate, and a file there that exports no check is a load error
+`.specwarden/checks/` is a check, and a file there that exports no check is a load error
 rather than a silent skip. `pnpm check` and `pnpm release` run the same list.
 
 ## When to spawn an agent
@@ -153,20 +153,20 @@ answer a question.
 Above it — three or more packages, a new published name, a verdict that changes, a
 template's output that changes, a release — the roster is the division of labour:
 
-| Role                   | Model  | Spawn it                                                                |
-| ---------------------- | ------ | ----------------------------------------------------------------------- |
-| `scout`                | haiku  | first, ONCE, with every question batched — where things are             |
-| `lead`                 | opus   | work above the threshold: it returns the plan, the main session runs it |
-| `planner`              | opus   | multi-phase work whose decisions are made: `_plans/NN-<slug>.md`        |
-| `contract-architect`   | opus   | BEFORE a published name, option, default or verdict changes             |
-| `gate-author`          | sonnet | a check — in a module, or a gate here — and how it could go silent      |
-| `template-author`      | sonnet | what a template writes, and its playground                              |
-| `test-writer`          | sonnet | the invariants a change introduced, and a package below its ratchet     |
-| `test-runner`          | sonnet | running the list and reading a red gate, without fixing it              |
-| `qa`                   | sonnet | finished work, green, before the commit                                 |
-| `adversarial-reviewer` | opus   | AFTER the first review, on anything that cannot be taken back           |
-| `canon-keeper`         | sonnet | which skill owns a question (before); where a learned rule goes (after) |
-| `release-manager`      | sonnet | changesets against the diff, versions, tarballs, publish                |
+| Role                   | Model  | Spawn it                                                                  |
+| ---------------------- | ------ | ------------------------------------------------------------------------- |
+| `scout`                | haiku  | first, ONCE, with every question batched — where things are               |
+| `lead`                 | opus   | work above the threshold: it returns the plan, the main session runs it   |
+| `planner`              | opus   | multi-phase work whose decisions are made: `_plans/NN-<slug>.md`          |
+| `contract-architect`   | opus   | BEFORE a published name, option, default or verdict changes               |
+| `gate-author`          | sonnet | a check — in a module, or in this repository — and how it could go silent |
+| `template-author`      | sonnet | what a template writes, and its playground                                |
+| `test-writer`          | sonnet | the invariants a change introduced, and a package below its ratchet       |
+| `test-runner`          | sonnet | running the list and reading a red gate, without fixing it                |
+| `qa`                   | sonnet | finished work, green, before the commit                                   |
+| `adversarial-reviewer` | opus   | AFTER the first review, on anything that cannot be taken back             |
+| `canon-keeper`         | sonnet | which skill owns a question (before); where a learned rule goes (after)   |
+| `release-manager`      | sonnet | changesets against the diff, versions, tarballs, publish                  |
 
 The files are `.claude/agents/<role>.md`; `pnpm gate --id agents` holds each to its shape,
 and none of them may spawn another. Two economics decide how many to use:
@@ -175,8 +175,8 @@ and none of them may spawn another. Two economics decide how many to use:
   expensive across many, so gather context in ONE `scout` call. Verification is the
   opposite: `contract-architect`, `adversarial-reviewer` and `qa` run in fresh contexts,
   because a reviewer sharing a context with the writer has stopped being a review.
-- **A gate is cheaper and stricter than an agent reading for the same thing.** If
-  `pnpm gate --id <x>` decides it, run the gate. Agents exist for what no gate can read:
+- **A check is cheaper and stricter than an agent reading for the same thing.** If
+  `pnpm gate --id <x>` decides it, run the check. Agents exist for what no check can read:
   whether a promise should be made, whether a verdict change is a fix or a break, whether the
   reason in a comment is true.
 

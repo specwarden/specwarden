@@ -6,7 +6,7 @@ allowed-tools: Read, Write, Edit, Grep, Glob, Bash
 
 Take phase `$ARGUMENTS` of the active plan in `_plans/` to green, and commit it.
 
-This is the harness loop. Do not pause between steps for approval; report at the end.
+This is the whole loop. Do not pause between steps for approval; report at the end.
 
 ## 1. Read
 
@@ -37,8 +37,8 @@ pnpm gate
 ```
 
 Green on both tiers, or the phase is not done. A package below its coverage ratchet gets
-the missing test — never a lower threshold. A gate that fails is fixed in the code, not in
-the gate, unless the gate itself is the bug — then say so and pin the case it got wrong.
+the missing test — never a lower threshold. A check that fails is fixed in the code, not in
+the check, unless the check itself is the bug — then say so and pin the case it got wrong.
 
 ## 6. Changeset and commit
 

@@ -39,9 +39,9 @@ const assembled = (detected: ITemplateContext) => {
   );
 };
 
-export const docsOnly: ITemplate = {
+export const docsOnlyTemplate: ITemplate = {
   name: 'docs-only',
-  describe: 'a repository whose product is documentation — paths, hygiene, counts, placement',
+  describe: 'A repository whose product is documentation — paths, hygiene, counts, placement.',
   requires: ['@specwarden/docs'],
 
   files: (ctx: ITemplateContext): readonly ITemplateFile[] => assembled(ctx).files,

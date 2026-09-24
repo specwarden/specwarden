@@ -7,59 +7,68 @@ description: Use when a repository keeps work-in-progress documents — plans, R
 
 `@specwarden/plans`
 
+## When to reach for it
+
 A plan that outlives its work is worse than no plan: it describes an intended future in
-the present tense, and the next reader cannot tell which parts already happened.
+the present tense, and the next reader cannot tell which parts already happened. Reach for
+this module when a repository keeps plans for work in flight and deletes or archives them
+when the work lands. A repository that plans differently should not install it.
 
-| Check              | Catches                                                                  |
-| ------------------ | ------------------------------------------------------------------------ |
-| `planShape`        | a plan that names no acceptance command, or sizes somebody's work        |
-| `planStaleness`    | a finished plan still in the live corpus, or a citation into the archive |
-| `decisionLogShape` | a rejected alternative recorded without the reason it was rejected       |
+| Check                | Catches                                                                  |
+| -------------------- | ------------------------------------------------------------------------ |
+| `plan-shape`         | a plan that names no acceptance command, or sizes somebody's work        |
+| `plan-staleness`     | a finished plan still in the live corpus, or a citation into the archive |
+| `decision-log-shape` | a rejected alternative recorded without the reason it was rejected       |
 
-## Wiring
+## The wiring
 
 All three, in one file under `.specwarden/checks/`:
 
 ```js
-import { planChecks } from '@specwarden/plans';
+import { plansChecks } from '@specwarden/plans';
 
-export const checks = planChecks({ plansDir: 'docs/_plans', archiveDir: 'docs/_plans-archive' });
+export const checks = plansChecks({ plansDir: 'docs/_plans', archiveDir: 'docs/_plans-archive' });
 ```
 
-Both folders are the defaults; name them when the repository keeps plans elsewhere. A
-plan declares itself with `**Status:** draft | active | done` and, once work has started,
-`**Branch:** <name>`; every phase ends with a command or an `**Acceptance.**` line. One
+Both folders are the defaults; name them when the repository keeps plans elsewhere. One
 check alone takes the same defaults:
 
 ```js
 import { planShape } from '@specwarden/plans';
 
-export const check = planShape({
-  id: 'plan-shape',
-  title: 'a plan names real gate ids and every phase has an acceptance command',
-  plansDir: 'docs/_plans',
-});
+export const check = planShape({ plansDir: 'docs/_plans' });
 ```
 
-A plans folder that does not exist is a failure naming it — point `plansDir` at the real
-one, never delete the check. A folder with no plan in it passes as "nothing in flight".
+Each check's id is its factory's name in kebab case, and it carries the rule the package
+implies. Write no `id` or `title` unless the repository means something else by it.
 
-## What a plan must carry, and why each one
+**What a plan must carry, and why each one.** A `**Status:** draft | active | done` line,
+so a draft can be told from work under way. A `**Branch:** <name>` once work has started —
+`plan-staleness` uses it to tell a plan whose branch merged from one still in progress, and
+a checkout with no refs answers "cannot tell" rather than inventing a verdict. An
+acceptance command per phase — without it "done" is an opinion. A reason for every rejected
+alternative — the list of what was rejected is what stops the same alternative being
+re-proposed every quarter.
 
-**An acceptance command per phase.** Without it "done" is an opinion. With it, the phase
-is finished exactly when a command somebody else can run says so.
+**Arm it at reality.** On a repository with old plans, set `ratchet` to the current count
+of the check's debt — undeclared statuses, or sizing and unaccepted phases — and let
+`--tighten` lower it as the plans are fixed.
 
-**A rejected alternative carries its reason.** The list of what was rejected is the only
-thing that stops the same alternative being re-proposed every quarter — and a rejection
-with no reason reads as an oversight rather than a decision.
+## What it refuses
 
-**A branch declaration, when the work has one.** `planStaleness` uses it to tell a plan
-whose branch merged from one that was abandoned, and it degrades honestly: a checkout
-with no refs answers "cannot tell" and the check skips rather than inventing a verdict.
+- An option a factory does not have, a value of the wrong kind, an empty list, and `zone`
+  — by name, when the file loads. Patterns are `name`, `phaseHeading`, `command` and
+  `sizing`; the bar is `ratchet`; an exemption is `except`.
+- On `plansChecks`: an `id`, `title`, `rule` or `ratchet`, which belong to one check —
+  give them in that check's entry (`shape: { ratchet: 2 }`).
+- At run time: a plans folder that does not exist (point `plansDir` at the real one, never
+  delete the check), a plan naming an `--id` the run does not know, and a `docs` pathspec
+  that matched nothing. A folder with no plan in it passes as "nothing in flight".
 
 ## Refuse to
 
 - let a plan size somebody's work in hours or days — a phase expresses dependency and
   deployability, never how much to do at once;
-- keep a plan after its work lands. Archive it with its harvest; a deleted plan leaves
-  nothing to check, and absence looks the same as a plan nobody wrote.
+- keep a plan after its work lands. Archive it with its harvest, or delete it; a stale plan
+  asserts a false present in the one folder whose purpose is to be believed;
+- raise a ratchet, or lower a corpus floor, to make a run green.

@@ -1,6 +1,6 @@
 import { invariantsInDocument, planInvariantSync } from '../../../domain';
 import type { IExistingInvariant, IFileSource, ISpecSource, IVcs } from '../../../domain';
-import type { IWardenConfig } from '../../config/config.model';
+import type { ISpecwardenConfig } from '../../config/config.model';
 import type { ICliIo } from '../_shared/cli-io/cli-io.model';
 
 /** A source's note as a whole sentence: its own closing mark kept, a full stop added only
@@ -16,10 +16,12 @@ const sentence = (note: string): string => (/[.!?]$/.test(note.trim()) ? note.tr
  * wording was written for approval, and turning it into a module invariant, read as
  * truth about behaviour, is a human's decision.
  */
-export function syncInvariants(config: IWardenConfig, files: IFileSource, io: ICliIo, vcs?: IVcs): number {
+export function syncInvariants(config: ISpecwardenConfig, files: IFileSource, io: ICliIo, vcs?: IVcs): number {
   const source: ISpecSource | undefined = config.specSource;
   if (!source) {
-    io.out('no specSource configured — nothing to sync. Declare one in warden.config (native plans, or an adapter).\n');
+    io.out(
+      'no specSource configured — nothing to sync. Declare one in .specwarden/config.mjs (native plans, or an adapter).\n',
+    );
     return 0;
   }
   const result = source.requirements(files);

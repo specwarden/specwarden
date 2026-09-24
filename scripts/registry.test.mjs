@@ -12,9 +12,13 @@
  * seen to fail, not only to pass.
  */
 import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { KINDS, PACKAGES, byName, pkgDeps, pkgDir, pkgName } from './registry.mjs';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 const THRESHOLDS = ['statements', 'branches', 'functions', 'lines'];
 
@@ -196,5 +200,19 @@ describe('what a registry edit is refused for', () => {
     const broken = brokenAt(MODULE_AT, (p) => ({ ...p, skill: { ...p.skill, name: 'specwarden' } }));
 
     expect(registryProblems(broken)).toContain('[duplicate-skill] specwarden');
+  });
+});
+
+describe('a template describes itself in one place', () => {
+  // `describe` on the template object and `description` in this registry were two copies of
+  // one sentence, kept equal by hand; the monorepo's said "credential scan" in one and "CI
+  // coverage" in the other. `init --template` prints the first, the README the second.
+  it.each(PACKAGES.filter((p) => p.kind === 'template'))('$slug says the same thing in both', async (pkg) => {
+    const mod = await import(/* @vite-ignore */ pathToFileURL(resolve(HERE, `../${pkgDir(pkg)}/src/index.ts`)).href);
+    const template = Object.values(mod).find(
+      (value) => typeof value === 'object' && value !== null && 'describe' in value,
+    );
+    expect(template, `${pkg.slug} exports a template`).toBeDefined();
+    expect(template.describe).toBe(pkg.description);
   });
 });

@@ -71,16 +71,21 @@ export interface ITrackedCorpus {
   readonly matched: number;
 }
 
-export function trackedCorpus(vcs: IVcs, pathspec: string, except: readonly string[] = []): ITrackedCorpus {
-  const matched = [...new Set(vcs.trackedFiles(pathspec))];
+/** A primitive's `files`: one pathspec, or several whose matches are joined. */
+export type TPathspecs = string | readonly string[];
+
+export function trackedCorpus(vcs: IVcs, files: TPathspecs, except: readonly string[] = []): ITrackedCorpus {
+  const pathspecs = typeof files === 'string' ? [files] : files;
+  const matched = [...new Set(pathspecs.flatMap((p) => vcs.trackedFiles(p)))];
   const exempt = new Set(except.flatMap((g) => vcs.trackedFiles(g)));
   return { files: matched.filter((f) => !exempt.has(f)).sort(), matched: matched.length };
 }
 
 /** Why a primitive's corpus is empty, in the words the refusal prints: the pathspec
  * matched nothing, or it matched and `except` exempted every file. */
-export function emptyCorpusReason(pathspec: string, corpus: ITrackedCorpus, purpose: string): string {
+export function emptyCorpusReason(files: TPathspecs, corpus: ITrackedCorpus, purpose: string): string {
+  const named = typeof files === 'string' ? `\`${files}\`` : files.map((f) => `\`${f}\``).join(', ');
   return corpus.matched > 0 && corpus.files.length === 0
-    ? `\`${pathspec}\` matched ${corpus.matched} file(s), and \`except\` exempted all of them`
-    : `\`${pathspec}\` matched nothing to ${purpose}`;
+    ? `${named} matched ${corpus.matched} file(s), and \`except\` exempted all of them`
+    : `${named} matched nothing to ${purpose}`;
 }

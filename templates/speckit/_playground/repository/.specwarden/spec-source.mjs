@@ -4,7 +4,7 @@
 import { speckit } from '@specwarden/speckit';
 
 export const source = speckit({
-  // root: 'specs',
+  // featuresDir: 'specs',
   // specFile: 'spec.md',
   // tasksFile: 'tasks.md',
 });

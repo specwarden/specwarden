@@ -12,7 +12,7 @@ import { type IReferencesResolveOptions, referencesResolve } from './references-
 const ID = { id: 'doc-refs', title: 'doc references resolve', tier: 'fast' as const };
 // Backticked repository paths, the shape a documentation check extracts.
 const check = (over: Partial<IReferencesResolveOptions> = {}) =>
-  referencesResolve({ ...ID, in: 'docs/**/*.md', extract: /`([\w./-]+\.\w+)`/, ...over });
+  referencesResolve({ ...ID, files: 'docs/**/*.md', extract: /`([\w./-]+\.\w+)`/, ...over });
 
 describe('referencesResolve — the refusing verdict', () => {
   it('fails on a reference to a file that does not exist, naming the document, the line and the reference', async () => {
@@ -89,7 +89,7 @@ describe('referencesResolve — the passing verdict', () => {
     const tree = { 'docs/a.md': '`a/x.ts` `a/y.ts`' };
 
     expect((await runCheck(check({ ratchet: 2 }), { tree })).ok).toBe(true);
-    expect((await runCheck(check({ ratchet: 2 }), { tree, ratchet: 1 })).ok).toBe(false);
+    expect((await runCheck(check({ ratchet: 2 }), { tree, threshold: 1 })).ok).toBe(false);
   });
 });
 
@@ -100,7 +100,7 @@ describe('referencesResolve — an empty corpus', () => {
    * still passes, and the verdict says how many documents were read.
    */
   it('refuses an `in` that matched no document — the dead reference is right there, unread', async () => {
-    const verdict = await runCheck(check({ in: 'guides/**/*.md' }), { tree: { 'docs/a.md': '`gone.ts`' } });
+    const verdict = await runCheck(check({ files: 'guides/**/*.md' }), { tree: { 'docs/a.md': '`gone.ts`' } });
 
     expect(verdict.ok).toBe(false);
     expect(errorsOf(verdict)).toEqual([expect.stringContaining('`guides/**/*.md` matched nothing to read')]);
@@ -112,6 +112,8 @@ describe('referencesResolve — an empty corpus', () => {
     const verdict = await runCheck(check(), { tree: { 'docs/a.md': 'links are now [[wiki]] style' } });
 
     expect(verdict.ok).toBe(true);
-    expect(verdict.findings).toEqual([{ severity: 'info', message: '✓ doc-refs — 1 file(s) examined, clean' }]);
+    expect(verdict.findings).toEqual([
+      { severity: 'info', message: '✓ doc-refs — 1 file(s) examined, clean', ruleId: 'doc-refs' },
+    ]);
   });
 });

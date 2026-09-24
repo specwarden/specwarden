@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { ICheck, TRatchetDirection } from '../../../domain';
 
 import { CheckRunner } from './check-runner.service';
-import { adapters, check, ratchetBacking, recordingReporter, registryOf } from './check-runner.service.spec-helpers';
+import { adapters, check, ratchetBacking, recordingReporter, rosterOf } from './check-runner.service.spec-helpers';
 
 /**
  * `--tighten` records a measurement only from a PASSING verdict, and never past the
@@ -18,11 +18,11 @@ const ratcheted = (
 ): ICheck => ({
   ...check({ id: 'ratcheted' }),
   ratchet: { id: 'r', ...ratchet },
-  run: () => ({ ok, findings: [], ratchet: { value: measured } }),
+  run: () => ({ ok, findings: [], measured: measured }),
 });
 
 const tighten = (c: ICheck) =>
-  new CheckRunner(registryOf([c]), adapters([]), recordingReporter().reporter).run(
+  new CheckRunner(rosterOf([c]), adapters([]), recordingReporter().reporter).run(
     { all: true, tighten: true },
     { ci: false },
   );
@@ -70,7 +70,7 @@ describe('relevance under CI with no base', () => {
 
   it('an empty range under CI is "cannot tell": everything runs, and the run says why', async () => {
     const { reporter, ran } = recordingReporter();
-    const outcome = await new CheckRunner(registryOf([scoped()]), adapters([]), reporter).run({}, { ci: true });
+    const outcome = await new CheckRunner(rosterOf([scoped()]), adapters([]), reporter).run({}, { ci: true });
     expect(ran).toEqual(['scoped']);
     expect(outcome.fullRunReason).toBe(
       'under CI with no --base, the unpushed range is empty and cannot tell what changed — pass --base <ref> for a filtered run',
@@ -78,20 +78,20 @@ describe('relevance under CI with no base', () => {
   });
 
   it('`--relevance` answers from the same derivation', () => {
-    const runner = new CheckRunner(registryOf([scoped()]), adapters([]), recordingReporter().reporter);
+    const runner = new CheckRunner(rosterOf([scoped()]), adapters([]), recordingReporter().reporter);
     expect(runner.relevanceOf('scoped', {}, { ci: true })).toBe('run');
     expect(runner.relevanceOf('scoped', {}, { ci: false })).toBe('skip');
   });
 
   it('locally, an empty unpushed range is still "nothing changed" — the pre-push reading is honest', async () => {
     const { reporter, ran } = recordingReporter();
-    const outcome = await new CheckRunner(registryOf([scoped()]), adapters([]), reporter).run({}, { ci: false });
+    const outcome = await new CheckRunner(rosterOf([scoped()]), adapters([]), reporter).run({}, { ci: false });
     expect([ran, outcome.fullRunReason]).toEqual([[], undefined]);
   });
 
   it('with a base, an empty diff under CI is a real empty diff, filtered as one', async () => {
     const { reporter, ran } = recordingReporter();
-    const outcome = await new CheckRunner(registryOf([scoped()]), adapters([]), reporter).run(
+    const outcome = await new CheckRunner(rosterOf([scoped()]), adapters([]), reporter).run(
       { base: 'origin/main' },
       { ci: true },
     );
@@ -100,7 +100,7 @@ describe('relevance under CI with no base', () => {
 
   it('a non-empty range under CI is filtered as usual', async () => {
     const { reporter, ran } = recordingReporter();
-    await new CheckRunner(registryOf([scoped()]), adapters(['docs/x.md']), reporter).run({}, { ci: true });
+    await new CheckRunner(rosterOf([scoped()]), adapters(['docs/x.md']), reporter).run({}, { ci: true });
     expect(ran).toEqual([]);
   });
 });
@@ -113,7 +113,7 @@ describe('--tighten over a check that could not look', () => {
     await tighten({
       ...check({ id: 'blind' }),
       ratchet: { id: 'r' },
-      run: () => ({ ok: true, findings: [], ratchet: { value: 0 }, skipped: 'the env files are not on this machine' }),
+      run: () => ({ ok: true, findings: [], measured: 0, skipped: 'the env files are not on this machine' }),
     });
     expect(ratchetBacking.has('r')).toBe(false);
   });

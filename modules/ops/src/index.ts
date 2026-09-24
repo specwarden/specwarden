@@ -12,29 +12,26 @@
  * decision instead of a default: the upstream one is prefixed, because a caller
  * reaching for `violationsFor` almost always means the build-order one.
  */
-export { envFilesAgree, parseCompose, parseEnvFile } from './env-files-agree/env-files-agree.check';
-export type { IEnvFilesAgreeOptions, IComposeService } from './env-files-agree/env-files-agree.check';
+export { opsChecks } from './ops-checks/ops-checks.check';
+export type { IOpsChecksOptions, TOpsEntry } from './ops-checks/ops-checks.check';
+
+export { envPairing, parseCompose, parseEnvFile } from './env-pairing/env-pairing.check';
+export type { IEnvPairingOptions, IComposeService } from './env-pairing/env-pairing.check';
 
 export {
-  upstreamsResolve,
+  proxyUpstreams,
   parseUpstreams,
   hostOf,
   violationsFor as upstreamViolationsFor,
-} from './upstreams-resolve/upstreams-resolve.check';
-export type { IUpstreamsResolveOptions, IUpstream } from './upstreams-resolve/upstreams-resolve.check';
+  DEFAULT_LOOPBACK_HOSTS,
+} from './proxy-upstreams/proxy-upstreams.check';
+export type { IProxyUpstreamsOptions, IUpstream } from './proxy-upstreams/proxy-upstreams.check';
 
-export { gatesHaveCiJobs, parseWorkflowJobs } from './gates-have-ci-jobs/gates-have-ci-jobs.check';
-export type { IGateEntry, IGatesHaveCiJobsOptions, IWorkflowJob } from './gates-have-ci-jobs/gates-have-ci-jobs.check';
+export { ciCoverage, parseWorkflowJobs, DEFAULT_RUNNER_PATTERN } from './ci-coverage/ci-coverage.check';
+export type { ICheckEntry, ICiCoverageOptions, IWorkflowJob } from './ci-coverage/ci-coverage.check';
 
-export {
-  buildOrderFollowsDeps,
-  buildOrder,
-  violationsFor,
-  workspaceDeps,
-} from './build-order-follows-deps/build-order-follows-deps.check';
-export type { IBuildOrderOptions } from './build-order-follows-deps/build-order-follows-deps.check';
+export { buildOrder, buildSequence, violationsFor, workspaceDeps } from './build-order/build-order.check';
+export type { IBuildOrderOptions } from './build-order/build-order.check';
 
-export { shellLocalScope, functionSpans, localOutsideFunction } from './shell-local-scope/shell-local-scope.check';
-export type { IShellLocalScopeOptions } from './shell-local-scope/shell-local-scope.check';
-export { DEFAULT_RUNNER_PATTERN } from './gates-have-ci-jobs/gates-have-ci-jobs.check';
-export { DEFAULT_LOOPBACK_HOSTS } from './upstreams-resolve/upstreams-resolve.check';
+export { shellScope, functionSpans, localOutsideFunction } from './shell-scope/shell-scope.check';
+export type { IShellScopeOptions } from './shell-scope/shell-scope.check';

@@ -2,7 +2,7 @@
 name: test-writer
 description: >
   Writes vitest specs in this repository's style — unit specs beside their unit, package
-  playgrounds that import by name, template playground defects, gate specs that prove a
+  playgrounds that import by name, template playground defects, script specs that prove a
   guard fails. Trigger after new behaviour lands, when a package falls below its coverage
   ratchet, or when an invariant has no test naming it. Does not run the whole list (that is
   test-runner) and does not write checks (that is gate-author).
@@ -22,7 +22,7 @@ first line; it decides what you may write and where it goes.
 | does the package work imported by NAME              | package playground  | `<pkg>/_playground/playground.spec.ts`           |
 | does a template's tree go green, and each check red | template playground | a defect in `templates/<name>/_playground/…spec` |
 | do the packages compose, through the CLI            | root playground     | `_playgrounds/`                                  |
-| does this repository's own guard still fail         | gate spec           | `scripts/<script>.test.mjs`                      |
+| does this repository's own guard still fail         | script spec         | `scripts/<script>.test.mjs`                      |
 
 # What to assert
 
@@ -39,7 +39,7 @@ failing case comes first. Then:
 Name the test after the defect it prevents. "never reports in sync over a source holding no
 requirement" still means something after the function is rewritten.
 
-# House style
+# This repository's style
 
 - `describe` names the subject; `it` completes a sentence about behaviour.
 - In a module, use the published kit — `runCheck`, `testContext` and `errorsOf` from
@@ -71,14 +71,14 @@ It is one entry in the spec's `provePlayground` list: `why`, `edits`, `says`.
 
 Each package's ratchet lives in its registry entry (`scripts/registry.mjs` → `coverage`),
 and the generated `vitest.config.ts` enforces it. **Add the missing test; never lower a
-threshold.** When your work raises the floor for good, report the new measurement and let
+threshold.** When your work raises the coverage ratchet for good, report the new measurement and let
 the caller record it — minus one point, floored.
 
 # Before finishing
 
 ```bash
 pnpm --filter <package> test:coverage      # the suite and its ratchet
-pnpm exec vitest run scripts/              # if you touched a gate spec
+pnpm exec vitest run scripts/              # if you touched a script spec
 npx eslint <paths> --max-warnings=0 && npx prettier --write <paths>
 ```
 

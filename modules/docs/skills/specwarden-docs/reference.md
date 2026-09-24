@@ -6,11 +6,23 @@ Five checks over documentation. Each answers a question a reader cannot answer f
 themselves, and each fails in the one way documentation fails: quietly, long after the
 code moved.
 
-## Install and wire
+## What it catches
+
+| Check           | Factory        | Catches                                                                        |
+| --------------- | -------------- | ------------------------------------------------------------------------------ |
+| `doc-paths`     | `docPaths`     | a backticked repository path that no longer resolves                           |
+| `doc-symbols`   | `docSymbols`   | a class, function or type named in prose that nothing in the code declares     |
+| `doc-counts`    | `docCounts`    | a count restated in prose that the repository already owns; a bare menu number |
+| `doc-placement` | `docPlacement` | a document where the placement contract does not say its kind lives            |
+| `doc-hygiene`   | `docHygiene`   | a dead relative link, a pointer into a MOVED section, an over-long table row   |
+
+## Wiring
 
 ```bash
 pnpm add -D @specwarden/docs
 ```
+
+The whole module in one file:
 
 ```js
 // .specwarden/checks/docs/docs.check.mjs
@@ -19,19 +31,15 @@ import { docsChecks } from '@specwarden/docs';
 export const checks = docsChecks({
   code: ['src/**/*.ts'],
   suffixes: ['Service', 'Repository', 'Gateway'],
-  countableNouns: ['services', 'gates', 'modules'],
+  countableNouns: ['services', 'modules'],
   placement: { docs: '**/*_MODULE.md', allowed: [/^src\/[^/]+\/[^/]+_MODULE\.md$/] },
 });
 ```
 
-That is the whole module: `doc-paths`, `doc-symbols`, `doc-counts`, `doc-placement` and
-`doc-hygiene`, each in the `fast` tier, all reading every tracked markdown file. The
-engine discovers any file under `checks/` at any depth; nothing has to be named in
-`warden.config.mjs`.
-
-The three facts it asks for are the three no package can know: the endings that make a
-word a symbol, the nouns whose count your repository owns, and where a document may live.
-A missing one is refused by name when the file loads. To leave a check out, say so:
+That is all five, each reading every tracked markdown file. The three facts it asks for
+are the three no package can know: the endings that make a word a symbol, the nouns whose
+count your repository owns, and where a document may live. A missing one is refused by
+name when the file loads. A check you do not want is left out with `false`:
 
 ```js
 import { docsChecks } from '@specwarden/docs';
@@ -44,13 +52,45 @@ export const checks = docsChecks({
 });
 ```
 
-### `docsChecks` options
+Or one check per file, with only the facts it cannot default:
+
+```js
+// .specwarden/checks/docs/doc-counts.check.mjs
+import { docCounts } from '@specwarden/docs';
+
+export const check = docCounts({ countableNouns: ['services'] });
+```
+
+A check's id is its factory's name in kebab case (`doc-paths`, `doc-symbols`, …), its title
+is the rule it enforces, and that rule is implied by the package, owned by
+`@specwarden/docs`. Write `id` or `rule` only to say something else. The engine discovers
+any file under `checks/` at any depth; nothing has to be named in `config.mjs`.
+
+## Options
+
+Every factory takes the engine's identity beside its own options — `id`, `title`, `tier`
+(default `fast`), `when` (default: always relevant), `hint`, `advisory`, `rule` and
+`ratchet` — plus `corpus: { atLeast }`, how many documents a run must read (default 1). It
+refuses `zone`, an option it does not have, an empty list and a value of the wrong kind,
+by name, when the file loads. A misspelled option used to be dropped in silence, and the
+check ran without it.
+
+Every check names its corpus `docs` — a git pathspec over tracked files, or a list of them
+— and leaves files out with `except`, pathspecs read the way git reads them: `docs/_archive`
+is that directory, `**/dist/**` built output at any depth.
+
+**`docsChecks`** says what every check shares once, and takes one entry per check: its own
+options, laid over the preset's, or `false` to leave it out. It refuses `id`, `title`,
+`rule` and `ratchet` — five checks cannot share one; give it in that check's entry.
 
 | Option           | Kind                                                     | Default      |
 | ---------------- | -------------------------------------------------------- | ------------ |
-| `docs`           | git pathspec                                             | `**/*.md`    |
-| `skipDirs`       | directory prefixes                                       | none         |
-| `code`           | git pathspecs                                            | — required   |
+| `docs`           | git pathspec, or a list                                  | `**/*.md`    |
+| `except`         | git pathspecs, left out of every check                   | none         |
+| `corpus`         | `{ atLeast }`, held by every check                       | one document |
+| `tier`           | tier, applied to every check                             | `fast`       |
+| `when`           | relevance, applied to every check                        | always       |
+| `code`           | git pathspec, or a list, never empty                     | — required   |
 | `suffixes`       | strings, never empty                                     | — required   |
 | `countableNouns` | strings, never empty                                     | — required   |
 | `paths`          | `docPaths` options, or `false`                           | the preset's |
@@ -59,159 +99,113 @@ export const checks = docsChecks({
 | `placement`      | `docPlacement` options — `allowed` required — or `false` | — required   |
 | `hygiene`        | `docHygiene` options, or `false`                         | the preset's |
 
-`skipDirs` reaches `doc-paths`, `doc-symbols` and `doc-counts` — the three that read prose
-for claims. Each per-check object is laid over what the preset gives that check, so an
-id, a tier, a `rule` or one of the check's own options goes there:
+### `docPaths`
 
-```js
-import { docsChecks } from '@specwarden/docs';
-
-export const checks = docsChecks({
-  code: ['src/**/*.ts'],
-  suffixes: ['Service'],
-  countableNouns: ['services'],
-  placement: { allowed: [/^docs\//, /^README\.md$/] },
-  paths: { illustrative: ['src/example/file.ts'] },
-});
-```
-
-Every factory refuses an option it does not have, by name, when the file loads — a
-misspelled option was dropped in silence before, and the check ran without it.
-
-## The five checks
-
-Each is also exported on its own, for a repository that wants one of them. Every factory
-takes the engine's identity — `id`, `title`, `tier` (default `fast`), `when` (default:
-always), `hint`, `rule`, `ratchet` — beside the options below.
-
-### `docPaths` — a backticked path resolves
-
-Reads every backticked token that looks like a repository path (it carries a slash and an
-extension) and asserts the file is there. A renamed directory turns every document that
-mentions it into a set of instructions that cannot be followed, and nothing else in a
-repository notices.
-
-```js
-import { docPaths } from '@specwarden/docs';
-
-export const check = docPaths({ id: 'doc-paths', title: 'documented paths resolve', skipDirs: ['docs/_archive/'] });
-```
+Reads every backticked token that looks like a repository path — it carries a slash and an
+extension — and asserts the file is there, resolved against the document's own directory,
+every ancestor of it, then the `prefixes`. Write an illustrative path as a folder and a
+filename rather than `dir/file.ext`, or name it in `illustrative`.
 
 | Option             | Kind                                     | Default   |
 | ------------------ | ---------------------------------------- | --------- |
-| `docs`             | git pathspec                             | `**/*.md` |
-| `skipDirs`         | directory prefixes                       | none      |
+| `docs`             | git pathspec, or a list                  | `**/*.md` |
+| `except`           | git pathspecs                            | none      |
 | `illustrative`     | paths deliberately absent                | none      |
 | `prefixes`         | workspace roots a path may omit (`{ws}`) | none      |
 | `externalPrefixes` | sibling-checkout prefixes, assumed there | none      |
 
-Write an illustrative path as a folder and a filename rather than `dir/file.ext`, or the
-check will correctly refuse it.
+### `docSymbols`
 
-### `docSymbols` — an identifier named in prose is declared somewhere
+A backticked PascalCase name ending in one of your `suffixes` must be declared somewhere in
+the `code` corpus, or be a framework's. An empty `suffixes` is refused: the suffixes are an
+alternation, and an alternation of nothing matches every backticked PascalCase name — the
+widest setting there is, not an inert one. `except` leaves files out of both corpora.
 
-```js
-import { docSymbols } from '@specwarden/docs';
+| Option         | Kind                                 | Default                                      |
+| -------------- | ------------------------------------ | -------------------------------------------- |
+| `code`         | git pathspec, or a list, never empty | — required                                   |
+| `suffixes`     | strings, never empty                 | — required                                   |
+| `docs`         | git pathspec, or a list              | `**/*.md`                                    |
+| `except`       | git pathspecs                        | none                                         |
+| `external`     | symbols a framework owns             | none                                         |
+| `illustrative` | deliberate illustrations             | none                                         |
+| `symbolRef`    | RegExp, global, capturing the name   | `DEFAULT_SYMBOL_REF` — backticked PascalCase |
+| `declaration`  | RegExp, global, capturing the name   | `DEFAULT_DECLARATION` — TypeScript           |
 
-export const check = docSymbols({
-  id: 'doc-symbols',
-  title: 'documented symbols exist',
-  code: ['src/**/*.ts'],
-  suffixes: ['Service', 'Repository', 'Gateway'],
-});
-```
+### `docCounts`
 
-`suffixes` is what makes this usable: it narrows the corpus to identifiers whose _shape_
-declares a kind. **An empty list is refused**: the suffixes are an alternation, and an
-alternation of nothing matches every backticked PascalCase name — the widest setting
-there is, not an inert one.
-
-| Option         | Kind                               | Default                 |
-| -------------- | ---------------------------------- | ----------------------- |
-| `code`         | git pathspecs, never empty         | — required              |
-| `suffixes`     | strings, never empty               | — required              |
-| `docs`         | git pathspec                       | `**/*.md`               |
-| `skipDirs`     | directory prefixes                 | none                    |
-| `excludeCode`  | substrings of code paths           | none                    |
-| `external`     | symbols a framework owns           | none                    |
-| `illustrative` | deliberate illustrations           | none                    |
-| `symbolRef`    | RegExp, global, capturing the name | backticked PascalCase   |
-| `declaration`  | RegExp, global, capturing the name | TypeScript declarations |
-
-### `docCounts` — an inventory the repository owns is derived, never restated
-
-A sentence like "there are 4 services" is a number nobody re-counts. `countableNouns` are
-the nouns whose totals the repository itself owns, and they are the one thing it needs:
-
-```js
-import { docCounts } from '@specwarden/docs';
-
-export const check = docCounts({ id: 'doc-counts', title: 'counts are derived', countableNouns: ['services'] });
-```
-
-It reads NUMERALS, not words: "four" in prose is as often a quantity as a count. **An empty
-`countableNouns` is refused** for the same reason an empty `suffixes` is — it matched every
+A sentence like "there are 4 services" is a number nobody re-counts. It reads NUMERALS, not
+words — "four" in prose is as often a quantity as a count — and leaves alone a number that
+is hedged ("about 70"), dated ("measured 2026-07-30") or an ordinal ("step 3"). An empty
+`countableNouns` is refused for the same reason an empty `suffixes` is: it matched every
 number.
 
-| Option           | Kind                                    | Default      |
-| ---------------- | --------------------------------------- | ------------ |
-| `countableNouns` | strings, never empty                    | — required   |
-| `docs`           | git pathspec                            | `**/*.md`    |
-| `skipped`        | RegExps over paths                      | none         |
-| `allowlist`      | `(read) => [{ claim, paths }]`          | none         |
-| `countRatchet`   | number of tolerated claims              | `0`          |
-| `menu`           | `{ source, item, reference, dispatch }` | no menu half |
-| `hedge`          | RegExp source fragment                  | English      |
-| `ordinalLead`    | RegExp source fragment                  | English      |
-| `numberPattern`  | RegExp source fragment                  | digits       |
-| `dated`          | RegExp                                  | English      |
+The optional menu half asks that a menu number travel with its label: "option 12 (Export
+globals)", never a bare "option 12", which a renumbered menu silently points elsewhere.
 
-The four grammars are ENGLISH by default, and exported (`DEFAULT_HEDGE`,
-`DEFAULT_ORDINAL_LEAD`, `DEFAULT_NUMBER`, `DEFAULT_DATED`) so a repository writing in
-another language adapts them rather than meeting a check that finds nothing.
+| Option           | Kind                                    | Default                          |
+| ---------------- | --------------------------------------- | -------------------------------- |
+| `countableNouns` | strings, never empty                    | — required                       |
+| `docs`           | git pathspec, or a list                 | `**/*.md`                        |
+| `except`         | git pathspecs                           | none                             |
+| `allowlist`      | `(read) => [{ claim, paths }]`          | none                             |
+| `menu`           | `{ source, item, reference, dispatch }` | no menu half                     |
+| `hedge`          | RegExp source fragment                  | `DEFAULT_HEDGE` — English        |
+| `ordinalLead`    | RegExp source fragment                  | `DEFAULT_ORDINAL_LEAD` — English |
+| `number`         | RegExp source fragment                  | `DEFAULT_NUMBER` — digits        |
+| `dated`          | RegExp                                  | `DEFAULT_DATED` — English        |
 
-### `docPlacement` — a document sits where the contract says its kind lives
+The four grammars are English by default, and exported, so a repository writing in another
+language adapts them rather than meeting a check that finds nothing.
 
-```js
-import { docPlacement } from '@specwarden/docs';
+### `docPlacement`
 
-export const check = docPlacement({
-  id: 'doc-placement',
-  title: 'module documents sit beside their module',
-  docs: '**/*_MODULE.md',
-  allowed: [/^src\/[^/]+\/[^/]+_MODULE\.md$/],
-});
-```
+Every document must match one row of the contract. A location no row describes is not
+wrong — it is undecided, which is where a second copy of a rule is born. `link` optionally
+bans a link into a folder from outside it: a plan is deleted when its work ends, so every
+inbound pointer is a delayed dangling one.
 
 | Option    | Kind                                  | Default    |
 | --------- | ------------------------------------- | ---------- |
 | `allowed` | RegExps — the placement contract      | — required |
-| `docs`    | git pathspec                          | `**/*.md`  |
+| `docs`    | git pathspec, or a list               | `**/*.md`  |
+| `except`  | git pathspecs                         | none       |
 | `link`    | `{ pattern, dir, allow }` inbound ban | none       |
 
-### `docHygiene` — a relative link points at something that exists
+### `docHygiene`
 
-Follows `./` and `../` only. An absolute-looking path is not a link this check reads.
+Follows `./` and `../` links only — an absolute-looking path is not a link it reads — and a
+`` `DOC.md` §N `` pointer into a section headed MOVED. Links inside a code fence or a code
+span are examples, and are not read. `except` is how a source rendered into another
+document is kept from being read twice.
 
-```js
-import { docHygiene } from '@specwarden/docs';
+| Option         | Kind                      | Default   |
+| -------------- | ------------------------- | --------- |
+| `docs`         | git pathspec, or a list   | `**/*.md` |
+| `except`       | git pathspecs             | none      |
+| `fatCellLimit` | characters in a table row | `300`     |
 
-export const check = docHygiene({ id: 'doc-hygiene', title: 'relative links resolve' });
-```
+## What fails and what passes
 
-| Option            | Kind                                 | Default   |
-| ----------------- | ------------------------------------ | --------- |
-| `docs`            | git pathspec                         | `**/*.md` |
-| `renderedSources` | files rendered into another document | none      |
-| `fatCellLimit`    | characters in a table row            | `300`     |
+A clean pass prints what it read — `✓ doc-paths — 12 document(s) examined, clean` — and a
+run that read fewer documents than `corpus.atLeast` **fails**, naming the pathspec and
+whether `except` emptied it: a `docs` pathspec that stopped matching would otherwise make
+every one of these pass over nothing. Declare `corpus: { atLeast: 0 }` where an empty set
+is expected. Every finding carries the file, and the line where there is one, and says what
+to do.
 
-## The two ways this goes wrong
+**The ratchet.** Each check counts one kind of debt, and `ratchet: n` tolerates that many:
 
-**A corpus that matched nothing.** A `docs` pathspec that stops matching would make every
-one of these pass over an empty set, so each of them fails instead and names the
-pathspec. Do not work around it because a new repository has few documents — point the
-pathspec at where the documents are.
+- `docPaths` — unresolved paths;
+- `docSymbols` — distinct undeclared names;
+- `docCounts` — restated counts and unlabelled menu numbers, together. A number the menu
+  does not have, two dispatch arms for one number, and a menu that cannot be read always
+  fail;
+- `docPlacement` — misplaced documents. An inbound link always fails;
+- `docHygiene` — over-long table rows. A dead link and a pointer into a MOVED section always
+  fail.
 
-**A ratchet used as an off switch.** `ratchet` and `countRatchet` exist so a repository
-with existing prose can arm the rule today and pay the debt down. A ratchet that goes up
-is a rule being retired, and it should be retired out loud instead.
+A tolerated finding is still listed, under a line saying it is tolerated. The stored
+threshold (`.specwarden/ratchets/`) wins over the one written inline, and `--tighten` moves
+it to what a passing run measured. A ratchet that goes up is a rule being retired — retire
+it out loud instead.

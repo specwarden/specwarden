@@ -1,14 +1,11 @@
+import { OUTPUT_VERSION } from '../../../contracts/version/version.constant';
 import { computeCoverage, validateOwnership } from '../../../domain';
 import type { IOwnershipFinding, IRule, TCapability } from '../../../domain';
-import type { CheckRegistry } from '../../container';
-import { HARNESS_RULE_ID } from '../../consumer-tree/harness-checks/harness-checks.factory';
+import type { CheckRoster } from '../../container';
+import { SELF_CHECK_RULE_ID } from '../../consumer-tree/self-checks/self-checks.factory';
 import { orphanChecks } from '../../rules';
-import type { IWardenConfig } from '../../config/config.model';
+import type { ISpecwardenConfig } from '../../config/config.model';
 import type { ICliIo } from '../_shared/cli-io/cli-io.model';
-
-/** The shape of `doctor --json`, stated in the document: a script reads it before the rest,
- * and a key removed or renamed moves this number. */
-const DOCTOR_REPORT_VERSION = 1;
 
 /** One check, as doctor describes it — the text line and the JSON row read the same. */
 interface IDoctorCheck {
@@ -40,9 +37,9 @@ interface IDoctorReport {
   };
 }
 
-function report(config: IWardenConfig, registry: CheckRegistry): IDoctorReport {
+function report(config: ISpecwardenConfig, roster: CheckRoster): IDoctorReport {
   const denied = new Set(config.denyCapabilities ?? []);
-  const checks = registry.all().map((c): IDoctorCheck => ({
+  const checks = roster.all().map((c): IDoctorCheck => ({
     id: c.id,
     title: c.title,
     tier: c.tier,
@@ -51,7 +48,7 @@ function report(config: IWardenConfig, registry: CheckRegistry): IDoctorReport {
     denied: c.capabilities.some((cap) => denied.has(cap)),
     advisory: Boolean(c.advisory),
     exclusive: Boolean(c.exclusive),
-    origin: registry.originOf(c),
+    origin: roster.originOf(c),
     rule:
       c.rule === undefined
         ? undefined
@@ -75,12 +72,12 @@ function report(config: IWardenConfig, registry: CheckRegistry): IDoctorReport {
       ? undefined
       : {
           declared: cov.total,
-          engine: declared.filter((r) => r.id === HARNESS_RULE_ID).map((r) => r.id),
+          engine: declared.filter((r) => r.id === SELF_CHECK_RULE_ID).map((r) => r.id),
           enforced: cov.enforced,
           notMechanizable: cov.notMechanizable,
           unenforcedWithoutReason: cov.unenforcedWithoutReason,
           orphans: orphanChecks(
-            registry.all().map((c) => c.id),
+            roster.all().map((c) => c.id),
             declared,
           ),
         };
@@ -91,8 +88,8 @@ function report(config: IWardenConfig, registry: CheckRegistry): IDoctorReport {
 /**
  * `doctor` — what this repository has DECLARED, printed without running any of it.
  *
- * It answers the question a red gate cannot: not "does the code pass" but "is the
- * harness itself wired". Every line is read from the config and the registry, so a
+ * It answers the question a red check cannot: not "does the code pass" but "is the
+ * repository's own declaration wired". Every line is read from the config and the roster, so a
  * check that exists but enforces no rule, an ownership conflict, or a capability the
  * config denies out from under a check, all show up here rather than as a surprise
  * mid-run.
@@ -102,15 +99,15 @@ function report(config: IWardenConfig, registry: CheckRegistry): IDoctorReport {
  * same either way — 1 on an ownership conflict.
  */
 export function doctor(
-  config: IWardenConfig,
-  registry: CheckRegistry,
+  config: ISpecwardenConfig,
+  roster: CheckRoster,
   io: ICliIo,
   options: { readonly json?: boolean } = {},
 ): number {
-  const r = report(config, registry);
+  const r = report(config, roster);
   const failed = (r.ownership?.conflicts.length ?? 0) > 0;
   if (options.json) {
-    io.out(`${JSON.stringify({ version: DOCTOR_REPORT_VERSION, ...r }, null, 2)}\n`);
+    io.out(`${JSON.stringify({ version: OUTPUT_VERSION, ...r }, null, 2)}\n`);
     return failed ? 1 : 0;
   }
 

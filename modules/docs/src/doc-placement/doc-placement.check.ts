@@ -1,11 +1,14 @@
-import type { ICheck, ICheckContext, IFinding, IVerdict } from 'specwarden';
-import { buildCheck, checkOptions, frameTolerated, testStateless } from 'specwarden';
-import type { IDocCheckIdentity } from '../_shared/identity/identity.model';
-import { DEFAULT_DOCS, nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
+import type { ICheck, ICorpusFloor, IFinding, IModuleCheckDeclaration, TPathspecs } from 'specwarden';
+import { buildCheck, checkOptions, lineOf, testStateless, thresholdOf } from 'specwarden';
+import { DEFAULT_DOCS, DOCS_CORPUS_OPTIONS, corpusOf, debtVerdict, refusedCorpus } from '../_shared/corpus/corpus.util';
 
-export interface IDocPlacementOptions extends IDocCheckIdentity {
-  /** git pathspec for the markdown corpus. Default: `**\/*.md`. */
-  readonly docs?: string;
+export interface IDocPlacementOptions extends IModuleCheckDeclaration {
+  /** git pathspec(s) for the markdown corpus. Default: `**\/*.md`. */
+  readonly docs?: TPathspecs;
+  /** Pathspecs of documents left out of the corpus. */
+  readonly except?: readonly string[];
+  /** How many documents a run must read for its verdict to count. Default: one. */
+  readonly corpus?: ICorpusFloor;
   /** The placement contract: a document must match ONE of these. Regexes, because
    * the contract's shapes (alternations, anchored names) exceed what a glob says. */
   readonly allowed: readonly RegExp[];
@@ -14,8 +17,6 @@ export interface IDocPlacementOptions extends IDocCheckIdentity {
    * dangling one). `pattern` is global with capture group 1 = the linked name;
    * `allow` names the one file that is safe to point at (the folder's own README). */
   readonly link?: { readonly pattern: RegExp; readonly dir: string; readonly allow?: string };
-  /** Ratchet on placement offenders only; an inbound link always fails. */
-  readonly ratchet?: number;
 }
 
 /**
@@ -24,50 +25,53 @@ export interface IDocPlacementOptions extends IDocCheckIdentity {
  * describe is not wrong — it is UNDECIDED, which is where a partial second copy is
  * born; either the contract gains a row or the file moves.
  *
+ * THE RATCHET counts misplaced documents only. An inbound link always fails: it is one
+ * edit to remove, and a repository armed at its count of them would keep a pointer that
+ * starts dangling the day the plan is deleted.
+ *
  * A PRODUCT check: matching a path against a contract, and banning an inbound link
  * into a folder, are universal; the contract's shapes and the folder are facts
  * about one repository and arrive as options.
  */
 export function docPlacement(options: IDocPlacementOptions): ICheck {
   checkOptions('docPlacement', options, {
-    docs: { kind: 'string' },
+    ...DOCS_CORPUS_OPTIONS,
     allowed: { kind: 'array', required: true },
     link: { kind: 'object' },
   });
   const docs = options.docs ?? DEFAULT_DOCS;
-  const ratchet = options.ratchet ?? 0;
   return buildCheck(
     {
       ...options,
+      id: options.id ?? 'doc-placement',
       rule: options.rule ?? {
         statement: 'a document sits where the placement contract says, and nothing outside links into the plans',
         owner: '@specwarden/docs',
         implied: true,
       },
-      tier: options.tier ?? 'fast',
       zone: 'product',
     },
     ['read'],
-    (ctx: ICheckContext): IVerdict => {
-      const files = ctx.vcs.trackedFiles(docs);
-      // Zero documents is a failure: a pathspec that stopped matching would otherwise
+    (ctx, self) => {
+      const corpus = corpusOf(ctx.vcs, docs, options.except);
+      // Too few documents is a failure: a pathspec that stopped matching would otherwise
       // report every document correctly placed, over a corpus of none.
-      if (files.length === 0) return nothingExamined(options.id, docs);
+      const short = refusedCorpus(self.id, docs, corpus, options.corpus);
+      if (short) return short;
 
-      const placement: IFinding[] = files
+      const placement: IFinding[] = corpus.files
         .filter((f) => !options.allowed.some((re) => testStateless(re, f)))
         .map((file) => ({
           severity: 'error',
           file,
-          message: `${file} sits where the placement contract does not describe — decide: move it, or add the row to the contract.`,
-          ruleId: options.id,
+          message: `${file} sits where the placement contract does not describe. Move it, or add the row that describes its kind to \`allowed\`.`,
         }));
 
       const links: IFinding[] = [];
       if (options.link) {
         const { pattern, dir, allow } = options.link;
         const re = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
-        for (const file of files) {
+        for (const file of corpus.files) {
           if (file.startsWith(dir)) continue;
           const body = ctx.files.tryRead(file);
           if (body === undefined) continue;
@@ -76,17 +80,18 @@ export function docPlacement(options: IDocPlacementOptions): ICheck {
               links.push({
                 severity: 'error',
                 file,
+                line: lineOf(body, m.index ?? 0),
                 message: `${file} links into ${dir} (\`${m[1]}\`) from outside it — a plan is deleted when its work ends, so nothing may point at one. Cite the document that owns the durable fact instead.`,
-                ruleId: options.id,
               });
           }
         }
       }
 
-      // Placement is ratcheted; an inbound link never is. A passing verdict's error
-      // lines are the placement violations the ratchet tolerates — frame them.
-      const ok = placement.length <= ratchet && links.length === 0;
-      return frameTolerated(ok, [...placement, ...links], `the placement ratchet ${ratchet}`);
+      return debtVerdict({ hard: links, soft: placement }, thresholdOf(ctx, self), {
+        id: self.id,
+        examined: corpus.files.length,
+        unit: 'document',
+      });
     },
   );
 }

@@ -15,15 +15,12 @@ const ARCHIVE_HEADER = [
 ];
 
 const OPTIONS: IPlanStalenessOptions = {
-  id: 'plan-staleness',
-  title: 'a finished plan leaves the live corpus',
   plansDir: 'docs/_plans',
   archiveDir: 'docs/_plans-archive',
   branchDeclaration: /^\*\*Branch:\*\*\s*`?([^\s`]+)`?/m,
   statusDeclaration: /^\*\*Status:\*\*\s*`?(draft|active)`?/im,
   activeStatuses: ['active'],
   archiveHeader: ARCHIVE_HEADER,
-  mayCiteArchive: ['docs/_plans/README.md'],
   when: () => true,
 };
 
@@ -45,8 +42,13 @@ const runWith = (
 const messages = (verdict: IVerdict) => verdict.findings.map((f) => f.message).join('\n');
 
 describe('planStaleness — the identity a run reads', () => {
-  it('is a product-zone, read-only check in the fast tier by default', () => {
-    expect(planStaleness(OPTIONS)).toMatchObject({ zone: 'product', capabilities: ['read'], tier: 'fast' });
+  it('is a product-zone, read-only check named `plan-staleness`, in the fast tier by default', () => {
+    expect(planStaleness(OPTIONS)).toMatchObject({
+      id: 'plan-staleness',
+      zone: 'product',
+      capabilities: ['read'],
+      tier: 'fast',
+    });
   });
 
   it('matters, by default, only when a document changed', () => {
@@ -66,8 +68,9 @@ describe('planStaleness — the live folder', () => {
     const verdict = await runWith({ 'docs/_plans/thing.md': '**Status:** active' }, ['dev']);
 
     expect(errorsOf(verdict)).toEqual([
-      'docs/_plans/thing.md: is active and declares no branch. An active plan names where its work happens.',
+      'docs/_plans/thing.md is active and declares no branch. An active plan names where its work happens.',
     ]);
+    expect(verdict.findings[0]).toMatchObject({ file: 'docs/_plans/thing.md', line: 1 });
   });
 
   it('fails a draft that names a branch — it arms a failure for the day that branch goes', async () => {
@@ -76,6 +79,7 @@ describe('planStaleness — the live folder', () => {
 
     expect(verdict.ok).toBe(false);
     expect(messages(verdict)).toMatch(/draft yet declares branch `work-branch`/);
+    expect(verdict.findings[0]).toMatchObject({ file: 'docs/_plans/thing.md', line: 2 });
   });
 
   // It was read as a draft, and failed as "a draft that declares a branch".
@@ -86,7 +90,7 @@ describe('planStaleness — the live folder', () => {
     });
 
     expect(verdict.ok).toBe(true);
-    expect(messages(verdict)).toContain('docs/_plans/thing.md: is done — harvest it, then move it to');
+    expect(messages(verdict)).toContain('docs/_plans/thing.md is done — harvest it, then move it to');
   });
 
   it('passes a draft with no branch — draft is a first-class state', async () => {
@@ -98,6 +102,7 @@ describe('planStaleness — the live folder', () => {
 
     expect(verdict.ok).toBe(false);
     expect(messages(verdict)).toMatch(/no longer exists here or on the remote.*docs\/_plans-archive\//s);
+    expect(verdict.findings[0]).toMatchObject({ file: 'docs/_plans/thing.md', line: 2 });
   });
 
   /**
@@ -111,17 +116,36 @@ describe('planStaleness — the live folder', () => {
     expect(messages(verdict)).toMatch(/SKIPPED, this checkout has no branch refs/);
   });
 
-  it('fails plans with no status past the ratchet, and holds them under it', async () => {
+  it('names each plan with no status, fails past the ratchet, and holds them under it', async () => {
     const tree = { 'docs/_plans/a.md': '# no status here', 'docs/_plans/b.md': '# nor here' };
 
     const failing = await runWith(tree, ['dev']);
-    expect(errorsOf(failing)).toEqual(['2 plan(s) declare no status; the ratchet is 0.']);
-    // Each undeclared plan is still NAMED, as a note, so the reader knows which to fix.
-    expect(messages(failing)).toContain('docs/_plans/a.md: no status declaration');
+    expect(errorsOf(failing)).toEqual([
+      'docs/_plans/a.md declares no status, so a draft cannot be told from work under way. Declare whether it is a draft, active or done.',
+      'docs/_plans/b.md declares no status, so a draft cannot be told from work under way. Declare whether it is a draft, active or done.',
+    ]);
+    expect(failing.findings.map((f) => f.file)).toEqual(['docs/_plans/a.md', 'docs/_plans/b.md']);
 
-    const held = await runWith(tree, ['dev'], { undeclaredStatusRatchet: 2 });
+    const held = await runWith(tree, ['dev'], { ratchet: 2 });
     expect(held.ok).toBe(true);
-    expect(messages(held)).toContain('✓ plan staleness — 2 plan(s) without a status (ratchet 2), archive clean');
+    expect(held.measured).toBe(2);
+    expect(messages(held)).toContain('2 pre-existing violation(s) tolerated under ratchet 2');
+  });
+
+  // `undeclaredStatusRatchet` was read off the options alone, and a passing run reported the
+  // count only as a note: `--tighten` stored 0 over the plans the check had been tolerating.
+  it('holds to the STORED threshold the run hands it, over the declared ceiling', async () => {
+    const tree = { ...FOLDER, 'docs/_plans/a.md': '# no status here' };
+
+    expect((await runCheck(planStaleness(OPTIONS), { tree, branches: [], threshold: 1 })).ok).toBe(true);
+    const armed = planStaleness({ ...OPTIONS, ratchet: 5 });
+    expect((await runCheck(armed, { tree, branches: [], threshold: 0 })).ok).toBe(false);
+  });
+
+  it('leaves out a plan `except` names', async () => {
+    const tree = { 'docs/_plans/a.md': '# no status here' };
+
+    expect((await runWith(tree, ['dev'], { except: ['docs/_plans/a.md'] })).ok).toBe(true);
   });
 
   it('does not treat the folder README as a plan', async () => {
@@ -152,7 +176,7 @@ describe('planStaleness — the live folder', () => {
     });
 
     expect(verdict.ok).toBe(true);
-    expect(messages(verdict)).toContain('0 plan(s) without a status');
+    expect(verdict.measured).toBe(0);
   });
 });
 
@@ -183,8 +207,9 @@ describe('planStaleness — the archive', () => {
     const verdict = await runWith(tree, ['dev']);
 
     expect(errorsOf(verdict)).toEqual([
-      'skills/x/SKILL.md links to docs/_plans-archive/done.md — an archived plan describes the past in the present tense; cite the document that owns the fact instead.',
+      'skills/x/SKILL.md:1 links to docs/_plans-archive/done.md — an archived plan describes the past in the present tense; cite the document that owns the fact instead.',
     ]);
+    expect(verdict.findings[0]).toMatchObject({ file: 'skills/x/SKILL.md', line: 1 });
   });
 
   it('reads the ROOT documents for archive links too', async () => {
@@ -195,13 +220,29 @@ describe('planStaleness — the archive', () => {
     expect((await runWith(tree, ['dev'])).ok).toBe(false);
   });
 
-  it('allows the one document declared able to cite the archive', async () => {
+  it('allows a document `except` names to cite the archive', async () => {
     const tree = {
       'docs/_plans-archive/done.md': ARCHIVE_OK,
-      'docs/_plans/README.md': 'archived plans live in docs/_plans-archive/done.md',
+      'docs/HISTORY.md': 'archived plans live in docs/_plans-archive/done.md',
     };
 
-    expect((await runWith(tree, ['dev'])).ok).toBe(true);
+    expect((await runWith(tree, ['dev'])).ok).toBe(false);
+    expect((await runWith(tree, ['dev'], { except: ['docs/HISTORY.md'] })).ok).toBe(true);
+  });
+
+  it('reads the documents `docs` names for a citation, and nothing else', async () => {
+    const tree = { 'docs/_plans-archive/done.md': ARCHIVE_OK, 'vendor/x.md': 'see docs/_plans-archive/done.md' };
+
+    expect((await runWith(tree, ['dev'], { docs: 'docs/**/*.md' })).ok).toBe(true);
+    expect((await runWith(tree, ['dev'], { docs: ['docs/**/*.md', 'vendor/*.md'] })).ok).toBe(false);
+  });
+
+  it('fails when there is an archive to cite and `docs` matched no document to read', async () => {
+    const verdict = await runWith({ 'docs/_plans-archive/done.md': ARCHIVE_OK }, ['dev'], { docs: 'handbook/*.md' });
+
+    expect(errorsOf(verdict)).toEqual([
+      '`docs` matched no document, so nothing was read for a citation of docs/_plans-archive/. Point `docs` at the repository’s documentation.',
+    ]);
   });
 
   it('lets both folder READMEs cite the archive by default', async () => {
@@ -211,7 +252,7 @@ describe('planStaleness — the archive', () => {
       'docs/_plans/README.md': 'see docs/_plans-archive/done.md',
     };
 
-    expect((await runWith(tree, ['dev'], { mayCiteArchive: undefined })).ok).toBe(true);
+    expect((await runWith(tree, ['dev'])).ok).toBe(true);
   });
 
   it('allows a link to the archive README — it is a contract, not an archived plan', async () => {
@@ -258,7 +299,21 @@ describe('planStaleness — what it examined', () => {
     const verdict = await runWith({}, ['dev']);
 
     expect(verdict.ok).toBe(true);
-    expect(messages(verdict)).toBe('no plan in docs/_plans — nothing in flight');
+    expect(messages(verdict)).toBe(
+      '✓ plan-staleness — 0 plan(s) examined, clean\nno plan in docs/_plans — nothing in flight.',
+    );
+  });
+
+  it('holds the plans to a floor when told one', async () => {
+    const verdict = await runWith({}, ['dev'], { corpus: { atLeast: 1 } });
+
+    expect(errorsOf(verdict)[0]).toContain('examined 0 plan(s) — docs/_plans holds 0 plan(s) — below the floor of 1');
+  });
+
+  it('prints the engine’s pass line, naming how many plans it read', async () => {
+    const verdict = await runWith({ 'docs/_plans/a.md': ACTIVE }, ['work-branch']);
+
+    expect(messages(verdict)).toBe('✓ plan-staleness — 1 plan(s) examined, clean');
   });
 
   it('fails a FILE where the plans folder should be, rather than crashing on the listing', async () => {
@@ -276,7 +331,7 @@ describe('planStaleness — what it examined', () => {
 
 describe('planStaleness — its defaults and its options', () => {
   it('reads `docs/_plans` and archives into `docs/_plans-archive` when neither is said', async () => {
-    const check = planStaleness({ id: 'plan-staleness', title: 't' });
+    const check = planStaleness();
     const verdict = await runCheck(check, { tree: { 'docs/_plans/a.md': ACTIVE }, branches: ['dev'] });
 
     expect(check.tier).toBe('fast');
@@ -284,9 +339,14 @@ describe('planStaleness — its defaults and its options', () => {
   });
 
   it('refuses an option it does not have, by name, when the file loads', () => {
-    expect(() => planStaleness({ ...OPTIONS, plans: 'docs/_plans' } as never)).toThrow(
+    expect(() => planStaleness({ ...OPTIONS, id: 'plan-staleness', plans: 'docs/_plans' } as never)).toThrow(
       "planStaleness 'plan-staleness': `plans` is not an option of planStaleness",
     );
+    for (const retired of ['mayCiteArchive', 'undeclaredStatusRatchet']) {
+      expect(() => planStaleness({ [retired]: 1 } as never), retired).toThrow(
+        `\`${retired}\` is not an option of planStaleness`,
+      );
+    }
   });
 
   it('takes a `rule` like every other factory', () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CheckRunner } from './check-runner.service';
-import { adapters, check, recordingReporter, registryOf } from './check-runner.service.spec-helpers';
+import { adapters, check, recordingReporter, rosterOf } from './check-runner.service.spec-helpers';
 
 describe('CheckRunner --fix', () => {
   it('repairs a fixable check, re-runs it, and reports what was fixed', async () => {
@@ -17,7 +17,7 @@ describe('CheckRunner --fix', () => {
       },
     };
     const { exitCode, results } = await new CheckRunner(
-      registryOf([fixme]),
+      rosterOf([fixme]),
       adapters([]),
       recordingReporter().reporter,
     ).run({ tier: 'fast', fix: true }, { ci: false });
@@ -35,7 +35,7 @@ describe('CheckRunner --fix', () => {
       },
     };
     const { exitCode, results } = await new CheckRunner(
-      registryOf([fixme]),
+      rosterOf([fixme]),
       adapters([]),
       recordingReporter().reporter,
     ).run({ tier: 'fast', fix: true }, { ci: false });
@@ -52,7 +52,7 @@ describe('CheckRunner --fix', () => {
         return { fixed: 0 };
       },
     };
-    await new CheckRunner(registryOf([fixme]), adapters([]), recordingReporter().reporter).run(
+    await new CheckRunner(rosterOf([fixme]), adapters([]), recordingReporter().reporter).run(
       { tier: 'fast' },
       { ci: false },
     );
@@ -65,7 +65,7 @@ describe('CheckRunner --fix over a check with no fix', () => {
   it('says the check has no fix, and still fails', async () => {
     const plain = check({ id: 'plain', verdict: { ok: false, findings: [{ severity: 'error', message: 'broken' }] } });
     const { exitCode, results } = await new CheckRunner(
-      registryOf([plain]),
+      rosterOf([plain]),
       adapters([]),
       recordingReporter().reporter,
     ).run({ tier: 'fast', fix: true }, { ci: false });
@@ -82,11 +82,11 @@ describe('CheckRunner --fix over a check with no fix', () => {
       id: 'plain',
       verdict: { ok: false, findings: [{ severity: 'error', message: 'broken' }] },
     });
-    const withFix = await new CheckRunner(registryOf([passing]), adapters([]), recordingReporter().reporter).run(
+    const withFix = await new CheckRunner(rosterOf([passing]), adapters([]), recordingReporter().reporter).run(
       { tier: 'fast', fix: true },
       { ci: false },
     );
-    const without = await new CheckRunner(registryOf([failing]), adapters([]), recordingReporter().reporter).run(
+    const without = await new CheckRunner(rosterOf([failing]), adapters([]), recordingReporter().reporter).run(
       { tier: 'fast' },
       { ci: false },
     );

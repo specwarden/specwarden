@@ -1,6 +1,6 @@
 import type { IRule, ITemplate, ITemplateContext, ITemplateFile } from 'specwarden';
 import {
-  ciCoveragePart,
+  ciCoverageExamplePart,
   compose,
   docPathsPart,
   exampleRule,
@@ -16,15 +16,15 @@ import {
  *
  * What a monorepo gets wrong that a single package cannot: a lockfile that drifts from
  * the manifests, a build order that contradicts the dependency graph, versions of one
- * library disagreeing between workspaces, and a gate list that silently covers only the
+ * library disagreeing between workspaces, and a check list that silently covers only the
  * packages somebody remembered to name. Each of those fails QUIETLY — the install still
  * works, the build still runs, both majors still compile — which is why they are worth
  * a check apiece.
  *
  * The build-order and dependency-pin checks are the reason this template exists rather
- * than being "node-ts, but run it in each package". The gate-coverage check joins them
- * when a workflow is detected: a workspace is where a gate list grows fastest, and a
- * gate nobody runs is the failure that looks exactly like a pass.
+ * than being "node-ts, but run it in each package". The ci-coverage check joins them
+ * when a workflow is detected: a workspace is where a check list grows fastest, and a
+ * check nobody runs is the failure that looks exactly like a pass.
  *
  * Three of its files are written HERE rather than composed from the shared parts. They
  * are the ones whose whole content is a workspace's own policy — the lockfile command,
@@ -42,7 +42,7 @@ const shared = (ctx: ITemplateContext) =>
       docs: '**/*.md',
     }),
     scriptWrappersPart(ctx),
-    ciCoveragePart(ctx),
+    ciCoverageExamplePart(ctx),
   );
 
 /** Where the workspace packages live: the fixed part of the first workspace glob. */
@@ -55,12 +55,12 @@ const examples = (ctx: ITemplateContext): ITemplateFile[] => [
     body: `${header(
       '`build-order` — a package is built after everything it depends on.',
       `A package built before its dependency ships the PREVIOUS build's output, and nothing errors.
-OFF until the prefix, the files that declare the order and the build invocation are yours.
+Switched off until the prefix, the files that declare the order and the build invocation are yours.
 ${switchOn('build-order')}`,
     )}
-import { buildOrderFollowsDeps } from '@specwarden/ops';
+import { buildOrder } from '@specwarden/ops';
 
-export const check = buildOrderFollowsDeps({
+export const check = buildOrder({
   id: 'build-order',
 ${tierOption(ctx)}  packagesDir: '${packagesDir(ctx)}',
   // REPLACE: the workspace packages' name prefix; anything else is an external dependency.
@@ -68,7 +68,7 @@ ${tierOption(ctx)}  packagesDir: '${packagesDir(ctx)}',
   // REPLACE: the files that DECLARE the order — a Dockerfile, a CI workflow, a build script.
   containerFiles: 'Dockerfile*',
   // Matches one build invocation and captures the package name.
-  buildInvocation: String.raw\`pnpm --filter (\\S+) run build\`,
+  buildInvocation: /pnpm --filter (\\S+) run build/,
 });
 `,
   },
@@ -77,7 +77,7 @@ ${tierOption(ctx)}  packagesDir: '${packagesDir(ctx)}',
     body: `${header(
       '`dependency-pins` — frozen versions stay exact, and coordinated groups agree across workspaces.',
       `Every failure is silent: a caret on a frozen package still installs, two majors both compile.
-OFF until the POLICY below is yours; an empty one says it is inert rather than passing.
+Switched off until the POLICY below is yours; an empty one says it is inert rather than passing.
 ${switchOn('dependency-pins')}`,
     )}
 import { fromResult } from 'specwarden';
@@ -122,9 +122,10 @@ ${tierOption(ctx)}  hint: 'Fix the tree, or change the policy above and say why 
   },
 ];
 
-export const monorepo: ITemplate = {
+export const monorepoTemplate: ITemplate = {
   name: 'monorepo',
-  describe: 'a pnpm workspace — lockfile, build order, dependency pins, credential scan',
+  describe:
+    'A pnpm workspace — lockfile, credential scan, documentation paths; build order, dependency pins and CI coverage as examples.',
   requires: ['@specwarden/ops', '@specwarden/security', '@specwarden/docs'],
 
   files: (ctx: ITemplateContext): readonly ITemplateFile[] => {

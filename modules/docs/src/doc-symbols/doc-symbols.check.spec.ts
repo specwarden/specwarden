@@ -25,7 +25,7 @@ describe('docSymbols — a named symbol is declared somewhere', () => {
     const v = await run({ 'MOD.md': 'the `OrderCancelService` handles this', 'x.ts': 'export class OtherService {}' });
 
     expect(v.ok).toBe(false);
-    expect(v.findings[0]).toMatchObject({ file: 'MOD.md' });
+    expect(v.findings[0]).toMatchObject({ file: 'MOD.md', line: 1 });
     expect(errorsOf(v)[0]).toContain('`OrderCancelService`');
   });
 
@@ -87,12 +87,16 @@ describe('docSymbols — the exemptions and the ratchet', () => {
     const tree = { 'MOD.md': '`LegacyService`', 'src/a.ts': '', 'dist/a.ts': 'export class LegacyService {}' };
 
     expect((await run(tree)).ok).toBe(true);
-    expect((await run(tree, { excludeCode: ['dist/'] })).ok).toBe(false);
+    expect((await run(tree, { except: ['dist'] })).ok).toBe(false);
+    // A pathspec, so built output at any depth is `**/dist/**`.
+    const nested = { 'MOD.md': '`OldService`', 'src/a.ts': '', 'pkg/dist/a.ts': 'export class OldService {}' };
+    expect((await run(nested, { except: ['dist'] })).ok).toBe(true);
+    expect((await run(nested, { except: ['**/dist/**'] })).ok).toBe(false);
   });
 
   it('skips snapshot trees and counts distinct names for the ratchet', async () => {
     const skipped = { 'docs/_plans/p.md': 'we will build `FutureService`', 'docs/a.md': '', 'a.ts': '' };
-    expect((await run(skipped, { skipDirs: ['docs/_plans/'] })).ok).toBe(true);
+    expect((await run(skipped, { except: ['docs/_plans'] })).ok).toBe(true);
 
     const two = { 'a.md': '`AService` and `BService`', 'b.md': '`AService` again', 'x.ts': '' };
     // Two distinct names, three mentions: the ratchet counts what needs fixing.
@@ -112,20 +116,33 @@ describe('docSymbols — what it examined', () => {
     const v = await run({ 'docs/guide.md': 'nothing named here' }, { code: ['src/**/*.ts'] });
 
     expect(v.ok).toBe(false);
-    expect(errorsOf(v)[0]).toContain('no code file matched `src/**/*.ts`');
+    expect(errorsOf(v)[0]).toContain('examined 0 code file(s) — `src/**/*.ts` matched nothing to read');
   });
 
   it('fails when the DOCUMENT corpus is empty — nothing read means every name "exists"', async () => {
     const v = await run({ 'src/a.ts': 'export class AService {}' }, { docs: 'handbook/**/*.md' });
 
     expect(v.ok).toBe(false);
-    expect(errorsOf(v)[0]).toContain('no document matched `handbook/**/*.md`');
+    expect(errorsOf(v)[0]).toContain('examined 0 document(s) — `handbook/**/*.md` matched nothing to read');
   });
 
-  it('fails when the skipped trees swallowed every document', async () => {
-    const v = await run({ 'docs/_plans/p.md': '`AService`', 'a.ts': '' }, { skipDirs: ['docs/'] });
+  it('fails when `except` swallowed every document', async () => {
+    const v = await run({ 'docs/_plans/p.md': '`AService`', 'a.ts': '' }, { except: ['docs'] });
 
-    expect(errorsOf(v)[0]).toContain('examined nothing');
+    expect(errorsOf(v)[0]).toContain('`except` exempted all of them');
+  });
+
+  it('holds both corpora to the floor it is given', async () => {
+    const tree = { 'docs/a.md': '`AService`', 'src/a.ts': 'export class AService {}' };
+
+    expect((await run(tree, { corpus: { atLeast: 2 } })).ok).toBe(false);
+    expect((await run({ 'src/a.ts': '' }, { docs: 'none/*.md', corpus: { atLeast: 0 } })).ok).toBe(true);
+  });
+
+  it('prints the engine’s pass line, naming how many documents it read', async () => {
+    const v = await run({ 'a.md': '`AService`', 'b.md': '', 'a.ts': 'export class AService {}' });
+
+    expect(v.findings.map((f) => f.message)).toEqual(['✓ doc-symbols — 2 document(s) examined, clean']);
   });
 });
 

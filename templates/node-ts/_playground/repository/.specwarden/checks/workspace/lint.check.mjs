@@ -1,4 +1,4 @@
-// `lint` — the linter this repository already has, run through the harness.
+// `lint` — the linter this repository already has, run as a check.
 // Heavy, because a type-aware config builds the whole program on every run; move it to the
 // fast tier if yours is quick — nothing else depends on where it sits.
 import { commandCheck } from 'specwarden';

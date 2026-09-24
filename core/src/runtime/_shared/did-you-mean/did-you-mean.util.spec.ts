@@ -32,7 +32,7 @@ describe('didYouMean — the known name meant, or nothing', () => {
   });
 
   it('phrases the tail of a refusal', () => {
-    expect(didYouMean('no-tod', IDS)).toBe(" — did you mean 'no-todo'?");
-    expect(didYouMean('doc-link', IDS)).toBe(" — did you mean 'doc-links' or 'doc-lints'?");
+    expect(didYouMean('no-tod', IDS)).toBe(" (did you mean 'no-todo'?)");
+    expect(didYouMean('doc-link', IDS)).toBe(" (did you mean 'doc-links' or 'doc-lints'?)");
   });
 });

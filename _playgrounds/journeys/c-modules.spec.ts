@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { ROOT, removeScratch, scratchTree, verdictsIn, warden } from '../../scripts/playgrounds.mjs';
+import { ROOT, removeScratch, scratchTree, verdictsIn, specwarden } from '../../scripts/playgrounds.mjs';
 
 /**
  * JOURNEY C — a consumer installs an optional module and follows its GUIDE.
@@ -29,8 +29,8 @@ const INSTALLED = Object.keys(
     .dependencies,
 ).map((name) => [name, join(PLAYGROUND, 'node_modules', ...name.split('/'))] as const);
 
-/** A config that says nothing, the harness audits off: the subject is the module. */
-const BARE = "import { defineConfig } from 'specwarden';\n\nexport default defineConfig({ harness: false });\n";
+/** A config that says nothing, the self-checks off: the subject is the module. */
+const BARE = "import { defineConfig } from 'specwarden';\n\nexport default defineConfig({ selfChecks: false });\n";
 /** The config a consumer has on day one when the GUIDE says nothing about one. */
 const DAY_ONE = "import { defineConfig } from 'specwarden';\n\nexport default defineConfig({});\n";
 /** A compose-file interpolation, spelled so it is not read as a template literal. */
@@ -42,7 +42,7 @@ interface IScene {
 }
 
 function inRepo<T>(tree: Record<string, string | null>, scene: IScene, act: (dir: string) => T): T {
-  const planted: Record<string, string> = { '.specwarden/warden.config.mjs': scene.config ?? BARE };
+  const planted: Record<string, string> = { '.specwarden/config.mjs': scene.config ?? BARE };
   for (const [path, text] of Object.entries(tree)) if (text !== null) planted[path] = text;
   const dir = scratchTree(planted, { installed: INSTALLED, branches: scene.branches ?? [] });
   try {
@@ -54,7 +54,7 @@ function inRepo<T>(tree: Record<string, string | null>, scene: IScene, act: (dir
 
 const verdicts = (tree: Record<string, string | null>, scene: IScene = {}) => inRepo(tree, scene, verdictsIn);
 const cli = (tree: Record<string, string | null>, args: readonly string[], scene: IScene = {}) =>
-  inRepo(tree, scene, (dir) => warden(dir, args));
+  inRepo(tree, scene, (dir) => specwarden(dir, args));
 
 function resultOf(run: ReturnType<typeof verdictsIn>, id: string) {
   const found = run.results.find((r) => r.id === id);
@@ -114,9 +114,9 @@ export const checks = [
     title: 'counts are derived, never restated',
     tier: 'fast',
     countableNouns: ['services', 'gates', 'modules'],
-    skipped: [],
+    except: [],
     allowlist: () => [],
-    countRatchet: 0,
+    ratchet: 0,
     when: () => true,
   }),
   docPlacement({
@@ -195,17 +195,19 @@ describe('@specwarden/docs, wired by its GUIDE', () => {
     });
     expect(run.failed).toEqual(['doc-paths', 'doc-symbols', 'doc-counts', 'doc-placement', 'doc-hygiene']);
     expect(resultOf(run, 'doc-paths').messages).toEqual([
-      'README.md names `src/gone.ts`, which does not resolve. Often the file gained its own folder and the path did not follow.',
+      'README.md names `src/gone.ts`, which does not resolve. Point it at where the file is now — often it gained its own folder and the path did not follow.',
     ]);
     expect(resultOf(run, 'doc-symbols').messages).toEqual([
-      'README.md names `OrderService`, which nothing in the code corpus declares. A renamed class leaves the old name in prose; fix the doc, or add the symbol to the framework allowlist.',
+      'README.md names `OrderService`, which nothing in the code corpus declares. Rename it to the symbol that replaced it, or name it in `external` if a framework owns it.',
     ]);
-    expect(resultOf(run, 'doc-counts').messages).toEqual(['README.md:5  "4 services"  There are 4 services.']);
+    expect(resultOf(run, 'doc-counts').messages).toEqual([
+      'README.md:5 restates "4 services" — a count the repository owns goes stale in prose. Say how to count it, date it, or hedge it.',
+    ]);
     expect(resultOf(run, 'doc-placement').messages).toEqual([
-      'docs/STRAY_MODULE.md sits where the placement contract does not describe — decide: move it, or add the row to the contract.',
+      'docs/STRAY_MODULE.md sits where the placement contract does not describe. Move it, or add the row that describes its kind to `allowed`.',
     ]);
     expect(resultOf(run, 'doc-hygiene').messages).toEqual([
-      'README.md:7 links to `./src/things/GONE_MODULE.md`, which does not exist.',
+      'README.md:7 links to `./src/things/GONE_MODULE.md`, which does not exist. Point the link at where the file is now.',
     ]);
   });
 
@@ -213,10 +215,10 @@ describe('@specwarden/docs, wired by its GUIDE', () => {
     const run = verdicts({
       'README.md': '# a\n',
       '.specwarden/checks/docs/docs.check.mjs':
-        "import { docPaths } from '@specwarden/docs';\nexport const check = docPaths({ id: 'doc-paths', title: 'x', tier: 'fast', docs: 'docs/**/*.md' });\n",
+        "import { docPaths } from '@specwarden/docs';\nexport const check = docPaths({ docs: 'docs/**/*.md' });\n",
     });
     expect(resultOf(run, 'doc-paths').messages).toEqual([
-      'no document matched `docs/**/*.md` — this check examined nothing, and a check that examined nothing cannot fail. Point the pathspec at where the files actually are.',
+      'examined 0 document(s) — `docs/**/*.md` matched nothing to read — below the floor of 1. A check that examined nothing cannot fail, so it reports success; this is that state, caught. Point the pathspec at where the files are, or declare `corpus: { atLeast: 0 }` if an empty set is expected.',
     ]);
   });
 
@@ -227,12 +229,14 @@ describe('@specwarden/docs, wired by its GUIDE', () => {
       '.specwarden/checks/docs/h.check.mjs':
         "import { docHygiene } from '@specwarden/docs';\nexport const check = docHygiene({ id: 'doc-hygiene', title: 'x', tier: 'fast', docs: '**/*.md' });\n",
     });
-    expect(resultOf(run, 'doc-hygiene').messages).toEqual(['docs/g.md:3 links to `../GONE.md`, which does not exist.']);
+    expect(resultOf(run, 'doc-hygiene').messages).toEqual([
+      'docs/g.md:3 links to `../GONE.md`, which does not exist. Point the link at where the file is now.',
+    ]);
   });
 
-  it('the shipped SKILL’s `skipDirs` skips the archive, and the old `skipped:` is refused by name at load', () => {
+  it('the shipped SKILL’s `except` leaves the archive out, and the old `skipped:` is refused by name at load', () => {
     // It said `skipped:`, which is not an option: dropped in silence, and the archive it
-    // meant to skip was read.
+    // meant to leave out was read.
     const tree = {
       'README.md': '# a\n\nSee `src/index.ts`.\n',
       'src/index.ts': 'export {};\n',
@@ -255,13 +259,15 @@ describe('@specwarden/docs, wired by its GUIDE', () => {
     expect(said(old)).toContain("docPaths 'doc-paths': `skipped` is not an option of docPaths");
   });
 
-  it('docCounts needs only its nouns — no `skipped`, no `allowlist`, no `when`', () => {
+  it('docCounts needs only its nouns — no `except`, no `allowlist`, no `when`, no id', () => {
     // It died with "options.allowlist is not a function" on the first run without them.
     const run = verdicts({
       'README.md': '# a\n\nThere are 4 services.\n',
       '.specwarden/checks/docs/counts.check.mjs': pasted('modules/docs/GUIDE.md', 'docCounts({'),
     });
-    expect(resultOf(run, 'doc-counts').messages).toEqual(['README.md:3  "4 services"  There are 4 services.']);
+    expect(resultOf(run, 'doc-counts').messages).toEqual([
+      'README.md:3 restates "4 services" — a count the repository owns goes stale in prose. Say how to count it, date it, or hedge it.',
+    ]);
   });
 
   it('docCounts over a repository with no document at all fails, like the other four', () => {
@@ -269,12 +275,12 @@ describe('@specwarden/docs, wired by its GUIDE', () => {
     const run = verdicts({
       'src/a.ts': 'export {};\n',
       '.specwarden/checks/c.check.mjs':
-        "import { docCounts } from '@specwarden/docs';\nexport const check = docCounts({ id: 'doc-counts', title: 'x', countableNouns: ['services'] });\n",
+        "import { docCounts } from '@specwarden/docs';\nexport const check = docCounts({ countableNouns: ['services'] });\n",
     });
     expect(run.status).toBe(1);
-    expect(resultOf(run, 'doc-counts').messages).toEqual([
-      'no document matched `**/*.md` — this check examined nothing, and a check that examined nothing cannot fail. Point the pathspec at where the files actually are.',
-    ]);
+    expect(resultOf(run, 'doc-counts').messages[0]).toContain(
+      'examined 0 document(s) — `**/*.md` matched nothing to read — below the floor of 1.',
+    );
   });
 
   // It shipped `countableNouns: []` — refused at load, since an empty list matched every
@@ -358,14 +364,14 @@ export const checks = [
   }),
   planShape({
     id: 'plan-shape',
-    title: 'a plan names real gate ids and every phase has an acceptance command',
+    title: 'a plan names real check ids and every phase has an acceptance command',
     tier: 'fast',
     plansDir: 'docs/_plans',
-    nameRe: /^[a-z0-9-]+\\.md$/,
-    allowedNonPlans: ['README.md'],
-    sizingPatterns: [/\\b\\d+\\s*(hours?|days?|story points?)\\b/i],
-    phaseHeadingRe: /^(#{2,3})\\s+Phase\\b/,
-    commandRe: /^\\s*(pnpm|npm|node|bash)\\s/,
+    name: /^[a-z0-9-]+\\.md$/,
+    except: ['docs/_plans/README.md'],
+    sizing: [/\\b\\d+\\s*(hours?|days?|story points?)\\b/i],
+    phaseHeading: /^(#{2,3})\\s+Phase\\b/,
+    command: /^\\s*(pnpm|npm|node|bash)\\s/,
   }),
   decisionLogShape({ id: 'decision-log-shape', title: 'a rejection states why', tier: 'fast', docs: 'docs/_plans/*.md' }),
 ];
@@ -383,15 +389,13 @@ describe('@specwarden/plans, wired by its GUIDE', () => {
   it('all three, as the GUIDE shapes them, pass over a live plan whose branch resolves', () => {
     const run = verdicts(PLANS_CLEAN, BRANCH);
     expect(run.failed).toEqual([]);
-    expect(resultOf(run, 'plan-staleness').messages).toEqual([
-      '✓ plan staleness — 0 plan(s) without a status (ratchet 0), archive clean',
-    ]);
+    expect(resultOf(run, 'plan-staleness').messages).toEqual(['✓ plan-staleness — 1 plan(s) examined, clean']);
   });
 
   it('the whole module by its GUIDE is 3 lines — the four regexes planShape needed are defaults', () => {
-    // It was 23: the plans folder twice, and `nameRe`, `sizingPatterns`, `phaseHeadingRe`,
-    // `commandRe` written out in every English repository the same way.
-    const guide = pasted('modules/plans/GUIDE.md', 'planChecks(');
+    // It was 23: the plans folder twice, and the name, sizing, phase-heading and command
+    // patterns written out in every English repository the same way.
+    const guide = pasted('modules/plans/GUIDE.md', 'plansChecks(');
     expect(lines(PLANS_ALL_THREE)).toBe(23);
     expect(lines(codeOf(guide))).toBe(3);
 
@@ -411,7 +415,7 @@ describe('@specwarden/plans, wired by its GUIDE', () => {
     const run = verdicts(PLANS_CLEAN);
     expect(run.failed).toEqual(['plan-staleness']);
     expect(resultOf(run, 'plan-staleness').messages).toEqual([
-      'docs/_plans/refunds.md: declares branch `feat/partial-refunds`, which no longer exists here or on the remote. The work merged — harvest the plan and move it to docs/_archive/.',
+      'docs/_plans/refunds.md declares branch `feat/partial-refunds`, which no longer exists here or on the remote. The work merged — harvest the plan and move it to docs/_archive/.',
     ]);
   });
 
@@ -422,19 +426,18 @@ describe('@specwarden/plans, wired by its GUIDE', () => {
         'docs/_plans/b.md': '# b\n\n**Status:** active\n',
         'docs/_plans/c.md': '# c\n\nno header\n',
         '.specwarden/checks/plans/p.check.mjs':
-          "import { planStaleness } from '@specwarden/plans';\nexport const check = planStaleness({ id: 'plan-staleness', title: 'x', tier: 'fast', plansDir: 'docs/_plans', archiveDir: 'docs/_archive' });\n",
+          "import { planStaleness } from '@specwarden/plans';\nexport const check = planStaleness({ archiveDir: 'docs/_archive' });\n",
       },
       { branches: ['feat/a'] },
     );
     expect(resultOf(run, 'plan-staleness').messages).toEqual([
-      'docs/_plans/a.md: is a draft yet declares branch `feat/a`. Work with a branch has started — say so — or the branch is a placeholder, and a plan must not name one: it arms a hard failure for the day it is cleaned up.',
-      'docs/_plans/b.md: is active and declares no branch. An active plan names where its work happens.',
-      '1 plan(s) declare no status; the ratchet is 0.',
-      'docs/_plans/c.md: no status declaration — cannot tell a draft from work under way',
+      'docs/_plans/a.md is a draft yet declares branch `feat/a`. Work with a branch has started — say so — or the branch is a placeholder, and a plan must not name one: it arms a hard failure for the day it is cleaned up.',
+      'docs/_plans/b.md is active and declares no branch. An active plan names where its work happens.',
+      'docs/_plans/c.md declares no status, so a draft cannot be told from work under way. Declare whether it is a draft, active or done.',
     ]);
   });
 
-  it('a nested folder, an unknown gate id, sizing, and an unreasoned rejection', () => {
+  it('a nested folder, an unknown check id, sizing, and an unreasoned rejection', () => {
     const run = verdicts(
       {
         ...PLANS_CLEAN,
@@ -448,9 +451,9 @@ describe('@specwarden/plans, wired by its GUIDE', () => {
     );
     expect(run.failed).toEqual(['plan-shape', 'decision-log-shape']);
     expect(resultOf(run, 'plan-shape').messages).toEqual([
-      'docs/_plans/nested/ — plans are FLAT; a folder here means plans stopped being deleted.',
-      "docs/_plans/refunds.md names gate '--id unit', which is not a known check.",
-      'docs/_plans/refunds.md:16 sizes work — a plan states dependency and deployability, not hours.',
+      'docs/_plans/nested/ — plans are FLAT; a folder here means plans stopped being deleted. Move what it holds out of docs/_plans.',
+      "docs/_plans/refunds.md:13 names '--id unit', which is not a check this run knows. Name a check the roster has, or state the acceptance as the command that runs it until it lands.",
+      'docs/_plans/refunds.md:16 sizes work — a plan states dependency and deployability, not hours. Say what the phase depends on instead.',
     ]);
     expect(resultOf(run, 'decision-log-shape').messages).toEqual([
       'docs/_plans/refunds.md:6 — decision "a refund is taken per line" rejects "a free-text amount" with no reason. State why: a rejection without a reason is the fact that gets lost.',
@@ -468,7 +471,7 @@ describe('@specwarden/plans, wired by its GUIDE', () => {
     );
     expect(resultOf(run, 'plan-staleness').messages).toEqual([
       'docs/_archive/done.md: archive header is missing Started, Finished, Branch, Harvested, Left open. Without it the archive is a slower delete — the reader cannot tell how far to trust the document, so they trust it fully.',
-      'docs/GUIDE.md links to docs/_archive/done.md — an archived plan describes the past in the present tense; cite the document that owns the fact instead.',
+      'docs/GUIDE.md:1 links to docs/_archive/done.md — an archived plan describes the past in the present tense; cite the document that owns the fact instead.',
     ]);
   });
 
@@ -479,7 +482,7 @@ describe('@specwarden/plans, wired by its GUIDE', () => {
       BRANCH,
     );
     expect(resultOf(run, 'plan-staleness').messages).toContain(
-      'docs/GUIDE.md links to docs/_archive/done.md — an archived plan describes the past in the present tense; cite the document that owns the fact instead.',
+      'docs/GUIDE.md:1 links to docs/_archive/done.md — an archived plan describes the past in the present tense; cite the document that owns the fact instead.',
     );
   });
 
@@ -492,7 +495,9 @@ describe('@specwarden/plans, wired by its GUIDE', () => {
       'docs/_plans does not exist — this check examined nothing, and a check that examined nothing cannot fail. Point `plansDir` at the folder the plans live in, or create it.';
     expect(resultOf(run, 'plan-staleness').messages).toEqual([absent]);
     expect(resultOf(run, 'plan-shape').messages).toEqual([absent]);
-    expect(resultOf(run, 'decision-log-shape').messages[0]).toContain('no document matched `docs/_plans/*.md`');
+    expect(resultOf(run, 'decision-log-shape').messages[0]).toContain(
+      'examined 0 document(s) — `docs/_plans/*.md` matched nothing to read',
+    );
   });
 
   it('a plans folder that exists and holds no plan is an honest "nothing in flight"', () => {
@@ -501,8 +506,14 @@ describe('@specwarden/plans, wired by its GUIDE', () => {
       '.specwarden/checks/plans/plans.check.mjs': PLANS_ALL_THREE,
     });
     expect(run.failed).toEqual([]);
-    expect(resultOf(run, 'plan-staleness').messages).toEqual(['no plan in docs/_plans — nothing in flight']);
-    expect(resultOf(run, 'plan-shape').messages).toEqual(['no plan in docs/_plans — nothing in flight']);
+    expect(resultOf(run, 'plan-staleness').messages).toEqual([
+      '✓ plan-staleness — 0 plan(s) examined, clean',
+      'no plan in docs/_plans — nothing in flight.',
+    ]);
+    expect(resultOf(run, 'plan-shape').messages).toEqual([
+      '✓ plan-shape — 0 plan(s) examined, clean',
+      'no plan in docs/_plans — nothing in flight.',
+    ]);
   });
 
   it('the shipped SKILL’s `planShape` passes a live plan, and its old `{ plans, statuses }` is refused by name', () => {
@@ -529,17 +540,13 @@ describe('@specwarden/plans, wired by its GUIDE', () => {
 // @specwarden/ops
 // ─────────────────────────────────────────────────────────────────────────────────────
 
-const ENV_CHECK = `import { envFilesAgree } from '@specwarden/ops';
+const ENV_CHECK = `import { envPairing } from '@specwarden/ops';
 
-export const check = envFilesAgree({
-  id: 'env-pairing',
-  title: 'the verifier has every key the sender has',
-  tier: 'fast',
+export const check = envPairing({
   composeFile: 'docker-compose.yml',
   modes: ['prod'],
   verifierService: 'be',
   declaredKeys: (read) => new Set((read('src/env.ts') ?? '').match(/[A-Z][A-Z0-9_]+/g) ?? []),
-  when: () => true,
 });
 `;
 const COMPOSE =
@@ -555,18 +562,17 @@ const ENV_TREE = {
   '.specwarden/checks/ops/env.check.mjs': ENV_CHECK,
 };
 const CHECKED = 'prod: checked 2 env files — env/prod/edge.env, env/prod/be.env';
+const ENV_CLEAN = ['✓ env-pairing — 2 compose service(s) examined, clean', CHECKED];
+const VERIFIER_LACKS =
+  'prod: HANDSHAKE_KEY is set in env/prod/edge.env (sent by edge) but missing or empty in env/prod/be.env (verified by be). The verifier boots green and rejects every request carrying it — set it in env/prod/be.env.';
 
-const UP_CHECK = `import { upstreamsResolve } from '@specwarden/ops';
+const UP_CHECK = `import { proxyUpstreams } from '@specwarden/ops';
 
-export const check = upstreamsResolve({
-  id: 'caddy-upstreams',
-  title: 'an upstream resolves where its proxy runs',
-  tier: 'fast',
+export const check = proxyUpstreams({
   modes: ['local', 'prod'],
   fileFor: (mode) => \`caddy/Caddyfile.\${mode}\`,
   hostModes: ['local'],
   loopbackHosts: ['localhost', '127.0.0.1', '[::1]'],
-  when: () => true,
 });
 `;
 const UP_TREE = {
@@ -575,42 +581,38 @@ const UP_TREE = {
   '.specwarden/checks/ops/up.check.mjs': UP_CHECK,
 };
 
-const CI_CHECK = `import { gatesHaveCiJobs } from '@specwarden/ops';
+const CI_CHECK = `import { ciCoverage } from '@specwarden/ops';
 
-export const check = gatesHaveCiJobs({
-  id: 'gate-coverage',
-  title: 'every heavy gate has a CI job the arbiter waits for',
-  tier: 'fast',
-  workflow: '.github/workflows/ci.yml',
-  arbiterJob: 'ci-ok',
+export const check = ciCoverage({
+  workflowFile: '.github/workflows/ci.yml',
+  requiredJob: 'ci-ok',
   ciTier: 'heavy',
   cheapTier: 'fast',
-  runnerPattern: String.raw\`warden\\.mjs\\s+check\`,
-  when: () => true,
+  runnerPattern: /specwarden\\.mjs\\s+check/,
 });
 `;
-const HEAVY_GATE = (id: string) =>
+const HEAVY_CHECK = (id: string) =>
   `import { docPaths } from '@specwarden/docs';\nexport const check = docPaths({ id: '${id}', title: '${id}', tier: 'heavy', docs: '**/*.md' });\n`;
 const CI_TREE = {
   'README.md': '# a\n',
   '.github/workflows/ci.yml':
-    'jobs:\n  fast:\n    steps:\n      - run: node warden.mjs check --tier fast\n' +
-    '  unit:\n    steps:\n      - run: node warden.mjs check --id unit\n  ci-ok:\n    needs: [fast, unit]\n',
+    'jobs:\n  fast:\n    steps:\n      - run: node specwarden.mjs check --tier fast\n' +
+    '  unit:\n    steps:\n      - run: node specwarden.mjs check --id unit\n  ci-ok:\n    needs: [fast, unit]\n',
   '.specwarden/checks/ops/ci.check.mjs': CI_CHECK,
-  '.specwarden/checks/unit.check.mjs': HEAVY_GATE('unit'),
+  '.specwarden/checks/unit.check.mjs': HEAVY_CHECK('unit'),
 };
+const CI_CLEAN = (id = 'ci-coverage') => [
+  `✓ ${id} — 3 job(s) examined, clean`,
+  '1 check(s) named across 3 job(s), all reaching ci-ok',
+];
 
-const BO_CHECK = `import { buildOrderFollowsDeps } from '@specwarden/ops';
+const BO_CHECK = `import { buildOrder } from '@specwarden/ops';
 
-export const check = buildOrderFollowsDeps({
-  id: 'workspace-build-order',
-  title: 'an image builds a package after what it imports',
-  tier: 'fast',
+export const check = buildOrder({
   packagesDir: 'packages',
   scopePrefix: '@acme/',
   containerFiles: '*Dockerfile*',
-  buildInvocation: String.raw\`--filter\\s+(@acme\\/[a-z0-9-]+)\\s+run\\s+build\`,
-  when: () => true,
+  buildInvocation: /--filter\\s+(@acme\\/[a-z0-9-]+)\\s+run\\s+build/,
 });
 `;
 const BO_TREE = {
@@ -621,8 +623,8 @@ const BO_TREE = {
 };
 
 const SHELL_CHECK =
-  "import { shellLocalScope } from '@specwarden/ops';\n\n" +
-  "export const check = shellLocalScope({ id: 'shell-local-scope', title: 'local only inside a function', tier: 'fast', pathspecs: ['scripts/*.sh'], when: () => true });\n";
+  "import { shellScope } from '@specwarden/ops';\n\n" +
+  "export const check = shellScope({ scripts: ['scripts/*.sh'] });\n";
 
 /** One repository with every stack the ops GUIDE's wiring block reads, all of it sound. */
 const OPS_TREE = {
@@ -643,31 +645,70 @@ const OPS_TREE = {
 };
 
 describe('@specwarden/ops, wired by its GUIDE', () => {
-  it('the GUIDE wires all five in one file, and it is green as pasted over a sound repository', () => {
+  it('the GUIDE wires all five with `opsChecks` in one file, and it is green as pasted over a sound repository', () => {
     // It had no wiring block at all: every section was a bare call with no import or
     // export, and the consumer assembled the file from fragments.
-    const guide = pasted('modules/ops/GUIDE.md', 'export const checks = [');
+    const guide = pasted('modules/ops/GUIDE.md', 'export const checks = opsChecks(');
     expect(guide).toContain("from '@specwarden/ops'");
     const run = verdicts({ ...OPS_TREE, '.specwarden/checks/ops/ops.check.mjs': guide });
     expect(run.failed).toEqual([]);
+    // Each check is named for its subject, with no `id` written.
     expect(run.results.map((r) => r.id).sort()).toEqual(
-      ['unit', 'env-pairing', 'caddy-upstreams', 'gate-coverage', 'workspace-build-order', 'shell-local-scope'].sort(),
+      ['unit', 'env-pairing', 'proxy-upstreams', 'ci-coverage', 'build-order', 'shell-scope'].sort(),
     );
   });
 
-  describe('shellLocalScope', () => {
+  it('the preset refuses a check whose facts it was not given, by name, saying how to leave it out', () => {
+    const r = cli(
+      {
+        'README.md': '# a\n',
+        '.specwarden/checks/ops/ops.check.mjs':
+          "import { opsChecks } from '@specwarden/ops';\nexport const checks = opsChecks({ shellScope: {} });\n",
+      },
+      ['check', '--all', '--json'],
+    );
+    expect(r.status).toBe(2);
+    expect(said(r)).toContain(
+      'opsChecks: pass `envPairing: { composeFile, modes, verifierService, declaredKeys }`, or `envPairing: false` to leave it out.',
+    );
+  });
+
+  describe('shellScope', () => {
     it('passes a clean script and names the line of a misplaced `local`', () => {
       const clean = verdicts({
         'scripts/deploy.sh':
           '#!/usr/bin/env bash\nset -Eeuo pipefail\n\nmain() {\n  local target\n  target="$1"\n}\n\nmain "$@"\n',
         '.specwarden/checks/ops/shell.check.mjs': SHELL_CHECK,
       });
-      expect(resultOf(clean, 'shell-local-scope').messages).toEqual(['✓ 1 shell file(s), 0 misplaced `local`']);
+      expect(resultOf(clean, 'shell-scope').messages).toEqual(['✓ shell-scope — 1 shell file(s) examined, clean']);
       const broken = verdicts({
         'scripts/deploy.sh': '#!/usr/bin/env bash\nlocal target\n',
         '.specwarden/checks/ops/shell.check.mjs': SHELL_CHECK,
       });
-      expect(resultOf(broken, 'shell-local-scope').messages).toEqual(['scripts/deploy.sh:2  local target']);
+      expect(resultOf(broken, 'shell-scope').messages).toEqual([
+        'scripts/deploy.sh:2 `local target` is outside every function — bash refuses it at run time. Move it inside a function, or drop `local`.',
+      ]);
+    });
+
+    it('scripts that moved are an empty corpus — a failure naming the pathspec, not a clean run', () => {
+      const run = verdicts({ 'bin/deploy.sh': 'local x\n', '.specwarden/checks/ops/shell.check.mjs': SHELL_CHECK });
+      expect(run.status).toBe(1);
+      expect(resultOf(run, 'shell-scope').messages[0]).toMatch(
+        /^examined 0 shell file\(s\) — `scripts\/\*\.sh` matched no tracked script — below the floor of 1\./,
+      );
+    });
+
+    it('the old `pathspecs` is refused by name at load, exit 2', () => {
+      const r = cli(
+        {
+          'scripts/deploy.sh': 'main() {\n  local t\n}\n',
+          '.specwarden/checks/ops/shell.check.mjs':
+            "import { shellScope } from '@specwarden/ops';\nexport const check = shellScope({ pathspecs: ['scripts/*.sh'] });\n",
+        },
+        ['check', '--all', '--json'],
+      );
+      expect(r.status).toBe(2);
+      expect(said(r)).toContain('`pathspecs` is not an option of shellScope');
     });
 
     it('an ops check wired without `when` is always relevant — the filtered run reports instead of crashing', () => {
@@ -676,19 +717,18 @@ describe('@specwarden/ops, wired by its GUIDE', () => {
       inRepo(
         {
           'scripts/deploy.sh': '#!/usr/bin/env bash\nmain() {\n  local t\n}\nmain\n',
-          '.specwarden/checks/ops/shell.check.mjs':
-            "import { shellLocalScope } from '@specwarden/ops';\nexport const check = shellLocalScope({ id: 'shell-local-scope', title: 'x', tier: 'fast', pathspecs: ['scripts/*.sh'] });\n",
+          '.specwarden/checks/ops/shell.check.mjs': SHELL_CHECK,
         },
         {},
         (dir) => {
           // Under `--all` the predicate is never consulted, so this is green…
-          expect(resultOf(verdictsIn(dir), 'shell-local-scope').ok).toBe(true);
+          expect(resultOf(verdictsIn(dir), 'shell-scope').ok).toBe(true);
           // …and so is the pre-push / PR run, which filters by relevance.
           const env: Record<string, string | undefined> = { ...process.env, NO_COLOR: '1' };
           delete env.SPECWARDEN_ALL;
           const r = spawnSync(
             process.execPath,
-            [join(ROOT, 'core/bin/warden.mjs'), 'check', '--json', '--base', 'main'],
+            [join(ROOT, 'core/bin/specwarden.mjs'), 'check', '--json', '--base', 'main'],
             {
               cwd: dir,
               env,
@@ -698,37 +738,34 @@ describe('@specwarden/ops, wired by its GUIDE', () => {
           expect(r.stderr).not.toContain('is not a function');
           expect(r.status).toBe(0);
           const report = JSON.parse(r.stdout) as { results: { id: string; ok: boolean }[] };
-          expect(report.results.find((x) => x.id === 'shell-local-scope')?.ok).toBe(true);
+          expect(report.results.find((x) => x.id === 'shell-scope')?.ok).toBe(true);
         },
       );
     });
   });
 
-  describe('envFilesAgree', () => {
-    it('the GUIDE’s `declaredKeys` is one a consumer can paste — it reads the sample env file', () => {
+  describe('envPairing', () => {
+    it('the shipped SKILL’s `declaredKeys` is one a consumer can paste — it reads the sample env file', () => {
       // It called `keysFrom`, which nothing exports: "keysFrom is not defined".
-      const guide = pasted('modules/ops/GUIDE.md', 'export const check = envFilesAgree(');
+      const guide = pasted('modules/ops/skills/specwarden-ops/SKILL.md', 'export const check = envPairing(');
       expect(guide).not.toContain('keysFrom');
       const tree = {
         ...ENV_TREE,
         '.env.example': 'HANDSHAKE_KEY=\nBE_PORT=\n',
         '.specwarden/checks/ops/env.check.mjs': guide,
       };
-      expect(resultOf(verdicts(tree), 'env-pairing').messages).toEqual([CHECKED]);
+      expect(resultOf(verdicts(tree), 'env-pairing').messages).toEqual(ENV_CLEAN);
       const broken = verdicts({ ...tree, 'env/prod/be.env': 'BE_PORT=3000\n' });
       expect(resultOf(broken, 'env-pairing').ok).toBe(false);
     });
 
-    it('passes when both files agree, and says which files it compared', () => {
-      expect(resultOf(verdicts(ENV_TREE), 'env-pairing').messages).toEqual([CHECKED]);
+    it('passes when both files agree, and says what it examined and which files it compared', () => {
+      expect(resultOf(verdicts(ENV_TREE), 'env-pairing').messages).toEqual(ENV_CLEAN);
     });
 
     it('catches the verifier missing a key the sender’s mounted config interpolates', () => {
       const run = verdicts({ ...ENV_TREE, 'env/prod/be.env': 'BE_PORT=3000\n' });
-      expect(resultOf(run, 'env-pairing').messages).toEqual([
-        'prod: HANDSHAKE_KEY is set in env/prod/edge.env (sent by edge) but missing or empty in env/prod/be.env (verified by be). The verifier boots green and rejects every request carrying it.',
-        CHECKED,
-      ]);
+      expect(resultOf(run, 'env-pairing').messages).toEqual([VERIFIER_LACKS, CHECKED]);
     });
 
     it('the GUIDE’s headline defect — the verifier lacks the key — is red with no mounted config at all', () => {
@@ -740,10 +777,7 @@ describe('@specwarden/ops, wired by its GUIDE', () => {
         'env/prod/be.env': 'BE_PORT=3000\n',
       });
       expect(run.status).toBe(1);
-      expect(resultOf(run, 'env-pairing').messages).toEqual([
-        'prod: HANDSHAKE_KEY is set in env/prod/edge.env (sent by edge) but missing or empty in env/prod/be.env (verified by be). The verifier boots green and rejects every request carrying it.',
-        CHECKED,
-      ]);
+      expect(resultOf(run, 'env-pairing').messages).toEqual([VERIFIER_LACKS, CHECKED]);
     });
 
     it('a mounted `Caddyfile` is read for interpolations, like a .yml, .json, .conf or .caddy', () => {
@@ -761,7 +795,7 @@ describe('@specwarden/ops, wired by its GUIDE', () => {
         'env/prod/be.env': 'BE_PORT=3000\n',
       });
       expect(resultOf(run, 'env-pairing').messages).toEqual([
-        "prod: HANDSHAKE_KEY is interpolated by edge's mounted config but is missing or empty in env/prod/edge.env.",
+        "prod: HANDSHAKE_KEY is interpolated by edge's mounted config but is missing or empty in env/prod/edge.env — set it there, or the substitution yields an empty string.",
         CHECKED,
       ]);
     });
@@ -772,9 +806,7 @@ describe('@specwarden/ops, wired by its GUIDE', () => {
         'caddy/edge.conf': 'nothing\n',
         'env/prod/be.env': 'HANDSHAKE_KEY=\nBE_PORT=3000\n',
       });
-      expect(resultOf(run, 'env-pairing').messages[0]).toBe(
-        'prod: HANDSHAKE_KEY is set in env/prod/edge.env (sent by edge) but missing or empty in env/prod/be.env (verified by be). The verifier boots green and rejects every request carrying it.',
-      );
+      expect(resultOf(run, 'env-pairing').messages[0]).toBe(VERIFIER_LACKS);
     });
 
     it('a run where no mode’s env files are present is SKIPPED, cannot-tell — as the GUIDE says, not a pass', () => {
@@ -788,55 +820,71 @@ describe('@specwarden/ops, wired by its GUIDE', () => {
       ]);
     });
 
-    it('the `env-files-agree` .example as-is says `verifierService` is not set, rather than naming a service ``', () => {
+    it('the `env-pairing` .example as-is names the verifier it guessed, rather than a service called ``', () => {
       // It failed on "compose.yaml: service `` declares no env_file" — a finding about a name
-      // nobody wrote.
+      // nobody wrote. An empty name is a load error now, so the example ships a guess no
+      // compose file declares, marked REPLACE, and the finding says what to put there.
       const run = verdicts({
         'compose.yaml': `services:\n  be:\n    env_file:\n      - ./.env.${MODE}\n`,
         '.specwarden/checks/ops/env.check.mjs': example(
-          'ops/_playground/repository/.specwarden/checks/ops/env-files-agree.check.mjs.example',
+          'ops/_playground/repository/.specwarden/checks/ops/env-pairing.check.mjs.example',
         ),
       });
-      expect(resultOf(run, 'env-files-agree').messages).toEqual([
-        '`verifierService` is not set — name the compose service that VERIFIES a key another service sends.',
+      expect(resultOf(run, 'env-pairing').messages).toEqual([
+        'compose.yaml: service `your-verifier` is not declared — name in `verifierService` the service that verifies a key another service sends, and give it the env_file it reads.',
       ]);
     });
 
-    it('a compose file that cannot be read fails', () => {
+    it('an empty `verifierService` is refused at load, by name — exit 2', () => {
+      const r = cli(
+        {
+          ...ENV_TREE,
+          '.specwarden/checks/ops/env.check.mjs': ENV_CHECK.replace("verifierService: 'be'", "verifierService: ''"),
+        },
+        ['check', '--all', '--json'],
+      );
+      expect(r.status).toBe(2);
+      expect(said(r)).toContain('envPairing: `verifierService` is empty, which selects nothing to check');
+    });
+
+    it('a compose file that cannot be read fails on the corpus floor', () => {
       const run = verdicts({ ...ENV_TREE, 'docker-compose.yml': null });
-      expect(resultOf(run, 'env-pairing').messages).toEqual([
-        'docker-compose.yml cannot be read — this check compared nothing',
-      ]);
+      expect(resultOf(run, 'env-pairing').messages[0]).toMatch(
+        /^examined 0 compose service\(s\) — `docker-compose\.yml` could not be read — below the floor of 1\./,
+      );
     });
   });
 
-  describe('upstreamsResolve', () => {
-    it('passes a host-mode loopback and a container-mode service name', () => {
-      expect(resultOf(verdicts(UP_TREE), 'caddy-upstreams').messages).toEqual([
-        '✓ every upstream resolves where its proxy runs',
+  describe('proxyUpstreams', () => {
+    it('passes a host-mode loopback and a container-mode service name, saying what it examined', () => {
+      expect(resultOf(verdicts(UP_TREE), 'proxy-upstreams').messages).toEqual([
+        '✓ proxy-upstreams — 2 proxy config(s) examined, clean',
       ]);
     });
 
     it('names a loopback address in a deployed file, with the fix', () => {
       const run = verdicts({ ...UP_TREE, 'caddy/Caddyfile.prod': ':80 {\n  reverse_proxy 127.0.0.1:3000\n}\n' });
-      expect(resultOf(run, 'caddy-upstreams').messages).toEqual([
+      expect(resultOf(run, 'proxy-upstreams').messages).toEqual([
         'caddy/Caddyfile.prod:2 proxies to `127.0.0.1:3000`. The proxy runs INSIDE the container network in prod mode, so a loopback address is the proxy itself — the site answers 502 on a public host. Use the service name.',
       ]);
     });
 
-    it('with EVERY mode’s file absent it fails naming them — the `.example` as-is too', () => {
+    it('with EVERY mode’s file absent it fails on the corpus floor naming them — the `.example` as-is too', () => {
       // It was green: two SKIPPED lines and exit 0, over a `fileFor` pointed at nothing.
       const run = verdicts({ ...UP_TREE, 'caddy/Caddyfile.local': null, 'caddy/Caddyfile.prod': null });
       expect(run.status).toBe(1);
-      expect(resultOf(run, 'caddy-upstreams').messages).toEqual([
-        'none of the proxy configs `fileFor` names exists (caddy/Caddyfile.local, caddy/Caddyfile.prod) — this check examined nothing, and a check that examined nothing cannot fail. Point `fileFor` at where they are.',
+      const [floor, ...skipped] = resultOf(run, 'proxy-upstreams').messages;
+      expect(floor).toMatch(
+        /^examined 0 proxy config\(s\) — none of the proxy configs `fileFor` names exists \(caddy\/Caddyfile\.local, caddy\/Caddyfile\.prod\) — below the floor of 1\./,
+      );
+      expect(skipped).toEqual([
         'SKIPPED local: caddy/Caddyfile.local not present.',
         'SKIPPED prod: caddy/Caddyfile.prod not present.',
       ]);
       const templated = verdicts({
         'README.md': '# a\n',
         '.specwarden/checks/ops/up.check.mjs': example(
-          'ops/_playground/repository/.specwarden/checks/ops/upstreams-resolve.check.mjs.example',
+          'ops/_playground/repository/.specwarden/checks/ops/proxy-upstreams.check.mjs.example',
         ),
       });
       expect(templated.status).toBe(1);
@@ -845,52 +893,52 @@ describe('@specwarden/ops, wired by its GUIDE', () => {
     it('with SOME mode’s file absent it reads the rest, and notes the one it skipped', () => {
       const run = verdicts({ ...UP_TREE, 'caddy/Caddyfile.local': null });
       expect(run.status).toBe(0);
-      expect(resultOf(run, 'caddy-upstreams').messages).toEqual(['SKIPPED local: caddy/Caddyfile.local not present.']);
+      expect(resultOf(run, 'proxy-upstreams').messages).toEqual([
+        '✓ proxy-upstreams — 1 proxy config(s) examined, clean',
+        'SKIPPED local: caddy/Caddyfile.local not present.',
+      ]);
     });
   });
 
-  describe('gatesHaveCiJobs', () => {
-    it('passes when the heavy gate has a job the arbiter needs, and a job runs the cheap tier', () => {
-      expect(resultOf(verdicts(CI_TREE), 'gate-coverage').messages).toEqual([
-        '✓ 1 gate(s) named across 3 job(s), all reaching ci-ok',
-      ]);
+  describe('ciCoverage', () => {
+    it('passes when the heavy check has a job the required job needs, and a job runs the cheap tier', () => {
+      expect(resultOf(verdicts(CI_TREE), 'ci-coverage').messages).toEqual(CI_CLEAN());
     });
 
-    it('names a heavy gate with no job and a gate job outside the arbiter’s needs', () => {
+    it('names a heavy check with no job and a job that runs checks outside the required job’s needs', () => {
       const run = verdicts({
         ...CI_TREE,
         '.github/workflows/ci.yml':
-          'jobs:\n  fast:\n    steps:\n      - run: node warden.mjs check --tier fast\n' +
-          '  lint:\n    steps:\n      - run: node warden.mjs check --id lint\n  ci-ok:\n    needs: [fast]\n',
-        '.specwarden/checks/lint.check.mjs': HEAVY_GATE('lint'),
+          'jobs:\n  fast:\n    steps:\n      - run: node specwarden.mjs check --tier fast\n' +
+          '  lint:\n    steps:\n      - run: node specwarden.mjs check --id lint\n  ci-ok:\n    needs: [fast]\n',
+        '.specwarden/checks/lint.check.mjs': HEAVY_CHECK('lint'),
       });
-      expect(resultOf(run, 'gate-coverage').messages).toEqual([
-        'heavy gate `unit` (unit) has no job in .github/workflows/ci.yml. Add it to the matrix of the job that offers what it needs, or move it to another tier on purpose.',
-        "job `lint` runs gates but is not in `ci-ok`'s needs. It can be red while the one check branch protection reads is green.",
+      expect(resultOf(run, 'ci-coverage').messages).toEqual([
+        'heavy check `unit` (unit) has no job in .github/workflows/ci.yml. Add it to the matrix of the job that offers what it needs, or move it to another tier on purpose.',
+        "job `lint` runs checks but is not in `ci-ok`'s needs, so it can be red while the status branch protection requires is green — add it to `ci-ok`'s needs.",
       ]);
     });
 
-    it('the shipped SKILL’s wiring is green, and its old `arbiter:` is refused by name at load', () => {
-      // `arbiter:` for `arbiterJob` loaded, and reported `undefined` three times.
-      const skill = pasted('modules/ops/skills/specwarden-ops/SKILL.md', 'gatesHaveCiJobs({');
+    it('the shipped SKILL’s wiring is green, and the old `arbiterJob` is refused by name at load', () => {
+      // `arbiter:` for `arbiterJob` loaded once, and reported `undefined` three times; the
+      // option is `requiredJob` now, and the old name is a load error rather than a silence.
+      const skill = pasted('modules/ops/skills/specwarden-ops/SKILL.md', 'ciCoverage({');
       const run = verdicts({ ...CI_TREE, '.specwarden/checks/ops/ci.check.mjs': skill });
-      expect(resultOf(run, 'gate-coverage').messages).toEqual([
-        '✓ 1 gate(s) named across 3 job(s), all reaching ci-ok',
-      ]);
+      expect(resultOf(run, 'ci-coverage').messages).toEqual(CI_CLEAN());
 
       const old = cli(
         {
           ...CI_TREE,
           '.specwarden/checks/ops/ci.check.mjs':
-            "import { gatesHaveCiJobs } from '@specwarden/ops';\nexport const check = gatesHaveCiJobs({ id: 'gate-coverage', title: 'x', workflow: '.github/workflows/ci.yml', arbiter: 'ci-ok' });\n",
+            "import { ciCoverage } from '@specwarden/ops';\nexport const check = ciCoverage({ workflowFile: '.github/workflows/ci.yml', arbiterJob: 'ci-ok' });\n",
         },
         ['check', '--all', '--json'],
       );
-      expect(old.status).not.toBe(0);
-      expect(said(old)).toContain('`arbiter` is not an option of gatesHaveCiJobs; `arbiterJob` is required');
+      expect(old.status).toBe(2);
+      expect(said(old)).toContain('`arbiterJob` is not an option of ciCoverage; `requiredJob` is required');
     });
 
-    it('the `gate-coverage` .example’s runnerPattern sees a job that runs the fast tier', () => {
+    it('the `ci-coverage` .example sees a job that runs the fast tier', () => {
       // It was red over a correct workflow: the cheap-tier test appended `--tier fast` to a
       // pattern that already ends in `--id (\S+)`, so it could never match.
       const run = verdicts({
@@ -900,27 +948,30 @@ describe('@specwarden/ops, wired by its GUIDE', () => {
           '  unit:\n    steps:\n      - run: specwarden check --id unit\n  ci-ok:\n    needs: [fast, unit]\n',
         // The monorepo example names `ci.yml`; the ops one names the `deploy.yml` its tree has.
         '.specwarden/checks/ops/ci.check.mjs': example(
-          'monorepo/_playground/repository/.specwarden/checks/harness/gate-coverage.check.mjs.example',
+          'monorepo/_playground/repository/.specwarden/checks/ops/ci-coverage.check.mjs.example',
         ),
       });
-      expect(resultOf(run, 'gate-coverage').messages).toEqual([
-        '✓ 1 gate(s) named across 3 job(s), all reaching ci-ok',
-      ]);
+      expect(resultOf(run, 'ci-coverage').messages).toEqual(CI_CLEAN('ci-coverage'));
     });
   });
 
-  describe('buildOrderFollowsDeps', () => {
-    it('passes a build in dependency order and names a swapped one', () => {
-      expect(resultOf(verdicts(BO_TREE), 'workspace-build-order').messages).toEqual([
-        '✓ every @acme/* build follows its dependencies',
+  describe('buildOrder', () => {
+    it('passes a build in dependency order and names a swapped one, on its line', () => {
+      expect(resultOf(verdicts(BO_TREE), 'build-order').messages).toEqual([
+        '✓ build-order — 1 container file(s) examined, clean',
       ]);
       const run = verdicts({
         ...BO_TREE,
         Dockerfile: 'RUN pnpm --filter @acme/api run build\nRUN pnpm --filter @acme/core run build\n',
       });
-      expect(resultOf(run, 'workspace-build-order').messages).toEqual([
-        'Dockerfile: builds @acme/api before @acme/core, which @acme/api imports — swap the two',
+      expect(resultOf(run, 'build-order').messages).toEqual([
+        'Dockerfile: builds @acme/api before @acme/core, which @acme/api imports — swap the two.',
       ]);
+    });
+
+    it('a pathspec that selects no container file fails on the corpus floor — it passed in silence', () => {
+      const run = verdicts({ ...BO_TREE, Dockerfile: null, 'Containerfile.web': 'FROM node\n' });
+      expect(resultOf(run, 'build-order').messages[0]).toMatch(/^examined 0 container file\(s\) — /);
     });
 
     it('the `build-order` .example as-is is loud about the scope it has not been told', () => {
@@ -931,7 +982,7 @@ describe('@specwarden/ops, wired by its GUIDE', () => {
         ),
       });
       expect(resultOf(run, 'build-order').messages).toEqual([
-        'no workspace packages found under packages with prefix @your-scope/ — this check compared nothing',
+        'no workspace package under packages is named @your-scope/… — point `packagesDir` at where the manifests are, and `scopePrefix` at the scope their names carry.',
       ]);
     });
   });
@@ -940,8 +991,8 @@ describe('@specwarden/ops, wired by its GUIDE', () => {
     // It said an empty corpus was "never passed over" — and passed it, "0 migration file(s) read".
     const run = verdicts({
       'README.md': '# a\n',
-      '.specwarden/checks/backend/mig.check.mjs': example(
-        'nestjs/_playground/repository/.specwarden/checks/backend/migrations-backwards-compatible.check.mjs.example',
+      '.specwarden/checks/workspace/mig.check.mjs': example(
+        'nestjs/_playground/repository/.specwarden/checks/workspace/migrations-backwards-compatible.check.mjs.example',
       ),
     });
     expect(run.status).toBe(1);
@@ -953,25 +1004,24 @@ describe('@specwarden/ops, wired by its GUIDE', () => {
 // @specwarden/security
 // ─────────────────────────────────────────────────────────────────────────────────────
 
-const SECRET_SCAN =
-  "import { secretScan } from '@specwarden/security';\n\n" +
-  "export const checks = [secretScan({ id: 'secret-scan', title: 'no credential in the tree', tier: 'fast' })];\n";
 /** Assembled, so this spec does not trip a scan run over THIS repository. */
 const AWS_KEY = `AKIA${'ABCDEFGHIJ012345'}`;
 const ACME_KEY = `acme_${'a'.repeat(32)}`;
 
 describe('@specwarden/security, wired by its GUIDE', () => {
-  it('the one-line wiring passes over a clean tree and names a planted key, rotate-first', () => {
+  it('the one-line wiring passes over a clean tree, saying what it read, and names a planted key, rotate-first', () => {
+    const wiring = pasted('modules/security/GUIDE.md', 'export const check = secretScan();');
     const clean = verdicts({
       'README.md': '# a\n',
       '.env.example': 'API_TOKEN=\n',
-      '.specwarden/checks/security/s.check.mjs': SECRET_SCAN,
+      '.specwarden/checks/security/s.check.mjs': wiring,
     });
-    expect(resultOf(clean, 'secret-scan').ok).toBe(true);
+    // The README, the sample env file, the config and the check file itself.
+    expect(resultOf(clean, 'secret-scan').messages).toEqual(['✓ secret-scan — 4 file(s) examined, clean']);
     const broken = verdicts({
       'README.md': '# a\n',
       'src/config.ts': `export const key = '${AWS_KEY}';\n`,
-      '.specwarden/checks/security/s.check.mjs': SECRET_SCAN,
+      '.specwarden/checks/security/s.check.mjs': wiring,
     });
     expect(resultOf(broken, 'secret-scan').messages).toEqual([
       'src/config.ts:1 — AWS access key id [aws-access-key-id]. If real, ROTATE it before deleting the line; if a placeholder, add it to the allowlist with a reason.',
@@ -1012,7 +1062,6 @@ export const check = secretScan({
       'src/config.ts': `export const key = '${ACME_KEY}';\n`,
       '.specwarden/checks/security/s.check.mjs': `import { secretScan } from '@specwarden/security';
 export const check = secretScan({
-  id: 'secret-scan', title: 'x', tier: 'fast',
   patterns: { extra: [{ id: 'acme-key', label: 'Acme API key', re: /\\bacme_[a-z0-9]{32}\\b/ }] },
 });
 `,
@@ -1022,15 +1071,25 @@ export const check = secretScan({
     ]);
   });
 
-  it('a `scan` pathspec that matches nothing fails', () => {
+  it('a `files` pathspec that matches nothing fails on the corpus floor, and the old `scan` is refused', () => {
     const run = verdicts({
       'README.md': '# a\n',
       '.specwarden/checks/security/s.check.mjs':
-        "import { secretScan } from '@specwarden/security';\nexport const check = secretScan({ id: 'secret-scan', title: 'x', tier: 'fast', scan: 'src/**' });\n",
+        "import { secretScan } from '@specwarden/security';\nexport const check = secretScan({ files: 'src/**' });\n",
     });
-    expect(resultOf(run, 'secret-scan').messages).toEqual([
-      'no file matched `src/**` after the skipped paths — this scan examined nothing, and a scan that examined nothing cannot fail.',
-    ]);
+    expect(resultOf(run, 'secret-scan').messages[0]).toMatch(
+      /^examined 0 file\(s\) — `src\/\*\*`, less `except` and the default exemptions, left nothing to scan — below the floor of 1\./,
+    );
+    const old = cli(
+      {
+        'README.md': '# a\n',
+        '.specwarden/checks/security/s.check.mjs':
+          "import { secretScan } from '@specwarden/security';\nexport const check = secretScan({ scan: 'src/**', skipPaths: [] });\n",
+      },
+      ['check', '--all', '--json'],
+    );
+    expect(old.status).toBe(2);
+    expect(said(old)).toContain('`scan` is not an option of secretScan; `skipPaths` is not an option of secretScan');
   });
 });
 
@@ -1040,14 +1099,7 @@ export const check = secretScan({
 
 const AGENTS_CHECK = `import { agentDefinitions } from '@specwarden/agents';
 
-export const checks = [
-  agentDefinitions({
-    id: 'agent-definitions',
-    title: 'every agent declares its tools',
-    tier: 'fast',
-    agentsDir: '.claude/agents',
-  }),
-];
+export const check = agentDefinitions();
 `;
 const ROSTER = {
   '.claude/agents/lead.md': '---\nname: lead\ndescription: Plans.\ntools: Read, Agent\nmodel: opus\n---\n\nPlans.\n',
@@ -1055,16 +1107,23 @@ const ROSTER = {
     '---\nname: reviewer\ndescription: Reviews.\ntools: Read, Grep\nmodel: sonnet\n---\n\nReviews.\n',
   '.specwarden/checks/agents/a.check.mjs': AGENTS_CHECK,
 };
+const SPAWNING_LEAF =
+  'declares the spawn tool(s) Agent but is not an orchestrator — a leaf role that can spawn turns a bounded pipeline into an unbounded one. Remove the tool, or name the role in `orchestrators`.';
 
 describe('@specwarden/agents, wired by its GUIDE', () => {
   it('passes a sound roster, and fails naming the folder when the roster is not there', () => {
     // A missing roster passed as "nothing to verify" — and so did an `agentsDir` pointing at
     // one that moved. A repository with no roster does not install this module.
-    expect(resultOf(verdicts(ROSTER), 'agent-definitions').ok).toBe(true);
-    const none = verdicts({ 'README.md': '# a\n', '.specwarden/checks/agents/a.check.mjs': AGENTS_CHECK });
-    expect(resultOf(none, 'agent-definitions').messages).toEqual([
-      '.claude/agents does not exist — this check examined nothing, and a check that examined nothing cannot fail. Point `agentsDir` at the folder the agent definitions live in.',
+    expect(pasted('modules/agents/GUIDE.md', 'agentDefinitions()')).toContain(
+      'export const check = agentDefinitions();',
+    );
+    expect(resultOf(verdicts(ROSTER), 'agent-definitions').messages).toEqual([
+      '✓ agent-definitions — 2 agent definition(s) examined, clean',
     ]);
+    const none = verdicts({ 'README.md': '# a\n', '.specwarden/checks/agents/a.check.mjs': AGENTS_CHECK });
+    expect(resultOf(none, 'agent-definitions').messages[0]).toMatch(
+      /^examined 0 agent definition\(s\) — `\.claude\/agents` does not exist — point `agentsDir` at the folder the agent definitions live in — below the floor of 1\./,
+    );
   });
 
   it('names a mismatched name, a spawning leaf, and a missing `tools:`', () => {
@@ -1075,18 +1134,16 @@ describe('@specwarden/agents, wired by its GUIDE', () => {
       '.claude/agents/writer.md': '---\nname: writer\ndescription: Writes.\nmodel: sonnet\n---\n',
     });
     expect(resultOf(run, 'agent-definitions').messages).toEqual([
-      '.claude/agents/reviewer.md: `name: review` does not match the filename (`reviewer`) — the harness addresses agents by name, so this one is uncallable.',
-      '.claude/agents/reviewer.md: declares the spawn tool(s) Agent but is not an orchestrator — a leaf role that can spawn turns a bounded pipeline into an unbounded one.',
-      '.claude/agents/writer.md: missing or empty `tools:`.',
+      '.claude/agents/reviewer.md: `name: review` does not match the filename (`reviewer`) — an assistant addresses agents by name, so this one is uncallable. Rename one to match the other.',
+      `.claude/agents/reviewer.md: ${SPAWNING_LEAF}`,
+      '.claude/agents/writer.md: missing or empty `tools:` — every definition declares it.',
     ]);
   });
 
   it("`orchestrators` defaults to `['lead']`, and the GUIDE and the SKILL both say so", () => {
     // It defaulted in silence, while the GUIDE said the check "asks for the list".
     for (const doc of ['modules/agents/GUIDE.md', 'modules/agents/skills/specwarden-agents/SKILL.md']) {
-      expect(readFileSync(join(ROOT, doc), 'utf8'), doc).toMatch(
-        /`orchestrators`\s+defaults\s+to\s+`\['lead'\]`|The default\s+is\s+`\['lead'\]`/,
-      );
+      expect(readFileSync(join(ROOT, doc), 'utf8'), doc).toMatch(/`orchestrators`\s+defaults\s+to\s+`\['lead'\]`/);
     }
     const run = verdicts({
       ...ROSTER,
@@ -1094,15 +1151,13 @@ describe('@specwarden/agents, wired by its GUIDE', () => {
       '.claude/agents/orchestrator.md':
         '---\nname: orchestrator\ndescription: Plans.\ntools: Read, Agent\nmodel: opus\n---\n',
     });
-    expect(resultOf(run, 'agent-definitions').messages).toEqual([
-      '.claude/agents/orchestrator.md: declares the spawn tool(s) Agent but is not an orchestrator — a leaf role that can spawn turns a bounded pipeline into an unbounded one.',
-    ]);
+    expect(resultOf(run, 'agent-definitions').messages).toEqual([`.claude/agents/orchestrator.md: ${SPAWNING_LEAF}`]);
   });
 
   it('a README beside the roster is read as a definition with no frontmatter', () => {
     const run = verdicts({ ...ROSTER, '.claude/agents/README.md': '# the roster\n\nOne file per role.\n' });
     expect(resultOf(run, 'agent-definitions').messages).toEqual([
-      '.claude/agents/README.md: no YAML frontmatter — the harness cannot register this agent.',
+      '.claude/agents/README.md: no YAML frontmatter — an assistant cannot register this agent. Open the file with `---`, its fields, and `---`.',
     ]);
   });
 
@@ -1118,8 +1173,6 @@ describe('@specwarden/agents, wired by its GUIDE', () => {
 
 export const check = agentDefinitions({
   id: 'agent-definitions',
-  title: 'every agent declares name, description, tools and model, and only an orchestrator spawns another',
-  tier: 'fast',
   agents: '.claude/agents/*.md',
   orchestrators: ['lead'],
 });
@@ -1165,7 +1218,7 @@ describe('rules, for a module check wired by its GUIDE', () => {
   });
 
   it('a hand-wired consumer meets a green `rule-owner-resolves` — the engine owns its own rule where no README does', () => {
-    // It was red: the harness rule was owned by `.specwarden/README.md`, which only `init` writes.
+    // It was red: the self-checks’ rule was owned by `.specwarden/README.md`, which only `init` writes.
     const run = verdicts(
       {
         ...DOCS_TREE,
@@ -1192,20 +1245,21 @@ describe('rules, for a module check wired by its GUIDE', () => {
     );
   });
 
-  it('the nestjs plugin’s check carries the `rule` it is given, and is no orphan', () => {
-    // It was an orphan, and `nestjs()` took no `rule` to fix it with.
+  it('the nestjs plugin’s check carries the rule its package implies, and is no orphan — a rule the consumer writes wins', () => {
+    // It was an orphan, and `nestjs()` took no `rule` to fix it with; then only a `rule` the
+    // consumer wrote would do. The plugin implies one now, as every module does.
     const tree = {
       'README.md': '# a\n',
+      'package.json': JSON.stringify({ devDependencies: { specwarden: '*', '@specwarden/plugin-nestjs': '*' } }),
       'src/modules/gaps/gaps.service.ts': "import { GapRepository } from './repositories/gap.repository';\n",
       'src/modules/gaps/repositories/gap.repository.ts': "import { eq } from 'drizzle-orm';\n",
     };
     const config = (extra: string) =>
       "import { nestjs } from '@specwarden/plugin-nestjs';\nimport { defineConfig } from 'specwarden';\n" +
-      `export default defineConfig({ rules: [], plugins: [nestjs({ modulesRoot: 'src/modules', ormPackage: 'drizzle-orm'${extra} })] });\n`;
-    const orphan = verdicts(tree, { config: config('') });
-    expect(resultOf(orphan, 'orphan-check').messages).toEqual([
-      '1 check(s) enforce no declared rule: nestjs/db-access-through-repositories',
-    ]);
+      `export default defineConfig({ rules: [], plugins: [nestjs({ modulesDir: 'src/modules', ormPackage: 'drizzle-orm'${extra} })] });\n`;
+    const implied = verdicts(tree, { config: config('') });
+    expect(resultOf(implied, 'orphan-check').ok).toBe(true);
+    expect(resultOf(implied, 'rule-owner-resolves').ok).toBe(true);
     const ruled = verdicts(tree, {
       config: config(
         ", rule: { statement: 'a module reaches the database only through a repository', owner: 'README.md' }",
@@ -1349,7 +1403,7 @@ describe('sync-invariants, as the spec-source GUIDEs describe it', () => {
     const os = cli({ 'README.md': '# a\n' }, ['sync-invariants'], { config: specConfig('openspec') });
     expect(os.status).toBe(2);
     expect(os.stdout).toBe(
-      'spec source "openspec" found nothing: openspec/specs not found — is OpenSpec installed here? (This is not a green light — it means the source could not be read.)\n',
+      'spec source "openspec" found nothing: openspec/specs not found — is OpenSpec installed here? Set `specsDir` if its capabilities live elsewhere. (This is not a green light — it means the source could not be read.)\n',
     );
     const sk = cli({ 'README.md': '# a\n' }, ['sync-invariants'], { config: specConfig('speckit') });
     expect(sk.status).toBe(2);
@@ -1360,7 +1414,7 @@ describe('sync-invariants, as the spec-source GUIDEs describe it', () => {
     const r = cli({ 'openspec/specs/auth/spec.md': '# auth\n\nNo heading here.\n' }, ['sync-invariants'], {
       config: specConfig('openspec'),
     });
-    expect(r.stdout).toContain('Pass `requirementHeading` if this OpenSpec version words them differently');
+    expect(r.stdout).toContain('Pass `requirementPattern` if this OpenSpec version words them differently');
     expect(r.stdout).toContain('(This is not "in sync" — there was nothing to compare.)');
   });
 
@@ -1396,7 +1450,7 @@ describe('sync-invariants, as the spec-source GUIDEs describe it', () => {
   it('with no specSource it says there is nothing to sync', () => {
     const r = cli({ 'README.md': '# a\n' }, ['sync-invariants']);
     expect(r.stdout).toBe(
-      'no specSource configured — nothing to sync. Declare one in warden.config (native plans, or an adapter).\n',
+      'no specSource configured — nothing to sync. Declare one in .specwarden/config.mjs (native plans, or an adapter).\n',
     );
   });
 });
@@ -1409,11 +1463,11 @@ const nestConfig = (options: string, prefix = "import { defineConfig } from 'spe
   `import { nestjs } from '@specwarden/plugin-nestjs';
 ${prefix}
 export default defineConfig({
-  harness: false,
+  selfChecks: false,
   plugins: [nestjs({ ${options} })],
 });
 `;
-const GUIDE_NEST = "modulesRoot: 'src/modules', ormPackage: 'drizzle-orm', ruleDocument: 'docs/ARCHITECTURE.md'";
+const GUIDE_NEST = "modulesDir: 'src/modules', ormPackage: 'drizzle-orm'";
 /** A realistic module: a service, its spec, a repository and a Drizzle entity. */
 const NEST_TREE = {
   'src/modules/gaps/gaps.service.ts': "import { GapRepository } from './repositories/gap.repository';\n",
@@ -1425,36 +1479,40 @@ const ENTITY =
   'src/modules/gaps/entities/gap.entity.ts imports `drizzle-orm/pg-core`, which is forbidden from src/modules/**.';
 
 describe('@specwarden/plugin-nestjs, wired by its GUIDE', () => {
-  it('with the default `allowedFrom`, an entity file — the ORM’s schema — is allowed', () => {
+  it('the GUIDE’s config, as pasted: an entity file — the ORM’s schema — is allowed by the default `except`', () => {
     // It was a violation: a Drizzle or TypeORM entity must import its ORM, and every real
     // service was red on its first run.
-    const run = verdicts(NEST_TREE, { config: nestConfig(GUIDE_NEST) });
-    expect(resultOf(run, 'nestjs/db-access-through-repositories').messages).toEqual([
-      '✓ nestjs/db-access-through-repositories — 1 file(s) examined, clean',
-    ]);
+    const config = pasted(
+      'plugins/nestjs/GUIDE.md',
+      "plugins: [nestjs({ modulesDir: 'src/modules', ormPackage: 'drizzle-orm' })]",
+    );
+    const run = verdicts(NEST_TREE, { config });
+    expect(resultOf(run, 'nestjs-db-access').messages).toEqual(['✓ nestjs-db-access — 1 file(s) examined, clean']);
     // …and a service reaching the ORM is still named, beside the entity that may.
     const broken = verdicts(
       { ...NEST_TREE, 'src/modules/gaps/gaps.service.ts': "import { eq } from 'drizzle-orm';\n" },
       { config: nestConfig(GUIDE_NEST) },
     );
-    expect(resultOf(broken, 'nestjs/db-access-through-repositories').messages).not.toContain(ENTITY);
-    expect(broken.failed).toEqual(['nestjs/db-access-through-repositories']);
+    expect(resultOf(broken, 'nestjs-db-access').messages).not.toContain(ENTITY);
+    expect(broken.failed).toEqual(['nestjs-db-access']);
   });
 
-  it('with `allowedFrom` naming entities, the tree is clean and the pass says what it examined', () => {
+  it('with `except` naming entities, the tree is clean and the pass says what it examined', () => {
     const run = verdicts(NEST_TREE, {
-      config: nestConfig(`${GUIDE_NEST}, allowedFrom: ['**/repositories/**', '**/entities/**', '**/*.spec.ts']`),
+      config: nestConfig(`${GUIDE_NEST}, except: ['**/repositories/**', '**/entities/**', '**/*.spec.ts']`),
     });
-    expect(resultOf(run, 'nestjs/db-access-through-repositories').messages).toEqual([
-      '✓ nestjs/db-access-through-repositories — 1 file(s) examined, clean',
-    ]);
+    expect(resultOf(run, 'nestjs-db-access').messages).toEqual(['✓ nestjs-db-access — 1 file(s) examined, clean']);
   });
 
-  it('a service reaching the ORM is named, on the command line by its id, with the rule document in the hint', () => {
+  it('a service reaching the ORM is named, on the command line by its id, with the rule’s document in the hint', () => {
     const r = cli(
       { ...NEST_TREE, 'src/modules/gaps/gaps.service.ts': "import { eq } from 'drizzle-orm';\n" },
-      ['check', '--id', 'nestjs/db-access-through-repositories'],
-      { config: nestConfig(GUIDE_NEST) },
+      ['check', '--id', 'nestjs-db-access'],
+      {
+        config: nestConfig(
+          `${GUIDE_NEST}, rule: { statement: 'a module reaches the database only through a repository', owner: 'docs/ARCHITECTURE.md' }`,
+        ),
+      },
     );
     expect(r.status).toBe(1);
     // `file:line` leads the finding now; the sentence after it is the check's.
@@ -1462,36 +1520,48 @@ describe('@specwarden/plugin-nestjs, wired by its GUIDE', () => {
       /src\/modules\/gaps\/gaps\.service\.ts(?::1)? imports `drizzle-orm`, which is forbidden from src\/modules\/\*\*\./,
     );
     expect(r.stdout).toContain(
-      '💡 Move the query behind a repository, or add the file to the excepted set. Rule: docs/ARCHITECTURE.md.',
+      '💡 Move the query behind a repository, or add the file to `except`. Rule: docs/ARCHITECTURE.md.',
     );
   });
 
-  it('a `modulesRoot` that matches nothing fails on the corpus floor', () => {
+  it('a `modulesDir` that matches nothing fails on the corpus floor', () => {
     const run = verdicts({ 'README.md': '# a\n' }, { config: nestConfig(GUIDE_NEST) });
-    expect(resultOf(run, 'nestjs/db-access-through-repositories').messages).toEqual([
+    expect(resultOf(run, 'nestjs-db-access').messages).toEqual([
       'examined 0 file(s) — `src/modules/**` matched nothing to scan — below the floor of 1. A check that examined nothing cannot fail, so it reports success; this is that state, caught. Point the pathspec at where the files are, or declare `corpus: { atLeast: 0 }` if an empty set is expected.',
     ]);
+  });
+
+  it('the old `modulesRoot`, `allowedFrom` and `ruleDocument` are refused by name at load', () => {
+    const r = cli(NEST_TREE, ['check', '--all', '--json'], {
+      config: nestConfig(
+        "modulesRoot: 'src/modules', ormPackage: 'drizzle-orm', allowedFrom: [], ruleDocument: 'x.md'",
+      ),
+    });
+    expect(r.status).toBe(2);
+    expect(said(r)).toContain(
+      '`modulesRoot` is not an option of nestjs; `allowedFrom` is not an option of nestjs; `ruleDocument` is not an option of nestjs; `modulesDir` is required',
+    );
   });
 
   it('the ratchet as the GUIDE arms it: today’s count passes as tolerated, and one more fails', () => {
     // The GUIDE said `--tighten` records today's count — and the run that recorded it exited
     // red. `--tighten` no longer records a count the check failed at, so the GUIDE arms the
     // ratchet inline, at today's count, instead.
-    const armed = pasted('plugins/nestjs/GUIDE.md', "ratchetId: 'nestjs-db-access', ratchet: 1");
+    const armed = pasted('plugins/nestjs/GUIDE.md', 'ratchet: 1');
     const tree = {
       'src/modules/gaps/gaps.service.ts': "import { eq } from 'drizzle-orm';\n",
       'src/modules/gaps/repositories/gap.repository.ts': "import { eq } from 'drizzle-orm';\n",
     };
     const today = verdicts(tree, { config: armed });
     expect(today.status).toBe(0);
-    expect(resultOf(today, 'nestjs/db-access-through-repositories').messages[0]).toBe(
+    expect(resultOf(today, 'nestjs-db-access').messages[0]).toBe(
       '↑ 1 pre-existing violation(s) tolerated under ratchet 1; the lines below are that tolerated set, not new failures. Any increase fails this check.',
     );
     const more = verdicts(
       { ...tree, 'src/modules/meetings/meetings.service.ts': "import { eq } from 'drizzle-orm';\n" },
       { config: armed },
     );
-    expect(more.failed).toEqual(['nestjs/db-access-through-repositories']);
+    expect(more.failed).toEqual(['nestjs-db-access']);
   });
 
   it('the shipped SKILL’s config, as pasted, loads and runs the plugin’s check', () => {
@@ -1502,7 +1572,7 @@ describe('@specwarden/plugin-nestjs, wired by its GUIDE', () => {
     expect(r.stderr).not.toContain('ReferenceError');
     expect(r.status).toBe(0);
     const report = JSON.parse(r.stdout) as { results: { id: string; ok: boolean }[] };
-    expect(report.results.find((x) => x.id === 'nestjs/db-access-through-repositories')?.ok).toBe(true);
+    expect(report.results.find((x) => x.id === 'nestjs-db-access')?.ok).toBe(true);
   });
 });
 

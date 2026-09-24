@@ -25,7 +25,7 @@ it inside somebody else's repository is
    the run would take minutes, and the finding would name a file nobody owns.
 
 4. **The placeholder vocabulary is overridable.** It is English and conventional, which
-   is wrong for some houses. A false positive from a table a consumer cannot reach is how
+   is wrong for some consumers. A false positive from a table a consumer cannot reach is how
    this check gets switched off for good.
 
 5. **The finding says ROTATE first.** Deleting the line leaves the credential in the
@@ -38,6 +38,16 @@ it inside somebody else's repository is
    (`file`, `patternId`, `why`). A new nested key goes into both the type and the list in
    the same edit.
 
+7. **The corpus is `files`, its exemptions `except`, and `except` ADDS to
+   `DEFAULT_SECRET_EXCEPT`.** It was two replaceable lists — `skipPaths` and
+   `skipExtensions` — and replacing one to add a folder dropped every lockfile from the
+   defaults. The allowlist is not an exemption: it excuses one pattern in one exact file,
+   and the file is still scanned for the rest.
+
+8. **An empty corpus fails through the engine's corpus floor**, and a clean pass prints the
+   engine's line. The factory takes `IModuleCheckDeclaration`: its id defaults to
+   `secret-scan`, its body reads the id from `self`, and `zone` is refused.
+
 ## The fixture trap, twice over
 
 A fixture for this check necessarily contains something credential-shaped — so it would
@@ -46,8 +56,8 @@ than writing it out, because needing an allowlist entry for a fixture is a smell
 allowlist is for a file that necessarily contains the pattern, and a fixture that could
 have been assembled does not qualify.
 
-The second trap is subtler and was live: the default `scan` option is the **empty
-string**, which means "every tracked file" to git. A test harness that forwards it to a
+The second trap is subtler and was live: the default corpus is the **empty
+pathspec**, which means "every tracked file" to git. A test kit that forwards it to a
 glob matches nothing, so the check examines an empty corpus and reports green — inside a
 suite whose entire job is to prove the check can fail. `testContext` handles it now; a
 hand-written tracked-file function must too.

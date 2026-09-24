@@ -49,22 +49,49 @@ describe('the line', () => {
     expect(cap.err()).toContain('--id needs a value.');
   });
 
-  it('`plan` reads its own flags, so the grammar does not refuse them for it', async () => {
+  it("`--verify` is plan's own flag, so the grammar does not refuse it there", async () => {
     const cap = captureIo();
     expect(await main(['plan', 'status', 'nope.md', '--verify'], {}, dir, cap.io)).toBe(2);
-    expect(cap.err()).toBe('no such plan: nope.md\n');
+    expect(cap.err()).toBe('no such plan: nope.md.\n');
+  });
+
+  // Read and ignored: `init --tier heavy`, `doctor --fix` and `check --template x` each ran
+  // as if the flag were not on the line.
+  it.each([
+    [['init', '--tier', 'heavy'], '--tier is a flag of check, not of init'],
+    [['doctor', '--fix'], '--fix is a flag of check, not of doctor'],
+    [['check', '--template', 'x'], '--template is a flag of init, not of check'],
+    [['adopt', '--json'], '--json is a flag of check and doctor, not of adopt'],
+    [['check', '--verify'], '--verify is a flag of plan, not of check'],
+  ])('%j is refused, naming the command that owns the flag', async (argv, said) => {
+    const cap = captureIo();
+    expect(await main(argv, {}, dir, cap.io)).toBe(2);
+    expect(cap.err()).toBe(`${said}.\n\n${USAGE}`);
+    expect(cap.out()).toBe('');
+  });
+
+  it('takes --flag=value as the flag and its value', async () => {
+    const cap = captureIo();
+    expect(await main(['check', '--tier=', '--all=yes'], {}, dir, cap.io)).toBe(2);
+    expect(cap.err()).toBe(`--tier needs a value; --all takes no value, and was given "yes".\n\n${USAGE}`);
+  });
+
+  it('refuses --json beside a --reporter that says otherwise — --json IS --reporter json', async () => {
+    const cap = captureIo();
+    expect(await main(['check', '--json', '--reporter', 'tty'], {}, dir, cap.io)).toBe(2);
+    expect(cap.err()).toContain('--json is --reporter json, and --reporter tty says otherwise.');
   });
 
   it('an unknown command is named above the usage', async () => {
     const cap = captureIo();
     expect(await main(['bogus'], {}, dir, cap.io)).toBe(2);
-    expect(cap.err()).toBe(`unknown command "bogus"\n\n${USAGE}`);
+    expect(cap.err()).toBe(`unknown command "bogus".\n\n${USAGE}`);
   });
 
   it('an unknown command close to a known one says which', async () => {
     const cap = captureIo();
     expect(await main(['chek'], {}, dir, cap.io)).toBe(2);
-    expect(cap.err()).toContain(`unknown command "chek" — did you mean 'check'?`);
+    expect(cap.err()).toContain(`unknown command "chek" (did you mean 'check'?).`);
   });
 
   it('no command at all is the usage alone, on stderr, exit 2', async () => {
@@ -98,7 +125,15 @@ describe('the line', () => {
     expect([...read].sort()).toEqual(expect.arrayContaining(['CI', 'GITHUB_ACTIONS', 'SPECWARDEN_SKIP']));
     for (const name of read) expect(USAGE, name).toContain(name);
     expect(USAGE).toContain('SPECWARDEN_SHELL');
-    for (const code of ['0 every gate held', '1 a gate failed', '2 the line']) expect(USAGE).toContain(code);
+    for (const code of [
+      '0 every check held',
+      '1 the answer is no: a check failed, doctor found a defect, a plan is not ready',
+      '2 the line',
+    ])
+      expect(USAGE).toContain(code);
+    // Nothing the command line prints about a run calls one check a gate.
+    expect(USAGE).not.toMatch(/\bgates?\b/);
+    expect(USAGE).toContain('spw is the same command');
   });
 });
 
@@ -110,7 +145,7 @@ describe('the config and the roster, as load errors', () => {
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-  const config = (body: string) => writeFileSync(join(dir, '.specwarden', 'warden.config.mjs'), body);
+  const config = (body: string) => writeFileSync(join(dir, '.specwarden', 'config.mjs'), body);
   const checkFile = (rel: string, body: string) => writeFileSync(join(dir, '.specwarden', 'checks', rel), body);
   const built = (fields: string) =>
     `{ id: 'x', title: 'x', tier: 'fast', zone: 'consumer', capabilities: [], contractVersion: 1, when: () => true, run: () => ({ ok: true, findings: [] }), ${fields} }`;
@@ -123,7 +158,7 @@ describe('the config and the roster, as load errors', () => {
     config('export default {\n');
     const r = await load();
     expect(r.code).toBe(2);
-    expect(r.err).toMatch(/^\.specwarden\/warden\.config\.mjs failed to load: /);
+    expect(r.err).toMatch(/^\.specwarden\/config\.mjs failed to load: /);
     expect(r.err).not.toMatch(/\n\s+at /);
   });
 
@@ -131,7 +166,7 @@ describe('the config and the roster, as load errors', () => {
     config("import 'not-installed-anywhere';\nexport default {};\n");
     const r = await load(['doctor']);
     expect(r.code).toBe(2);
-    expect(r.err).toMatch(/^\.specwarden\/warden\.config\.mjs failed to load: .*not-installed-anywhere/);
+    expect(r.err).toMatch(/^\.specwarden\/config\.mjs failed to load: .*not-installed-anywhere/);
   });
 
   it('a check naming a tier outside the vocabulary: exit 2, the check, its file and the tiers', async () => {
@@ -141,7 +176,7 @@ describe('the config and the roster, as load errors', () => {
     expect(r.code).toBe(2);
     expect(r.err).toBe(
       'check \'x\' (.specwarden/checks/x.check.mjs) declares tier "fastt" — expected one of: fast, heavy. ' +
-        'A tier outside the vocabulary is in no schedule, so no `--tier` would ever run it.\n',
+        'A tier outside the vocabulary is no tier a run can select, so no `--tier` would ever run it.\n',
     );
   });
 

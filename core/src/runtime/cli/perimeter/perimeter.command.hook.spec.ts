@@ -14,7 +14,7 @@ import { perimeter } from './perimeter.command';
  * that is not there. And it FAILS OPEN on every fault — a perimeter that turns a
  * broken file into a block halts work while wearing the face of a rule.
  *
- * The rules below are plain objects rather than `commandRule(...)`: the temp directory
+ * The policies below are plain objects rather than `commandPolicy(...)`: the temp directory
  * is outside the workspace and cannot resolve the engine's package.
  */
 
@@ -22,7 +22,7 @@ const RULE = `{
   id: 'no-rm',
   evaluate: (intent) =>
     intent.command && intent.command.startsWith('rm ')
-      ? { blocked: true, reason: 'rm deletes what review cannot see', ruleId: 'no-rm' }
+      ? { blocked: true, reason: 'rm deletes what review cannot see', policyId: 'no-rm' }
       : { blocked: false },
 }`;
 
@@ -55,59 +55,59 @@ describe('perimeter, the PreToolUse entry', () => {
   }
 
   describe('it blocks what a rule names', () => {
-    it('reads `export const rules`, blocks with 2 and tells the assistant why', async () => {
-      declare(`export const rules = [${RULE}];`);
+    it('reads `export const policies`, blocks with 2 and tells the assistant why', async () => {
+      declare(`export const policies = [${RULE}];`);
       const r = await hook(RM);
       expect(r.code).toBe(2);
       expect(r.err).toContain('Blocked by the perimeter: rm deletes what review cannot see');
     });
 
     it('allows with 0 and says nothing for an action no rule names', async () => {
-      declare(`export const rules = [${RULE}];`);
+      declare(`export const policies = [${RULE}];`);
       expect(await hook(LS)).toEqual({ code: 0, err: '' });
     });
 
-    it('reads a default-exported ARRAY of rules', async () => {
+    it('reads a default-exported ARRAY of policies', async () => {
       declare(`export default [${RULE}];`);
       expect((await hook(RM)).code).toBe(2);
     });
 
-    it('reads a default-exported object holding the rules', async () => {
-      declare(`export default { rules: [${RULE}] };`);
+    it('reads a default-exported object holding the policies', async () => {
+      declare(`export default { policies: [${RULE}] };`);
       expect((await hook(RM)).code).toBe(2);
     });
 
     it('finds the declaration in its own folder, beside its test', async () => {
       // Folder-per-unit is a house style; resolving only the flat file forced such a
       // house to choose between its convention and a perimeter that enforces anything.
-      declare(`export const rules = [${RULE}];`, 'perimeter/perimeter.mjs');
+      declare(`export const policies = [${RULE}];`, 'perimeter/perimeter.mjs');
       expect((await hook(RM)).code).toBe(2);
     });
 
     it('walks up from a nested working directory to the repository that declares it', async () => {
-      declare(`export const rules = [${RULE}];`);
+      declare(`export const policies = [${RULE}];`);
       const nested = join(dir, 'packages', 'a');
       mkdirSync(nested, { recursive: true });
       expect((await hook(RM, nested)).code).toBe(2);
     });
   });
 
-  describe('a runtime declared beside the rules is the one that speaks', () => {
+  describe('a runtime declared beside the policies is the one that speaks', () => {
     const RUNTIME = `{
       name: 'other',
       parse: (p) => (p && p.shell ? { tool: 'shell', command: p.shell } : null),
       exitCode: (v) => (v.blocked ? 7 : 0),
-      formatBlock: (v) => 'DENIED ' + v.ruleId,
+      formatBlock: (v) => 'DENIED ' + v.policyId,
     }`;
 
     it('as a named export', async () => {
-      declare(`export const rules = [${RULE}];\nexport const runtime = ${RUNTIME};`);
+      declare(`export const policies = [${RULE}];\nexport const runtime = ${RUNTIME};`);
       const r = await hook(JSON.stringify({ shell: 'rm -rf /' }));
       expect(r).toEqual({ code: 7, err: 'DENIED no-rm' });
     });
 
     it('inside a default-exported object', async () => {
-      declare(`export default { rules: [${RULE}], runtime: ${RUNTIME} };`);
+      declare(`export default { policies: [${RULE}], runtime: ${RUNTIME} };`);
       const r = await hook(JSON.stringify({ shell: 'rm -rf /' }));
       expect(r).toEqual({ code: 7, err: 'DENIED no-rm' });
     });
@@ -127,12 +127,12 @@ describe('perimeter, the PreToolUse entry', () => {
     });
 
     it('allows an empty payload', async () => {
-      declare(`export const rules = [${RULE}];`);
+      declare(`export const policies = [${RULE}];`);
       expect(await hook('   \n')).toEqual({ code: 0, err: '' });
     });
 
     it('allows a payload that is not JSON', async () => {
-      declare(`export const rules = [${RULE}];`);
+      declare(`export const policies = [${RULE}];`);
       expect(await hook('{ not json')).toEqual({ code: 0, err: '' });
     });
 
@@ -142,7 +142,7 @@ describe('perimeter, the PreToolUse entry', () => {
     });
 
     it('allows when stdin cannot be read', async () => {
-      declare(`export const rules = [${RULE}];`);
+      declare(`export const policies = [${RULE}];`);
       const r = await hook(() => {
         throw new Error('EAGAIN');
       });
@@ -150,12 +150,12 @@ describe('perimeter, the PreToolUse entry', () => {
     });
 
     it('allows when a rule throws, and still lets a later rule block', async () => {
-      declare(`export const rules = [{ id: 'boom', evaluate: () => { throw new Error('x'); } }, ${RULE}];`);
+      declare(`export const policies = [{ id: 'boom', evaluate: () => { throw new Error('x'); } }, ${RULE}];`);
       expect((await hook(LS)).code).toBe(0);
       expect((await hook(RM)).code).toBe(2);
     });
 
-    it('allows when the file declares no rules at all', async () => {
+    it('allows when the file declares no policies at all', async () => {
       declare(`export const unrelated = 1;`);
       expect(await hook(RM)).toEqual({ code: 0, err: '' });
     });

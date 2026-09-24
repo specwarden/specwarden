@@ -22,7 +22,7 @@ export interface IRatchetStore {
   establish(id: string, value: number): IRatchet;
 
   /** Move the stored value to `value` when that is TIGHTER for this ratchet's
-   * direction (lower for a debt, higher for a floor). A no-op otherwise —
+   * direction (lower for a debt, higher for a rising ratchet, `direction: 'up'`). A no-op otherwise —
    * tightening never loosens a ratchet, which is the whole point. */
   tighten(id: string, value: number, direction?: TRatchetDirection): IRatchet;
 }

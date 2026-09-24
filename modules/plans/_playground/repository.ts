@@ -105,16 +105,21 @@ export const BROKEN: Record<string, string> = {
 export const BRANCHES = ['main', 'plat-337_burst-allowance'];
 
 /** The check ids a plan's acceptance may name — the run's own roster, in a real run. */
-export const KNOWN_GATE_IDS = ['unit', 'typecheck', 'lint'];
+export const KNOWN_CHECK_IDS = ['unit', 'typecheck', 'lint'];
 
 export const PLAN_SHAPE_CONVENTION = {
   plansDir: 'docs/_plans',
-  nameRe: /^[A-Z]+-\d+-[a-z0-9-]+\.md$/,
-  allowedNonPlans: ['README.md'],
-  sizingPatterns: [/\b\d+\s*(hours?|days?|story points?)\b/i],
-  phaseHeadingRe: /^(#{2,3})\s+Phase\b/,
-  commandRe: /^\s*(pnpm|npm|node|bash)\s/,
+  name: /^[A-Z]+-\d+-[a-z0-9-]+\.md$/,
+  sizing: [/\b\d+\s*(hours?|days?|story points?)\b/i],
+  phaseHeading: /^(#{2,3})\s+Phase\b/,
+  command: /^\s*(pnpm|npm|node|bash)\s/,
 };
 
 /** The factories this playground claims to exercise — the three checks and the preset. */
-export const COVERED = ['planStaleness', 'planShape', 'decisionLogShape', 'planChecks'];
+export const COVERED = ['planStaleness', 'planShape', 'decisionLogShape', 'plansChecks'];
+
+/**
+ * What every export is probed with to tell a factory from a helper: nothing. A factory
+ * builds a check from it or refuses it by name; anything else is not a factory.
+ */
+export const PROBE = {};

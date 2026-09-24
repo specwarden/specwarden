@@ -4,6 +4,7 @@
 import { openspec } from '@specwarden/openspec';
 
 export const source = openspec({
-  // root: 'openspec',
-  // requirementHeading: /^#{2,4}\s+Requirement:\s*(.+?)\s*$/,
+  // specsDir: 'openspec/specs',
+  // changesDir: 'openspec/changes',
+  // requirementPattern: /^#{2,4}\s+Requirement:\s*(.+?)\s*$/,
 });

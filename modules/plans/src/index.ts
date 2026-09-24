@@ -1,14 +1,14 @@
 /**
  * Checks over PLANS and DECISION LOGS — documents that describe work in flight.
-
+ *
  * The lifecycle they assume (a plan is written, worked, harvested and archived; a
  * decision is raised, argued and closed) is one way of working, not the only one. It
- * ships as a module so a house that plans differently simply does not install it,
+ * ships as a module so a consumer that plans differently simply does not install it,
  * rather than switching its checks off one by one.
  */
 export { planStaleness } from './plan-staleness/plan-staleness.check';
 export type { IPlanStalenessOptions, IArchiveHeaderField } from './plan-staleness/plan-staleness.check';
-// The default plan convention, exported so a house adapting it starts from something
+// The default plan convention, exported so a consumer adapting it starts from something
 // rather than inventing a header format to satisfy a check.
 export {
   DEFAULT_BRANCH_DECLARATION,
@@ -21,11 +21,6 @@ export { planShape } from './plan-shape/plan-shape.check';
 export type { IPlanShapeOptions } from './plan-shape/plan-shape.check';
 export { decisionLogShape } from './decision-log-shape/decision-log-shape.check';
 export type { IDecisionLogShapeOptions } from './decision-log-shape/decision-log-shape.check';
-export {
-  DEFAULT_COMMAND,
-  DEFAULT_PHASE_HEADING,
-  DEFAULT_PLAN_NAME,
-  DEFAULT_SIZING,
-} from './plan-shape/plan-shape.check';
-export { planChecks } from './plan-checks/plan-checks.check';
-export type { IPlanChecksOptions, TPlansOverride } from './plan-checks/plan-checks.check';
+export { DEFAULT_COMMAND, DEFAULT_NAME, DEFAULT_PHASE_HEADING, DEFAULT_SIZING } from './plan-shape/plan-shape.check';
+export { plansChecks } from './plans-checks/plans-checks.check';
+export type { IPlansChecksOptions, TPlansOverride } from './plans-checks/plans-checks.check';

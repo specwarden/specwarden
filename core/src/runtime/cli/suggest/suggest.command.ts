@@ -50,7 +50,7 @@ function checkFile(i: ISiblingInference): string {
     "import { siblingRequired } from 'specwarden';",
     '',
     'export const check = siblingRequired({',
-    `  subjects: ${q(i.when)},`,
+    `  files: ${q(i.when)},`,
     `  require: ${q(i.require)},`,
     ...(i.except.length ? [`  except: [${i.except.map(q).join(', ')}],`] : []),
     // The exceptions that exist today are tolerated, and the count only turns down.
@@ -122,7 +122,7 @@ export function suggest(files: IFileSource, io: ICliIo, vcs?: IVcs): number {
     // copied instead of the file flags the tests themselves.
     const except = inference.except.length ? `, except: [${inference.except.map(q).join(', ')}]` : '';
     io.out(
-      `  → siblingRequired({ subjects: '${inference.when}', require: '${inference.require}'${except} }), ratchet ${inference.exceptions.length}.\n`,
+      `  → siblingRequired({ files: '${inference.when}', require: '${inference.require}'${except} }), ratchet ${inference.exceptions.length}.\n`,
     );
     if (inference.exceptions.length > 0) io.out(`  exceptions: ${listed(inference.exceptions)}\n`);
     io.out(`  Save as ${CONFIG_DIR}/checks/tests/${candidate.id}.check.mjs:\n\n`);

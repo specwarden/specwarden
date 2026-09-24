@@ -5,6 +5,7 @@ import {
   belowCorpusFloor,
   buildCheck,
   checkOptions,
+  thresholdOf,
   verdictFrom,
   withExaminedNote,
 } from '../_shared';
@@ -72,7 +73,6 @@ export function sourcesAgree(options: ISourcesAgreeOptions): ICheck {
           severity: 'error',
           message: `\`${name}\` is in ${options.a.name} but not ${options.b.name}.`,
           ...(fileB === undefined ? {} : { file: fileB }),
-          ruleId: self.id,
         });
       }
     }
@@ -82,11 +82,10 @@ export function sourcesAgree(options: ISourcesAgreeOptions): ICheck {
           severity: 'error',
           message: `\`${name}\` is in ${options.b.name} but not ${options.a.name}.`,
           ...(fileA === undefined ? {} : { file: fileA }),
-          ruleId: self.id,
         });
       }
     }
     // The tolerance every other primitive gives; it was accepted on the identity and ignored.
-    return verdictFrom(withExaminedNote(findings, self.id, named, 'name'), ctx.ratchet ?? options.ratchet);
+    return verdictFrom(withExaminedNote(findings, self.id, named, 'name'), thresholdOf(ctx, self));
   });
 }

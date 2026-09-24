@@ -78,18 +78,18 @@ describe('ratchetDirection', () => {
 
   // ── direction ──────────────────────────────────────────────────────────────────
 
-  it('a floor fails when the stored value falls BELOW it', async () => {
+  it('an up ratchet fails when the stored value falls BELOW its ceiling', async () => {
     // A score that only rises. Judged by the debt rule this would pass at any value,
-    // which is why a floor could not live inside the mechanism before `direction`.
+    // which is why a rising score could not live inside the mechanism before `direction`.
     const v = await run(
       { '.specwarden/ratchets/s.json': '{"id":"s","value":61}' },
       { roster: [declaring('s', 68, 'up')] },
     );
     expect(v.ok).toBe(false);
-    expect(v.findings[0].message).toContain('below the floor 68');
+    expect(v.findings[0].message).toContain('below the ceiling 68');
   });
 
-  it('a floor passes at or above its declared value', async () => {
+  it('an up ratchet passes at or above its declared ceiling', async () => {
     const v = await run(
       { '.specwarden/ratchets/s.json': '{"id":"s","value":71}' },
       { roster: [declaring('s', 68, 'up')] },
@@ -97,7 +97,7 @@ describe('ratchetDirection', () => {
     expect(v.ok).toBe(true);
   });
 
-  it('a debt above its ceiling and a floor below its own are both caught in one run', async () => {
+  it('a debt above its ceiling and an up ratchet below its own are both caught in one run', async () => {
     const v = await run(
       { '.specwarden/ratchets/a.json': '{"id":"a","value":9}', '.specwarden/ratchets/s.json': '{"id":"s","value":10}' },
       { roster: [declaring('a', 3), declaring('s', 68, 'up')] },

@@ -5,7 +5,7 @@ import { compose, docPathsPart, scriptWrappersPart, secretScanPart, specSourcePa
  * A starting tree for a repository that specifies its work with SPEC KIT.
  *
  * WHAT THIS TEMPLATE IS ACTUALLY FOR. Spec Kit owns the specification — `specs/<feature>/`
- * holds the requirements (`**FR-001**: the system MUST …`) and the task list. SpecWarden
+ * holds the requirements (`**FR-001**: the system MUST …`) and the task list. specwarden
  * does not restate any of it: two tools owning one fact is how a specification and its
  * enforcement drift apart. What it adds is the SEAM — the spec source, so
  * `specwarden sync-invariants` reconciles those requirements against the invariants this
@@ -31,7 +31,7 @@ const assembled = (ctx: ITemplateContext) =>
 
 export const speckitTemplate: ITemplate = {
   name: 'speckit',
-  describe: 'a repository specified with Spec Kit — the spec source wired, credential scan, doc paths, lint and tests',
+  describe: 'A repository specified with Spec Kit — the spec source wired, credential scan, doc paths, lint and tests.',
   requires: ['@specwarden/speckit', '@specwarden/security', '@specwarden/docs'],
 
   files: (ctx: ITemplateContext): readonly ITemplateFile[] => assembled(ctx).files,

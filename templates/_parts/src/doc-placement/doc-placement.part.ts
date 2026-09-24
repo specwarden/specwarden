@@ -16,7 +16,7 @@ export const docPlacementExamplePart = (ctx: ITemplateContext): IPart => ({
       path: 'checks/docs/doc-placement.check.mjs.example',
       body: `${header(
         '`doc-placement` — each document sits where its kind belongs.',
-        `OFF until \`allowed\` is YOUR placement contract: one regex per kind of document. A document
+        `Switched off until \`allowed\` is YOUR placement contract: one regex per kind of document. A document
 no row matches is a finding — an undecided location is where a second copy of a rule is born.
 ${switchOn('doc-placement')}`,
       )}

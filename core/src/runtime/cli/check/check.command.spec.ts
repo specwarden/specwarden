@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { CHECK_CONTRACT_VERSION, type ICheck, type ICheckResult, type IReporter, type IVerdict } from '../../../domain';
 import { InMemoryFileSource } from '../../../infrastructure';
-import { CheckRegistry } from '../../container';
-import type { IWardenConfig } from '../../config/config.model';
+import { CheckRoster } from '../../container';
+import type { ISpecwardenConfig } from '../../config/config.model';
 import type { IParsedArgs } from '../_shared/parse-args/parse-args.util';
 import { check } from './check.command';
 
@@ -54,13 +54,13 @@ function readingCheck(path: string): ICheck {
   };
 }
 
-const registryOf = (checks: readonly ICheck[]) => {
-  const r = new CheckRegistry();
+const rosterOf = (checks: readonly ICheck[]) => {
+  const r = new CheckRoster();
   r.registerAll(checks);
   return r;
 };
 
-const base: IWardenConfig = { checks: [] };
+const base: ISpecwardenConfig = { checks: [] };
 
 describe('config.adapters replaces a port', () => {
   it('hands the check the supplied file source instead of the real disk', async () => {
@@ -70,7 +70,7 @@ describe('config.adapters replaces a port', () => {
     const code = await check(
       args(),
       { ...base, adapters: () => ({ files }) },
-      registryOf([readingCheck('only-here.txt')]),
+      rosterOf([readingCheck('only-here.txt')]),
       '/nonexistent-root',
       {},
       cap.io,
@@ -99,7 +99,7 @@ describe('config.adapters replaces a port', () => {
     await check(
       args(),
       { ...base, adapters: () => ({ files: new InMemoryFileSource() }) },
-      registryOf([probe]),
+      rosterOf([probe]),
       process.cwd(),
       {},
       io().io,
@@ -119,7 +119,7 @@ describe('config.adapters replaces a port', () => {
           return {};
         },
       },
-      registryOf([]),
+      rosterOf([]),
       '/some/root',
       {},
       io().io,
@@ -141,7 +141,7 @@ describe('config.reporter replaces the output', () => {
     await check(
       args(),
       { ...base, adapters: () => ({ files: new InMemoryFileSource({ 'f.txt': 'hi' }) }), reporter: () => custom },
-      registryOf([readingCheck('f.txt')]),
+      rosterOf([readingCheck('f.txt')]),
       process.cwd(),
       {},
       cap.io,
@@ -166,7 +166,7 @@ describe('config.reporter replaces the output', () => {
             return quiet;
           },
         },
-        registryOf([]),
+        rosterOf([]),
         process.cwd(),
         {},
         io().io,

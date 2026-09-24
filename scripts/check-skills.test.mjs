@@ -102,6 +102,22 @@ describe('the marketplace', () => {
   });
 });
 
+describe('the glossary beside the engine skill', () => {
+  // An agent in a consumer's repository has the installed skill folder and nothing else;
+  // the words the engine is written in have to be in it.
+  it('ships as glossary.md in the engine skill folder, generated from the engine glossary', () => {
+    const generated = generatedSkillFiles().get(`${skillDir(ENGINE)}/glossary.md`);
+    expect(generated).toBeDefined();
+    expect(generated).toContain(`<!-- GENERATED from ${pkgDir(ENGINE)}/GLOSSARY.md. Edit the glossary. -->`);
+    expect(generated).toContain('**rule register**');
+  });
+
+  it('is shipped only where a package keeps a glossary', () => {
+    const glossaries = [...generatedSkillFiles().keys()].filter((path) => path.endsWith('/glossary.md'));
+    expect(glossaries).toEqual([`${skillDir(ENGINE)}/glossary.md`]);
+  });
+});
+
 describe('what the skills gate refuses', () => {
   it('finds nothing wrong with the repository as it stands', () => {
     expect(skillProblems(repoWith())).toEqual([]);

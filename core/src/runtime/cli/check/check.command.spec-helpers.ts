@@ -5,8 +5,8 @@
  */
 import { CHECK_CONTRACT_VERSION, type ICheck, type IVcs } from '../../../domain';
 import { testContext } from '../../../testing';
-import { CheckRegistry } from '../../container';
-import type { IWardenConfig } from '../../config/config.model';
+import { CheckRoster } from '../../container';
+import type { ISpecwardenConfig } from '../../config/config.model';
 import type { IParsedArgs } from '../_shared/parse-args/parse-args.util';
 import { check } from './check.command';
 
@@ -22,6 +22,8 @@ export const args = (over: Partial<IParsedArgs> = {}): IParsedArgs => ({
   ifRelevant: false,
   relevance: false,
   showSkipped: false,
+  verify: false,
+  flags: [],
   help: false,
   problems: [],
   ...over,
@@ -41,13 +43,13 @@ export const aCheck = (id: string, over: Partial<ICheck> = {}): ICheck => ({
 
 export function setup(
   checks: readonly ICheck[],
-  config: IWardenConfig = {},
+  config: ISpecwardenConfig = {},
   vcs: IVcs = testContext({ changed: [] }).vcs,
 ) {
-  const registry = new CheckRegistry();
-  registry.registerAll(checks);
+  const roster = new CheckRoster();
+  roster.registerAll(checks);
   const t = testContext();
-  const full: IWardenConfig = {
+  const full: ISpecwardenConfig = {
     adapters: () => ({ vcs, files: t.files, clock: t.clock, proc: t.proc }),
     ...config,
   };
@@ -55,8 +57,7 @@ export function setup(
   let err = '';
   const io = { out: (s: string) => (out += s), err: (s: string) => (err += s) };
   return {
-    run: (a: Partial<IParsedArgs> = {}, env: NodeJS.ProcessEnv = {}) =>
-      check(args(a), full, registry, '/repo', env, io),
+    run: (a: Partial<IParsedArgs> = {}, env: NodeJS.ProcessEnv = {}) => check(args(a), full, roster, '/repo', env, io),
     out: () => out,
     err: () => err,
   };

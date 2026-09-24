@@ -39,7 +39,7 @@ export function provePlayground(
 /** What a spec's own scene gets: the scratch directory, and the CLI run inside it. */
 export interface IScratchScene {
   readonly dir: string;
-  readonly warden: (
+  readonly specwarden: (
     args: readonly string[],
     options?: { readonly input?: string; readonly timeoutSec?: number },
   ) => { readonly status: number | null; readonly stdout: string; readonly stderr: string };

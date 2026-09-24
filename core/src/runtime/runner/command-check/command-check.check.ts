@@ -18,6 +18,7 @@ import {
   type TWhen,
   CheckOptionsError,
   UNNAMED_CHECK_ID,
+  attributionOf,
   checkOptions,
   normaliseRule,
   resolveWhen,
@@ -37,7 +38,7 @@ export interface IOutputRefusal {
 /** What a consumer states to wrap a shell command as a check. Everything but `cmd` is
  * optional: the id is the file's name when the file exports the check alone, the title
  * the rule's statement else the id, the tier `fast`. */
-export interface ICommandCheckSpec {
+export interface ICommandCheckOptions {
   readonly id?: string;
   readonly title?: string;
   readonly tier?: TTier;
@@ -45,7 +46,7 @@ export interface ICommandCheckSpec {
    * How to invoke a shell. Defaults to what `resolveShell` finds for this machine —
    * `bash -c` everywhere but Windows, and Git's own bash there, because a bare `bash` on
    * Windows is often WSL's launcher and the command then runs inside Linux. Some
-   * containers ship only `sh`, and a house may run everything through another shell
+   * containers ship only `sh`, and a consumer may run everything through another shell
    * entirely; neither should require forking the engine, so the shell is a setting, per
    * check here or for every check through `SPECWARDEN_SHELL`.
    */
@@ -59,7 +60,7 @@ export interface ICommandCheckSpec {
   /** Run this command alone under `--jobs` — see `exclusive` on ICheck. */
   readonly exclusive?: boolean;
   readonly hint?: string;
-  /** The rule this gate enforces, declared beside it rather than in a register that
+  /** The rule this check enforces, declared beside it rather than in a register that
    * has to be kept in step by hand. A string is the statement. */
   readonly rule?: string | ICheckRule;
   /** Extra environment for the command (e.g. a flag that makes missing infrastructure
@@ -75,11 +76,11 @@ export interface ICommandCheckSpec {
   readonly timeoutSec?: number;
   /**
    * External services the command needs — a database, a cache. The engine does not
-   * start them; it carries the declaration so a CI-coverage check can place the gate
+   * start them; it carries the declaration so a CI-coverage check can place the check
    * in a job that offers what it needs, and so the report can say why one was skipped.
    */
   readonly needs?: readonly string[];
-  /** The zone the check is declared in — a wrapped repository gate is `consumer`. */
+  /** The zone the check is declared in — a wrapped repository command is `consumer`. */
   readonly zone?: TZone;
 
   /**
@@ -87,7 +88,7 @@ export interface ICommandCheckSpec {
    *
    * THE DEFECT THIS CLOSES, verbatim from the record: a test command was given a list
    * of exact spec paths; one of those files moved; the runner treated the unmatched
-   * path as "no filter matched", ran the remaining suites and exited 0. The gate
+   * path as "no filter matched", ran the remaining suites and exited 0. The check
    * reported green for months while running 78 of the 86 tests it claimed. The same
    * shape appears wherever a tool takes paths and shrugs at the ones it cannot find.
    *
@@ -143,18 +144,24 @@ const SPEC_OPTIONS = {
   cwd: { kind: 'string' },
   expect: { kind: ['regexp', 'array'] },
   refuse: { kind: 'array' },
+  // Accepted and dropped, it was a tolerance nobody had: a command's verdict is its exit,
+  // and there is no count to hold a threshold against.
+  ratchet: {
+    refused:
+      'a command check has no count to tolerate: its verdict is the exit code. To ratchet a measurement, read it with fromResult or defineCheck',
+  },
 } as const;
 
 /**
  * A check whose logic is an external command — the bridge that lets specwarden run
- * a repository's existing gates unchanged while the native rewrites happen check by
+ * a repository's existing commands unchanged while the native rewrites happen check by
  * check. It declares the `exec` capability, plus `read` when it was given paths to
  * verify: its engine-port use is the subprocess and, optionally, the existence check
  * before it; the subprocess does its own file IO outside the capability system, which
  * is correct — the manifest governs what a check does THROUGH the engine.
  *
  * A generic primitive, so it lives in the product; an instance wrapping a concrete
- * repository gate is consumer-zone, which the spec declares.
+ * repository command is consumer-zone, which the spec declares.
  */
 export class CommandCheck implements ICheck {
   readonly id: string;
@@ -172,14 +179,14 @@ export class CommandCheck implements ICheck {
   readonly needs?: readonly string[];
   /**
    * The command line, readable from outside. A manifest consumer — the CI-coverage
-   * audit, a test asserting that a gate sweeps by path — needs to know WHAT a wrapped
-   * gate runs, and the spec it was built from is private. Metadata, never re-run.
+   * audit, a test asserting that a check sweeps by path — needs to know WHAT a wrapped
+   * check runs, and the spec it was built from is private. Metadata, never re-run.
    */
   readonly cmd: string;
 
   private readonly relevant: (changed: readonly string[]) => boolean;
 
-  constructor(private readonly spec: ICommandCheckSpec) {
+  constructor(private readonly spec: ICommandCheckOptions) {
     checkOptions('commandCheck', spec, SPEC_OPTIONS);
     // Inside the repository, relative to its root — refused at load otherwise. An absolute
     // path passed the directory check as itself and spawned beneath the root, and `..` ran
@@ -234,8 +241,8 @@ export class CommandCheck implements ICheck {
           message:
             `${this.id} is pointed at ${path}, which does not exist — the command was not run. ` +
             'A tool given a path it cannot find generally runs the rest and exits 0, so this ' +
-            'would have been a green gate over a shrinking subject.',
-          ruleId: this.id,
+            'would have been a green check over a shrinking subject.',
+          ruleId: attributionOf(this),
         })),
       };
     }
@@ -249,7 +256,7 @@ export class CommandCheck implements ICheck {
             severity: 'error' as const,
             file: dir,
             message: `${this.id} runs in ${dir}, which is not a directory here — the command was not run.`,
-            ruleId: this.id,
+            ruleId: attributionOf(this),
           },
         ],
       };
@@ -289,7 +296,7 @@ export class CommandCheck implements ICheck {
           {
             severity: 'error' as const,
             message: shellStartFailure(this.id, shell, result.spawnError),
-            ruleId: this.id,
+            ruleId: attributionOf(this),
           },
         ],
       };
@@ -299,7 +306,7 @@ export class CommandCheck implements ICheck {
     // verbatim into findings and JSON, and an `expect` written against the words did not
     // match the words between the escapes.
     const output = stripAnsi(`${result.stdout}${result.stderr}`).trim();
-    const findings = output === '' ? [] : [{ severity: 'info' as const, message: output, ruleId: this.id }];
+    const findings = output === '' ? [] : [{ severity: 'info' as const, message: output, ruleId: attributionOf(this) }];
 
     if (result.status === 0) {
       // A zero exit says the command did not fail. Whether it DID anything is a
@@ -315,7 +322,7 @@ export class CommandCheck implements ICheck {
         {
           severity: this.advisory ? ('warning' as const) : ('error' as const),
           message: `${this.id} exited ${result.status ?? 'by signal'} — ${cmd}`,
-          ruleId: this.id,
+          ruleId: attributionOf(this),
         },
       ],
     };
@@ -333,7 +340,7 @@ export class CommandCheck implements ICheck {
       if (testStateless(pattern, output)) continue;
       findings.push({
         severity: 'error',
-        ruleId: this.id,
+        ruleId: attributionOf(this),
         message:
           `${this.id} exited 0 but its output does not match ${String(pattern)}, which it declares as proof of work. ` +
           'A zero exit means the command did not fail; it never means the command did anything.',
@@ -345,7 +352,7 @@ export class CommandCheck implements ICheck {
       if (!testStateless(refusal.pattern, output)) continue;
       findings.push({
         severity: 'error',
-        ruleId: this.id,
+        ruleId: attributionOf(this),
         message:
           `${this.id} exited 0 but its output matched ${String(refusal.pattern)}. ` +
           (refusal.why ?? 'That pattern is declared as evidence the command silently did nothing.'),
@@ -357,14 +364,14 @@ export class CommandCheck implements ICheck {
 }
 
 /**
- * The factory form, for a check file.
+ * The factory, for a check file.
  *
- *   export const check = commandCheck({ id: 'lint', title: '…', tier: 'heavy', cmd: '…' });
+ *   export const check = commandCheck({ cmd: 'pnpm lint', tier: 'heavy', rule: '…' });
  *
- * Same object as `new CommandCheck(spec)`. It exists so a check FILE reads like every
- * other check file — a call producing a check — rather than being the one place a
- * consumer meets a class and a constructor.
+ * The class behind it is not exported: a check FILE reads like every other check file — a
+ * call producing a check — rather than being the one place a consumer meets a class and a
+ * constructor.
  */
-export function commandCheck(spec: ICommandCheckSpec): ICheck {
-  return new CommandCheck(spec);
+export function commandCheck(options: ICommandCheckOptions): ICheck {
+  return new CommandCheck(options);
 }

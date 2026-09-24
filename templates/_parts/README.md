@@ -2,7 +2,7 @@
 
 ⚙ **scaffold** — The pieces every template is assembled from.
 
-A part is one check: the file that configures it, the rule that file enforces, and where one is needed the config field that makes the two resolve.
+One piece a template is assembled from: the check or checks it writes, the rule they enforce, and where one is needed the config field that makes the two resolve.
 
 ## What a scaffold is
 
@@ -10,9 +10,8 @@ The pieces a template is assembled from — one check, the rule it enforces, the
 
 ## Install
 
-```bash
-npm install @specwarden/scaffold-parts specwarden
-```
+A build-time dependency of the templates listed in this repository's README — declared
+automatically when you install one of them. Nothing installs it on its own.
 
 It depends on [`specwarden`](https://github.com/specwarden/specwarden/tree/main/core#readme).
 

@@ -14,9 +14,9 @@ const rule = (id: string, enforcement: IRule['enforcement']): IRule => ({
 describe('computeCoverage', () => {
   it('counts enforced, not-mechanizable, and unenforced-without-reason', () => {
     const cov = computeCoverage([
-      rule('a', { checkIds: ['x'] }),
+      rule('a', { enforcedBy: ['x'] }),
       rule('b', { notMechanizable: 'a real reason' }),
-      rule('c', { checkIds: [] }), // declared enforced but names nothing → debt
+      rule('c', { enforcedBy: [] }), // declared enforced but names nothing → debt
     ]);
     expect(cov).toMatchObject({ total: 3, enforced: 1, notMechanizable: 1, unenforcedWithoutReason: 1 });
   });
@@ -24,7 +24,7 @@ describe('computeCoverage', () => {
 
 describe('orphanChecks', () => {
   it('finds checks that no rule enforces (an enforcer with no rule is a defect)', () => {
-    const rules = [rule('r', { checkIds: ['used'] })];
+    const rules = [rule('r', { enforcedBy: ['used'] })];
     expect(orphanChecks(['used', 'orphan'], rules)).toEqual(['orphan']);
   });
 });
@@ -33,8 +33,8 @@ describe('ruleOwnerFindings', () => {
   it('flags a rule whose owner document is gone', () => {
     const files = new InMemoryFileSource({ 'AGENTS.md': '# router' });
     const rules = [
-      rule('ok', { checkIds: ['x'] }), // owner AGENTS.md exists
-      { id: 'gone', statement: 's', owner: 'docs/missing.md', enforcement: { checkIds: ['y'] } },
+      rule('ok', { enforcedBy: ['x'] }), // owner AGENTS.md exists
+      { id: 'gone', statement: 's', owner: 'docs/missing.md', enforcement: { enforcedBy: ['y'] } },
     ];
     const findings = ruleOwnerFindings(rules, files);
     expect(findings).toHaveLength(1);
@@ -44,7 +44,7 @@ describe('ruleOwnerFindings', () => {
   it('accepts an owner path with a section suffix', () => {
     const files = new InMemoryFileSource({ 'AGENTS.md': '# router' });
     const findings = ruleOwnerFindings(
-      [{ id: 'r', statement: 's', owner: 'AGENTS.md § Releases', enforcement: { checkIds: ['x'] } }],
+      [{ id: 'r', statement: 's', owner: 'AGENTS.md § Releases', enforcement: { enforcedBy: ['x'] } }],
       files,
     );
     expect(findings).toEqual([]);
@@ -59,7 +59,7 @@ describe('orphanChecks — what counts as enforcing', () => {
   });
 
   it('is empty for an empty roster, and every check is an orphan with no rules', () => {
-    expect(orphanChecks([], [rule('r', { checkIds: ['x'] })])).toEqual([]);
+    expect(orphanChecks([], [rule('r', { enforcedBy: ['x'] })])).toEqual([]);
     expect(orphanChecks(['a', 'b'], [])).toEqual(['a', 'b']);
   });
 });
@@ -73,7 +73,7 @@ describe('ruleOwnerFindings — what counts as a document', () => {
   it('does not look for a file when the owner is not path-shaped', () => {
     const files = new InMemoryFileSource({});
     const findings = ruleOwnerFindings(
-      [{ id: 'p', statement: 's', owner: '@platform', enforcement: { checkIds: ['x'] } }],
+      [{ id: 'p', statement: 's', owner: '@platform', enforcement: { enforcedBy: ['x'] } }],
       files,
     );
 
@@ -91,7 +91,7 @@ describe('ruleOwnerFindings — what counts as a document', () => {
     ];
     const manifest = JSON.stringify({ devDependencies: { '@specwarden/docs': '1', '@specwarden/plugin-nestjs': '1' } });
     const findings = ruleOwnerFindings(
-      owners.map((owner, i) => ({ id: `r${i}`, statement: 's', owner, enforcement: { checkIds: ['x'] } })),
+      owners.map((owner, i) => ({ id: `r${i}`, statement: 's', owner, enforcement: { enforcedBy: ['x'] } })),
       new InMemoryFileSource({ 'package.json': manifest }),
     );
 
@@ -106,7 +106,7 @@ describe('ruleOwnerFindings — what counts as a document', () => {
 
   it('checks an owner that is path-shaped by a slash alone, and names it', () => {
     const findings = ruleOwnerFindings(
-      [{ id: 'r', statement: 's', owner: 'skills/gates/SKILL', enforcement: { checkIds: ['x'] } }],
+      [{ id: 'r', statement: 's', owner: 'skills/gates/SKILL', enforcement: { enforcedBy: ['x'] } }],
       new InMemoryFileSource({}),
     );
 
@@ -119,7 +119,7 @@ describe('ruleOwnerFindings — what counts as a document', () => {
 
   it('attributes findings to the rule id it is given', () => {
     const findings = ruleOwnerFindings(
-      [{ id: 'r', statement: 's', owner: 'gone.md', enforcement: { checkIds: ['x'] } }],
+      [{ id: 'r', statement: 's', owner: 'gone.md', enforcement: { enforcedBy: ['x'] } }],
       new InMemoryFileSource({}),
       'owners',
     );
@@ -130,7 +130,7 @@ describe('ruleOwnerFindings — what counts as a document', () => {
 
 describe('ruleOwnerFindings — a rule with no owner', () => {
   it('reports it by name, instead of crashing the audit on "reading \'split\'"', () => {
-    const ownerless = { id: 'x', statement: 's', enforcement: { checkIds: ['x'] } } as unknown as IRule;
+    const ownerless = { id: 'x', statement: 's', enforcement: { enforcedBy: ['x'] } } as unknown as IRule;
     expect(ruleOwnerFindings([ownerless], new InMemoryFileSource({})).map((f) => f.message)).toEqual([
       "rule 'x' names no owner — say which document holds its reasoning (`owner: 'docs/RULES.md'`).",
     ]);

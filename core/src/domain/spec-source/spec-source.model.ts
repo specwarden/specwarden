@@ -2,7 +2,7 @@ import type { IFileSource } from '../ports/file-source/file-source.port';
 
 /**
  * A spec source — where requirements and tasks come from, when a spec-driven tool
- * (OpenSpec, Spec Kit, Kiro) sits on top. SpecWarden answers a different question
+ * (OpenSpec, Spec Kit, Kiro) sits on top. specwarden answers a different question
  * than those tools ("does the decided thing still hold", not "what to build"), so
  * it shares the work with them rather than replacing them — and the sharing is
  * declared through this port, not assumed.

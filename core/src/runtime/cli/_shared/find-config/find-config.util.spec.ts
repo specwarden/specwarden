@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { CONFIG_DIR, CONFIG_FILE, findConfig } from './find-config.util';
+import { CONFIG_DIR, CONFIG_FILE, RETIRED_CONFIG_FILE, RetiredConfigError, findConfig } from './find-config.util';
 
 /**
  * The ROOT this returns is what every port is built on: the file source, the writer,
@@ -37,13 +37,13 @@ describe('findConfig', () => {
   });
 
   it('accepts the folder-per-unit form, where the config sits in its own folder beside its test', () => {
-    const configPath = put(`${CONFIG_DIR}/warden/${CONFIG_FILE}`);
+    const configPath = put(`${CONFIG_DIR}/config/${CONFIG_FILE}`);
     expect(findConfig(dir)).toEqual({ configPath, root: dir });
   });
 
   it('prefers the flat file when both layouts exist, so a half-finished migration keeps reading the old one', () => {
     const flat = put(`${CONFIG_DIR}/${CONFIG_FILE}`);
-    put(`${CONFIG_DIR}/warden/${CONFIG_FILE}`);
+    put(`${CONFIG_DIR}/config/${CONFIG_FILE}`);
     expect(findConfig(dir)?.configPath).toBe(flat);
   });
 
@@ -54,6 +54,20 @@ describe('findConfig', () => {
     const pkg = join(dir, 'pkg');
     mkdirSync(join(pkg, CONFIG_DIR, 'ratchets'), { recursive: true });
     expect(findConfig(pkg)).toEqual({ configPath, root: dir });
+  });
+
+  // Read as "no config", the old name made every command say there was nothing to run —
+  // and beside a new config.mjs it sat there unread while its author went on editing it.
+  it.each([
+    ['alone', [`${CONFIG_DIR}/${RETIRED_CONFIG_FILE}`]],
+    ['in its folder', [`${CONFIG_DIR}/warden/${RETIRED_CONFIG_FILE}`]],
+    ['beside the new name', [`${CONFIG_DIR}/${RETIRED_CONFIG_FILE}`, `${CONFIG_DIR}/${CONFIG_FILE}`]],
+  ])('refuses the old config name, %s, naming the rename', (_, files) => {
+    for (const file of files) put(file);
+    expect(() => findConfig(dir)).toThrow(RetiredConfigError);
+    expect(() => findConfig(dir)).toThrow(
+      `${files[0]} is the config's old name — rename it to .specwarden/config.mjs, the only name the engine reads.`,
+    );
   });
 
   it('answers undefined, rather than looping, once it reaches the top of the filesystem', () => {

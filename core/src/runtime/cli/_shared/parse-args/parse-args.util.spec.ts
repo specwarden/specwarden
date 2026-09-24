@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { type IParsedArgs, KNOWN_FLAGS, parseArgs } from './parse-args.util';
+import { type IParsedArgs, KNOWN_FLAGS, flagProblems, parseArgs } from './parse-args.util';
 
 /**
  * The argv grammar is the one thing every command shares, so a slip here is a slip in
@@ -24,6 +24,8 @@ describe('parseArgs reads the command and its flags', () => {
     expect(parseArgs([])).toEqual({
       ids: [],
       positionals: [],
+      flags: [],
+      verify: false,
       all: false,
       list: false,
       json: false,
@@ -46,13 +48,14 @@ describe('parseArgs reads the command and its flags', () => {
     ['--if-relevant', 'ifRelevant'],
     ['--relevance', 'relevance'],
     ['--show-skipped', 'showSkipped'],
+    ['--verify', 'verify'],
   ])('%s turns on %s and nothing else', (flag, field) => {
     // A switch that also flipped a neighbour — `--tighten` implying `--fix`, say —
     // would make a read-only run write. Each one is asserted in isolation for that.
     const parsed = parseArgs(['check', flag]);
-    const on = (['all', 'list', 'json', 'fix', 'tighten', 'ifRelevant', 'relevance', 'showSkipped'] as const).filter(
-      (k) => parsed[k],
-    );
+    const on = (
+      ['all', 'list', 'json', 'fix', 'tighten', 'ifRelevant', 'relevance', 'showSkipped', 'verify'] as const
+    ).filter((k) => parsed[k]);
     expect(on).toEqual([field]);
   });
 
@@ -69,6 +72,35 @@ describe('parseArgs reads the command and its flags', () => {
     expect(parsed[field]).toBe('value');
     expect(parsed.positionals).toEqual([]);
     expect(parsed.command).toBe('check');
+  });
+
+  // `--tier=fast` was an unknown flag named `--tier=fast`, exit 2, where every other tool takes it.
+  it('takes a value attached with = as the same flag', () => {
+    expect(parseArgs(['check', '--tier=fast', '--id=a', '--base=origin/main', '--jobs=4'])).toMatchObject({
+      tier: 'fast',
+      ids: ['a'],
+      base: 'origin/main',
+      jobs: '4',
+      problems: [],
+    });
+    expect(parseArgs(['check', '--base=a=b']).base).toBe('a=b');
+  });
+
+  it('refuses an empty attached value, and a value attached to a switch', () => {
+    expect(parseArgs(['check', '--tier=']).problems).toEqual(['--tier needs a value']);
+    expect(parseArgs(['check', '--all=yes']).problems).toEqual(['--all takes no value, and was given "yes"']);
+    expect(parseArgs(['check', '--nope=1']).problems).toEqual(['unknown flag --nope']);
+  });
+
+  // One output switch, two spellings: `--json --reporter tty` rendered a terminal while the
+  // rest of the run kept quiet for a machine.
+  it('reads --json as --reporter json, and refuses the two disagreeing', () => {
+    expect(parseArgs(['check', '--json'])).toMatchObject({ json: true, reporter: 'json' });
+    expect(parseArgs(['check', '--reporter', 'json'])).toMatchObject({ json: true, reporter: 'json' });
+    expect(parseArgs(['check', '--json', '--reporter', 'json']).problems).toEqual([]);
+    expect(parseArgs(['check', '--json', '--reporter', 'tty']).problems).toEqual([
+      '--json is --reporter json, and --reporter tty says otherwise',
+    ]);
   });
 });
 
@@ -112,7 +144,16 @@ describe('a value flag does not swallow what follows it — and says it had no v
   it('a value flag at the very end of argv is a problem — `--id` there ran EVERY check', () => {
     expect(parseArgs(['check', '--tier']).problems).toEqual(['--tier needs a value']);
     expect(parseArgs(['check', '--id']).problems).toEqual(['--id needs a value']);
-    expect(parseArgs(['init', '--template']).template).toBeUndefined();
+  });
+
+  // `--template` bare used to be refused the same way, as if it were a typo. It is how a
+  // newcomer asks what is installed — `init` reads the empty string as "list them".
+  it('`--template` alone is not a problem — it is the empty string, for `init` to read as a listing', () => {
+    expect(parseArgs(['init', '--template'])).toMatchObject({ template: '', problems: [] });
+  });
+
+  it('`--template=` explicitly empty is still a problem — a name was promised and not given', () => {
+    expect(parseArgs(['init', '--template=']).problems).toEqual(['--template needs a value']);
   });
 
   it('a value may start with a single dash — `--jobs -3` is a value, refused later for what it is', () => {
@@ -161,6 +202,27 @@ describe('what the grammar does not know', () => {
       '--if-relevant',
       '--relevance',
       '--show-skipped',
+      '--verify',
     ]);
+  });
+});
+
+describe('a flag belongs to one command', () => {
+  // Read and ignored, each of these ran as if the flag were not on the line.
+  it.each([
+    [['init', '--tier', 'fast'], ['--tier is a flag of check, not of init']],
+    [['doctor', '--fix', '--json'], ['--fix is a flag of check, not of doctor']],
+    [['new', 'x', '--template', 't'], ['--template is a flag of init, not of new']],
+    [['plan', 'status', 'p.md', '--all'], ['--all is a flag of check, not of plan']],
+    [['adopt', '--reporter', 'json'], ['--reporter is a flag of check and doctor, not of adopt']],
+  ])('%j is refused, naming the owner', (argv, problems) => {
+    expect(flagProblems(parseArgs(argv))).toEqual(problems);
+  });
+
+  it("a command's own flags, and a line with no command, raise nothing", () => {
+    expect(flagProblems(parseArgs(['check', '--tier', 'fast', '--json', '--jobs', '2']))).toEqual([]);
+    expect(flagProblems(parseArgs(['doctor', '--json']))).toEqual([]);
+    expect(flagProblems(parseArgs(['plan', 'status', 'p.md', '--verify']))).toEqual([]);
+    expect(flagProblems(parseArgs(['--json']))).toEqual([]);
   });
 });

@@ -6,4 +6,4 @@
  * DECISIONS: which checks are worth having on day one, which options keep them from
  * being noisy, and which are better left off until somebody asks.
  */
-export { nodeTs } from './node-ts/node-ts.template';
+export { nodeTsTemplate } from './node-ts/node-ts.template';

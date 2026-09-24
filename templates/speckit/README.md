@@ -1,6 +1,6 @@
 # @specwarden/template-speckit
 
-⚒ **template** — A repository specified with Spec Kit — the spec seam wired.
+⚒ **template** — A repository specified with Spec Kit — the spec source wired, credential scan, doc paths, lint and tests.
 
 The same as the OpenSpec template, against the other tool.
 
@@ -11,7 +11,7 @@ A starting tree for one kind of repository, so day one is one command rather tha
 ## Install
 
 ```bash
-npm install @specwarden/template-speckit specwarden
+pnpm add -D specwarden @specwarden/template-speckit @specwarden/speckit @specwarden/security @specwarden/docs
 ```
 
 It depends on [`specwarden`](https://github.com/specwarden/specwarden/tree/main/core#readme), [`@specwarden/scaffold-parts`](https://github.com/specwarden/specwarden/tree/main/templates/_parts#readme), [`@specwarden/speckit`](https://github.com/specwarden/specwarden/tree/main/modules/speckit#readme), [`@specwarden/security`](https://github.com/specwarden/specwarden/tree/main/modules/security#readme), [`@specwarden/docs`](https://github.com/specwarden/specwarden/tree/main/modules/docs#readme).

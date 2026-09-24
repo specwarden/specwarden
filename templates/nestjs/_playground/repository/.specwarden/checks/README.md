@@ -6,10 +6,10 @@ has to import or list it.
 
 | Family | Check files | From |
 | --- | --- | --- |
-| `backend/` | nestjs-conventions, migrations-backwards-compatible (example, off) | `@specwarden/plugin-nestjs`, `specwarden` |
+| `nestjs/` | nestjs-conventions | `@specwarden/plugin-nestjs` |
+| `workspace/` | migrations-backwards-compatible (example, off), unit | `specwarden` |
 | `security/` | secret-scan | `@specwarden/security` |
-| `workspace/` | unit | `specwarden` |
-| `ops/` | env-files-agree (example, off) | `@specwarden/ops` |
+| `ops/` | env-pairing (example, off) | `@specwarden/ops` |
 
 ## Adding a check
 

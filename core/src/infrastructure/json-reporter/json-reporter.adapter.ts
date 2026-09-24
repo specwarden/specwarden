@@ -1,4 +1,5 @@
 import type { ICheckMeta, ICheckResult, IReporter, IRunSummary } from '../../domain';
+import { OUTPUT_VERSION } from '../../contracts/version/version.constant';
 import { type TWriteSink, stdoutSink } from '../reporter-sink/reporter-sink.model';
 
 /**
@@ -18,7 +19,7 @@ export class JsonReporter implements IReporter {
     // Nothing per-check: the document is built from the full result set at the end,
     // so a SKIPPED check — which never reaches checkFinished — still appears. Building
     // from accumulated checkFinished calls silently dropped every skip, and a machine
-    // consumer could not tell a skipped gate from one that never existed.
+    // consumer could not tell a skipped check from one that never existed.
   }
 
   runFinished(results: readonly ICheckResult[], totalMs: number, run: IRunSummary = {}): void {
@@ -34,6 +35,6 @@ export class JsonReporter implements IReporter {
     // The reason a run was not filtered travels WITH it: a dashboard reading this could
     // not tell a filtered run from a fail-safe one, which the terminal says in a line.
     const reason = run.fullRunReason === undefined ? {} : { fullRunReason: run.fullRunReason };
-    this.write(`${JSON.stringify({ totalMs, ...reason, results: rows }, null, 2)}\n`);
+    this.write(`${JSON.stringify({ version: OUTPUT_VERSION, totalMs, ...reason, results: rows }, null, 2)}\n`);
   }
 }

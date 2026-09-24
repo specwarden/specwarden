@@ -7,7 +7,7 @@ import { regenerable } from './regenerable.primitive';
 const ID = { id: 'map', title: 'the map matches its generator', tier: 'fast' as const };
 
 const check = (over: Record<string, unknown> = {}) =>
-  regenerable({ ...ID, artifact: 'docs/map.md', by: 'generate-map', ...over });
+  regenerable({ ...ID, artifact: 'docs/map.md', cmd: 'generate-map', ...over });
 
 const producing = (stdout: string, status: number | null = 0) => ({
   tree: { 'docs/map.md': 'committed' },

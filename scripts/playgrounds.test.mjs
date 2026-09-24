@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { HARNESS_CHECK_IDS } from 'specwarden';
+import { SELF_CHECK_IDS } from 'specwarden';
 
 import { planted } from './playground-proof.mjs';
 import { playgroundEnv, removeScratch, scratchTree, treeOf, writtenByTemplate } from './playgrounds.mjs';
@@ -77,17 +77,17 @@ describe('walking a tree', () => {
 
 describe('the checks a template must prove', () => {
   it('knows the harness checks — an empty list would make every check a template wrote', () => {
-    expect(HARNESS_CHECK_IDS.length).toBeGreaterThan(0);
+    expect(SELF_CHECK_IDS.length).toBeGreaterThan(0);
   });
 
   it('drops exactly the harness checks, and keeps every other id in its order', () => {
-    const ids = ['secret-scan', ...HARNESS_CHECK_IDS, 'doc-paths'];
+    const ids = ['secret-scan', ...SELF_CHECK_IDS, 'doc-paths'];
 
     expect(writtenByTemplate(ids)).toEqual(['secret-scan', 'doc-paths']);
   });
 
   it('keeps an id that only resembles a harness check', () => {
-    const lookalike = `${HARNESS_CHECK_IDS[0]}-extra`;
+    const lookalike = `${SELF_CHECK_IDS[0]}-extra`;
 
     expect(writtenByTemplate([lookalike])).toEqual([lookalike]);
   });

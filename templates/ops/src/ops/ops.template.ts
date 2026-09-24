@@ -1,12 +1,12 @@
 import type { IRule, ITemplate, ITemplateContext, ITemplateFile } from 'specwarden';
 import {
-  ciCoveragePart,
+  ciCoverageExamplePart,
   compose,
   docPathsPart,
-  envFilesExamplePart,
+  envPairingExamplePart,
+  proxyUpstreamsExamplePart,
   secretScanPart,
   shellScopePart,
-  upstreamsExamplePart,
 } from '@specwarden/scaffold-parts';
 
 /**
@@ -25,9 +25,10 @@ import {
  * it is omitted, since a check reporting that it examined nothing fails, correctly, and a
  * scaffold must not be the reason a first run is red.
  *
- * The env-file and upstream checks need a fact about YOUR deployment — which modes exist,
- * which of them run the proxy on the host, which service verifies a key — so they ship as
- * `.example`, pointed at the compose file, proxy config and workflow `init` found.
+ * The env-pairing and proxy-upstreams checks need a fact about YOUR deployment — which
+ * modes exist, which of them run the proxy on the host, which service verifies a key —
+ * so they ship as `.example`, pointed at the compose file, proxy config and workflow
+ * `init` found.
  *
  * The doc-path check reads every tracked document: the README is where an operator starts
  * ("when something is on fire, start at …"), and a runbook path that no longer resolves
@@ -40,19 +41,20 @@ const assembled = (ctx: ITemplateContext) =>
         'Connection strings and tokens arrive here by accident, pasted into a compose file "just to test".\nA match means rotate first, delete second: the history keeps what the diff removes.',
     }),
     shellScopePart(ctx, { pathspecs: ['scripts/**/*.sh', 'deploy/**/*.sh', '*.sh'] }),
-    envFilesExamplePart(ctx),
-    upstreamsExamplePart(ctx),
+    envPairingExamplePart(ctx),
+    proxyUpstreamsExamplePart(ctx),
     docPathsPart(ctx, {
       header:
         'A runbook is read under pressure; a path in it that no longer resolves costs minutes when there are none.',
       docs: '**/*.md',
     }),
-    ciCoveragePart(ctx),
+    ciCoverageExamplePart(ctx),
   );
 
-export const ops: ITemplate = {
+export const opsTemplate: ITemplate = {
   name: 'ops',
-  describe: 'an infrastructure repository — credential scan, shell scoping, env files, proxy upstreams, runbook paths',
+  describe:
+    'Infrastructure — env pairing, proxy upstreams, shell scoping, runbooks — credential scan and documentation paths always on.',
   // All three unconditionally. The ops module is required even where the shell check is
   // omitted, because the two examples import it as well — a repository that fills one in
   // must not then discover it has to install something.

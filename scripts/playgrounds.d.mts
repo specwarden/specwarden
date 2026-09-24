@@ -28,7 +28,7 @@ export function verdictsIn(dir: string): {
 };
 
 /** Run the CLI in `dir` — never throws on a non-zero exit; the exit IS the answer. */
-export function warden(
+export function specwarden(
   dir: string,
   args: readonly string[],
   options?: { readonly timeoutSec?: number; readonly input?: string },

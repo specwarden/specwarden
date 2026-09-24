@@ -26,11 +26,24 @@ package, a pattern that stopped matching after a format changed. None of them er
 A primitive is tested as part of the product, so a consumer who uses one writes no test
 for it. That is the larger of the two wins.
 
-The primitives name their corpus differently — `in` on `forbidPattern` and
-`referencesResolve`, `from` on `forbidImport`, `files` on `mustDeclare`, `subjects` on
-`siblingRequired`, `kind` on `pathContract` — and stay that way until a major version: one
-name across them is a rename every consumer's check files would have to follow. A new
-primitive whose corpus is a pathspec to scan takes `in`.
+Every primitive that reads files names its corpus `files` — a pathspec, or a list whose
+matches are joined — and takes `except` for the pathspecs it leaves out. Five spellings
+(`in`, `from`, `subjects`, `kind`, `files`) named that one thing, and three primitives had no
+`except` at all; a new primitive takes `files` and `except`, and `core/GLOSSARY.md` owns the
+name.
+
+A module's options follow the same rules, so a consumer who has wired one module can guess
+the next one's: the corpus is named for its role (`docs`, `code`) and exemptions are
+`except`; a directory ends in `Dir` and a file in `File` (`plansDir`, `workflowFile`); a
+pattern is a RegExp with no `Re` suffix, never a source string; a tier is a `TTier`; an empty
+list is refused at load. A module's factory is named for the subject it audits (`docPaths`,
+`envPairing`), its id is that name in kebab case, and its preset is `<module>Checks`.
+
+A check has ONE ratchet. Where a check tolerates two kinds of debt — restated counts and
+unlabelled menu numbers, sizing and phases with no acceptance — its `ratchet` holds the sum,
+stated as `measured`, and its hard findings stay hard. Rejected: a named ratchet per kind
+(`countRatchet`, `sizingRatchet`, …) — five spellings of one option, each `--tighten`
+could not reach, and a separate factory for the smaller half a published name for little.
 
 ## 2a. Write only what the engine cannot know
 
@@ -38,7 +51,7 @@ A check is the information it carries. Everything else has a default the engine 
 derive, and a field restated where a default would do is a field that drifts:
 
 - **`tier`** — `fast`. A tier outside the config's `tiers` is refused at load: it ran
-  under `--all` and was in no schedule, so no `--tier` ever ran it.
+  under `--all` and was in no tier a run selects, so no `--tier` ever ran it.
 - **`title`** — the rule's statement, else the id.
 - **`id`** — the file's stem, for a check exported **alone** from `<name>.check.mjs`. A
   file exporting several checks gives each its own id; one built anywhere else — the
@@ -49,7 +62,7 @@ derive, and a field restated where a default would do is a field that drifts:
 So the one-line check is one line:
 
 ```js
-export const check = forbidPattern({ in: 'src/**/*.ts', pattern: /TODO/, rule: 'no TODO in shipped source' });
+export const check = forbidPattern({ files: 'src/**/*.ts', pattern: /TODO/, rule: 'no TODO in shipped source' });
 ```
 
 **A file that names its check keeps that name.** The id is inferred only when the file is

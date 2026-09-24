@@ -1,6 +1,6 @@
 # specwarden
 
-> A quality-gate engine. A repository declares its rules; the warden proves which
+> A quality-gate engine. A repository declares its rules; specwarden proves which
 > hold — and the failure it is built against is the one nobody sees: a check that
 > cannot fail reports success.
 > 18 packages, versioned independently; each document names the version it describes.
@@ -25,10 +25,11 @@ Every document below is flat markdown at a stable path. The paths are predictabl
 
 - [core/skills/specwarden/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/core/skills/specwarden/SKILL.md): writing, running and reasoning about a check
 - [core/GUIDE.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/core/GUIDE.md): the engine end to end
+- [core/GLOSSARY.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/core/GLOSSARY.md): every term the product uses, defined once
 
 ## Packages
 
-- [core/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/core/README.md): specwarden — core: A repository declares its rules; the warden proves which hold.
+- [core/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/core/README.md): specwarden — core: A repository declares its rules; specwarden proves which hold.
 - [modules/docs/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/modules/docs/README.md): @specwarden/docs — module: Documentation checks: paths, symbols, counts, placement, hygiene.
 - [modules/plans/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/modules/plans/README.md): @specwarden/plans — module: Plans and decision logs — one way of working, not the only one.
 - [modules/ops/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/modules/ops/README.md): @specwarden/ops — module: Env files, proxy upstreams, CI coverage, build order, shell scoping.
@@ -38,18 +39,18 @@ Every document below is flat markdown at a stable path. The paths are predictabl
 - [modules/speckit/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/modules/speckit/README.md): @specwarden/speckit — module: Reads a Spec Kit tree as the source of requirements.
 - [plugins/nestjs/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/plugins/nestjs/README.md): @specwarden/plugin-nestjs — plugin: NestJS conventions, declared against the engine's primitives.
 - [templates/_parts/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/_parts/README.md): @specwarden/scaffold-parts — scaffold: The pieces every template is assembled from.
-- [templates/node-ts/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/node-ts/README.md): @specwarden/template-node-ts — template: An ordinary TypeScript repository.
-- [templates/docs-only/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/docs-only/README.md): @specwarden/template-docs-only — template: A repository whose product IS documentation.
-- [templates/monorepo/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/monorepo/README.md): @specwarden/template-monorepo — template: A pnpm workspace — lockfile, build order, dependency pins, CI coverage.
-- [templates/nestjs/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/nestjs/README.md): @specwarden/template-nestjs — template: A NestJS backend — the plugin wired, plus what a backend needs.
-- [templates/agentic/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/agentic/README.md): @specwarden/template-agentic — template: A repository coding agents work in — roles, docs, plans, a perimeter.
-- [templates/ops/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/ops/README.md): @specwarden/template-ops — template: Infrastructure — env files, proxy upstreams, shell scoping, runbooks.
-- [templates/openspec/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/openspec/README.md): @specwarden/template-openspec — template: A repository specified with OpenSpec — the spec seam wired.
-- [templates/speckit/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/speckit/README.md): @specwarden/template-speckit — template: A repository specified with Spec Kit — the spec seam wired.
+- [templates/node-ts/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/node-ts/README.md): @specwarden/template-node-ts — template: An ordinary TypeScript repository — credential scan, doc paths and symbols, lint and tests.
+- [templates/docs-only/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/docs-only/README.md): @specwarden/template-docs-only — template: A repository whose product is documentation — paths, hygiene, counts, placement.
+- [templates/monorepo/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/monorepo/README.md): @specwarden/template-monorepo — template: A pnpm workspace — lockfile, credential scan, documentation paths; build order, dependency pins and CI coverage as examples.
+- [templates/nestjs/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/nestjs/README.md): @specwarden/template-nestjs — template: A NestJS backend — module conventions via the plugin, credential scan, env pairing, migration guard.
+- [templates/agentic/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/agentic/README.md): @specwarden/template-agentic — template: A repository coding agents work in — role files, agent-read docs, plan and decision lifecycle, a perimeter.
+- [templates/ops/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/ops/README.md): @specwarden/template-ops — template: Infrastructure — env pairing, proxy upstreams, shell scoping, runbooks — credential scan and documentation paths always on.
+- [templates/openspec/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/openspec/README.md): @specwarden/template-openspec — template: A repository specified with OpenSpec — the spec source wired, credential scan, doc paths, lint and tests.
+- [templates/speckit/README.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/templates/speckit/README.md): @specwarden/template-speckit — template: A repository specified with Spec Kit — the spec source wired, credential scan, doc paths, lint and tests.
 
 ## Skills an agent can install
 
-- [core/skills/specwarden/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/core/skills/specwarden/SKILL.md): specwarden — Write, run and reason about quality gates with specwarden.
+- [core/skills/specwarden/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/core/skills/specwarden/SKILL.md): specwarden — Write, run and reason about checks with specwarden.
 - [modules/docs/skills/specwarden-docs/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/modules/docs/skills/specwarden-docs/SKILL.md): specwarden-docs — Configure and reason about documentation checks — paths, symbols, counts, placement, hygiene.
 - [modules/plans/skills/specwarden-plans/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/modules/plans/skills/specwarden-plans/SKILL.md): specwarden-plans — Configure the plan lifecycle and the decision log a plan carries.
 - [modules/ops/skills/specwarden-ops/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/modules/ops/skills/specwarden-ops/SKILL.md): specwarden-ops — Configure the operational checks — env files, upstreams, CI coverage, build order, shell scoping.
@@ -64,11 +65,12 @@ Every document below is flat markdown at a stable path. The paths are predictabl
 - [skills/checks/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/checks/SKILL.md): How a check is written, and the declarations that stop it going silent.
 - [skills/commits/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/commits/SKILL.md): What the log has to carry that the diff cannot.
 - [skills/documentation/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/documentation/SKILL.md): Comments, READMEs, guides and package docs — what each carries, and what it must not.
-- [skills/gates/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/gates/SKILL.md): How this repository checks itself, where a gate lives, and what makes one worth running.
-- [skills/plans/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/plans/SKILL.md): Where a working document for unfinished work lives, the shape the plans gate holds it to, and when it dies.
+- [skills/gates/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/gates/SKILL.md): How this repository checks itself, where one of its checks lives, and what makes one worth running.
+- [skills/plans/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/plans/SKILL.md): Where a working document for unfinished work lives, the shape the plans checks hold it to, and when it dies.
 - [skills/playgrounds/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/playgrounds/SKILL.md): The three kinds of playground — inside each package, inside each template, and the one at the root — what each proves, and how to change one.
 - [skills/publishing/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/publishing/SKILL.md): Versions, changesets, what ships in a tarball, and how a release is cut.
 - [skills/skills/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/skills/SKILL.md): The three things called a skill in this repository, which one ships, and what is generated around it.
 - [skills/structure/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/structure/SKILL.md): Which package a thing belongs in, which folder, which file — and the one dependency direction that must never reverse.
 - [skills/testing/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/testing/SKILL.md): What each kind of test answers, where it lives, what it must assert to be worth running, and how coverage is ratcheted.
 - [skills/typescript/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/typescript/SKILL.md): The language settings in force across every package, and what each one forbids.
+- [skills/vocabulary/SKILL.md](https://raw.githubusercontent.com/specwarden/specwarden/refs/heads/main/skills/vocabulary/SKILL.md): One name per concept — the glossary is the contract, and code, options, output and documents inherit it.

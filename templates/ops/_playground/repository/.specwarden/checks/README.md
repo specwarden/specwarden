@@ -7,9 +7,8 @@ has to import or list it.
 | Family | Check files | From |
 | --- | --- | --- |
 | `security/` | secret-scan | `@specwarden/security` |
-| `ops/` | shell-local-scope, env-files-agree (example, off), upstreams-resolve (example, off) | `@specwarden/ops` |
+| `ops/` | shell-scope, env-pairing (example, off), proxy-upstreams (example, off), ci-coverage (example, off) | `@specwarden/ops` |
 | `docs/` | doc-paths | `@specwarden/docs` |
-| `harness/` | gate-coverage (example, off) | `@specwarden/ops` |
 
 ## Adding a check
 

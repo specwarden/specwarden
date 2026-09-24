@@ -1,6 +1,6 @@
 # @specwarden/template-agentic
 
-⚒ **template** — A repository coding agents work in — roles, docs, plans, a perimeter.
+⚒ **template** — A repository coding agents work in — role files, agent-read docs, plan and decision lifecycle, a perimeter.
 
 The agent-facing half: role definitions that resolve, plans that die when finished, and a perimeter computed before the action rather than after it.
 
@@ -11,7 +11,7 @@ A starting tree for one kind of repository, so day one is one command rather tha
 ## Install
 
 ```bash
-npm install @specwarden/template-agentic specwarden
+pnpm add -D specwarden @specwarden/template-agentic @specwarden/agents @specwarden/plans @specwarden/docs
 ```
 
 It depends on [`specwarden`](https://github.com/specwarden/specwarden/tree/main/core#readme), [`@specwarden/scaffold-parts`](https://github.com/specwarden/specwarden/tree/main/templates/_parts#readme), [`@specwarden/agents`](https://github.com/specwarden/specwarden/tree/main/modules/agents#readme), [`@specwarden/plans`](https://github.com/specwarden/specwarden/tree/main/modules/plans#readme), [`@specwarden/docs`](https://github.com/specwarden/specwarden/tree/main/modules/docs#readme).

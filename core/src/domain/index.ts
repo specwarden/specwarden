@@ -1,14 +1,13 @@
 /**
  * The domain barrel — pure types and interfaces, no disk access and no decorators.
- * This is the floor of the engine's dependency graph: everything else depends on
+ * This is the bottom of the engine's dependency graph: everything else depends on
  * it, it depends on nothing. Values (the `as const` vocabularies, the typed error
  * classes) are re-exported plainly; the interfaces as `export type`, because
  * `isolatedModules` cannot tell a type re-export from a value one on its own.
  */
 
-// Zones — the barrier's pure floor: the two values, and the rule that a declared zone
-// must match the one a file's location implies.
-export { ZONES, SpecwardenZoneError, assertZoneMatchesLocation } from './zone/zone.model';
+// Zones — the barrier's pure base: the two values.
+export { ZONES } from './zone/zone.model';
 export type { TZone } from './zone/zone.model';
 
 // Vocabularies and the contract version.
@@ -35,18 +34,23 @@ export type {
   IFixable,
   IFixOutcome,
 } from './check/check.model';
-export type { ICheckDeclaration, ICheckIdentity, TCheckFactory } from './check-factory/check-factory.model';
+export type {
+  ICheckDeclaration,
+  ICheckIdentity,
+  IModuleCheckDeclaration,
+  TCheckFactory,
+} from './check-factory/check-factory.model';
 
 // Ratchets — the value, and the three pure questions every consumer of one asks:
 // which way is forward, what does forward give, and does this measurement hold.
-export { isTighter, satisfiesRatchet, tightenedTo } from './ratchet/ratchet.model';
-export type { IRatchet, TRatchetDirection } from './ratchet/ratchet.model';
+export { isTighter, ratchetDeclaration, satisfiesRatchet, tightenedTo } from './ratchet/ratchet.model';
+export type { IRatchet, IRatchetDeclaration, TRatchetDirection, TRatchetInput } from './ratchet/ratchet.model';
 
 // Rules and the perimeter.
 export { computeCoverage, isDeclaredUnenforceable, isEnforced } from './rule/rule.model';
 export type { IRule, IRuleCoverage, TRuleEnforcement } from './rule/rule.model';
 export { ALLOW } from './perimeter/perimeter.model';
-export type { IActionIntent, IPerimeterRule, IPerimeterVerdict } from './perimeter/perimeter.model';
+export type { IActionIntent, IPerimeterPolicy, IPerimeterVerdict } from './perimeter/perimeter.model';
 
 // Document kinds, instruments, plans.
 export type { IPlugin, TPluginFactory } from './plugin/plugin.model';

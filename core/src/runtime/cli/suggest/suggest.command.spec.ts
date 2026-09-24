@@ -51,7 +51,7 @@ describe('what suggest proposes', () => {
     const r = run(services(4, 4));
     expect(r.code).toBe(0);
     expect(r.out).toContain('100% of **/*.service.ts have {name}.spec.ts (4 of 4).');
-    expect(r.out).toContain("siblingRequired({ subjects: '**/*.service.ts', require: '{name}.spec.ts' }), ratchet 0.");
+    expect(r.out).toContain("siblingRequired({ files: '**/*.service.ts', require: '{name}.spec.ts' }), ratchet 0.");
     expect(r.out).not.toContain('exceptions:');
   });
 
@@ -76,11 +76,11 @@ describe('what suggest proposes', () => {
   });
 
   it('prints the whole check file and where to save it — under checks/, never "copy into the config"', async () => {
-    // It said to copy a one-line call into warden.config.mjs: a check lives in its own
+    // It said to copy a one-line call into config.mjs: a check lives in its own
     // file under checks/, and the call alone was not a file that could load.
     const r = run(services(10, 9));
     expect(r.out).toContain('Save as .specwarden/checks/tests/service-has-spec.check.mjs:\n');
-    expect(r.out).not.toContain('warden.config.mjs');
+    expect(r.out).not.toContain('config.mjs');
     const file = /\.check\.mjs:\n\n([\s\S]*?\n\}\);)\n/.exec(r.out)?.[1] ?? '';
     expect(file).toContain("import { siblingRequired } from 'specwarden';");
     expect(file).toContain('ratchet: 1,');

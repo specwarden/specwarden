@@ -2,20 +2,24 @@ import type { ICheck, ICheckContext, ICheckDeclaration, IFinding } from '../../d
 import {
   CheckOptionsError,
   type ICorpusFloor,
+  type TPathspecs,
   belowCorpusFloor,
   buildCheck,
   checkOptions,
   emptyCorpusReason,
   lineOf,
+  thresholdOf,
   trackedCorpus,
   verdictFrom,
   withExaminedNote,
 } from '../_shared';
 
 export interface IReferencesResolveOptions extends ICheckDeclaration {
-  /** Pathspec of the TRACKED files whose references are checked. */
-  readonly in: string;
-  /** How many files `in` must match for a verdict to count. Defaults to one: no file
+  /** The TRACKED files whose references are checked: a pathspec, or several whose matches are joined. */
+  readonly files: TPathspecs;
+  /** Pathspecs among `files` that are exempt. */
+  readonly except?: readonly string[];
+  /** How many files `files` must match for a verdict to count. Defaults to one: no file
    * means no reference, which resolved trivially and passed in silence. */
   readonly corpus?: ICorpusFloor;
   /** A RegExp whose first capture group is the reference to resolve. */
@@ -35,7 +39,8 @@ const groupsOf = (re: RegExp): number =>
  */
 export function referencesResolve(options: IReferencesResolveOptions): ICheck {
   checkOptions('referencesResolve', options, {
-    in: { kind: 'string', required: true },
+    files: { kind: ['string', 'array'], required: true, nonEmpty: true },
+    except: { kind: 'array' },
     extract: { kind: 'regexp', required: true },
     resolve: { kind: 'function' },
     corpus: { kind: 'object' },
@@ -52,12 +57,12 @@ export function referencesResolve(options: IReferencesResolveOptions): ICheck {
   );
   const resolves = options.resolve ?? ((ref, ctx) => ctx.files.exists(ref));
   return buildCheck(options, ['read'], (ctx, self) => {
-    const corpus = trackedCorpus(ctx.vcs, options.in);
+    const corpus = trackedCorpus(ctx.vcs, options.files, options.except);
     const short = belowCorpusFloor(
       self.id,
       corpus.files.length,
       options.corpus,
-      emptyCorpusReason(options.in, corpus, 'read'),
+      emptyCorpusReason(options.files, corpus, 'read'),
     );
     if (short) return short;
 
@@ -76,11 +81,10 @@ export function referencesResolve(options: IReferencesResolveOptions): ICheck {
             file,
             line: lineOf(content, m.index ?? 0),
             message: `${file} references \`${ref}\`, which does not resolve.`,
-            ruleId: self.id,
           });
         }
       }
     }
-    return verdictFrom(withExaminedNote(findings, self.id, examined), ctx.ratchet ?? options.ratchet);
+    return verdictFrom(withExaminedNote(findings, self.id, examined), thresholdOf(ctx, self));
   });
 }

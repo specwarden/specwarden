@@ -5,5 +5,5 @@
  * every concrete tool that fills it lives outside, so a new spec framework needs a new
  * package and no change to the engine at all.
  */
-export { speckit } from './speckit/speckit.source';
+export { DEFAULT_REQUIREMENT_PATTERN, speckit } from './speckit/speckit.source';
 export type { ISpeckitOptions } from './speckit/speckit.source';

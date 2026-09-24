@@ -1,5 +1,5 @@
 import {
-  CheckRegistry,
+  CheckRoster,
   CheckRunner,
   type ICheck,
   type ICheckResult,
@@ -15,7 +15,7 @@ import {
  * The engine, assembled the way a host assembles it.
  *
  * WHAT THIS FILE IS FOR. Every other package's playground wires checks THROUGH the
- * engine. This one wires the engine itself: a registry, the six adapters, a reporter, and
+ * engine. This one wires the engine itself: a roster, the six adapters, a reporter, and
  * the runner that decides which checks run and what the process exits with. A consumer's
  * CLI is these five lines plus argument parsing, so anything that breaks here breaks the
  * first run of every repository that installs this.
@@ -112,8 +112,8 @@ export function engine(
     exec?: (command: string, args: readonly string[]) => { status: number; stdout: string; stderr: string };
   } = {},
 ): IEngineHarness {
-  const registry = new CheckRegistry();
-  registry.registerAll(checks);
+  const roster = new CheckRoster();
+  roster.registerAll(checks);
 
   const store = ratchetStore(options.ratchets);
   const { reporter, results, started } = recordingReporter();
@@ -133,7 +133,7 @@ export function engine(
     ratchets: store.port,
   };
 
-  const runner = new CheckRunner(registry, adapters, reporter);
+  const runner = new CheckRunner(roster, adapters, reporter);
 
   return { run: runner.run.bind(runner), results, started, ratchets: store, commands };
 }

@@ -1,30 +1,29 @@
-import type { ICheck, IFinding } from 'specwarden';
-import { buildCheck, checkOptions, verdictFrom } from 'specwarden';
-import { type IDocCheckIdentity, optionsError } from '../_shared/identity/identity.model';
-import { DEFAULT_DOCS, nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
+import type { ICheck, ICorpusFloor, IFinding, IModuleCheckDeclaration, TPathspecs } from 'specwarden';
+import { CheckOptionsError, buildCheck, checkOptions, thresholdOf, verdictFrom, withExaminedNote } from 'specwarden';
+import { DEFAULT_DOCS, DOCS_CORPUS_OPTIONS, corpusOf, refusedCorpus } from '../_shared/corpus/corpus.util';
 
-export interface IDocSymbolsOptions extends IDocCheckIdentity {
-  /** git pathspec(s) for the code corpus that DEFINES symbols. */
-  readonly code: readonly string[];
-  /** git pathspec for the documentation corpus scanned for references. Default: `**\/*.md`. */
-  readonly docs?: string;
-  /** Substrings; a code path containing any is excluded (built output, e.g. dist). */
-  readonly excludeCode?: readonly string[];
-  /** Directory prefixes whose documents are skipped (snapshots, plans, archive). */
-  readonly skipDirs?: readonly string[];
+export interface IDocSymbolsOptions extends IModuleCheckDeclaration {
+  /** git pathspec(s) for the code corpus that DEFINES symbols. Never empty. */
+  readonly code: TPathspecs;
+  /** git pathspec(s) for the documentation corpus scanned for references. Default: `**\/*.md`. */
+  readonly docs?: TPathspecs;
+  /** Pathspecs left out of BOTH corpora — built output (`**\/dist/**`), so a stale build
+   * cannot keep a dead name alive, and snapshot trees whose names are history. */
+  readonly except?: readonly string[];
+  /** How many files each corpus must hold for a verdict to count. Default: one of each. */
+  readonly corpus?: ICorpusFloor;
   /** The structural suffixes a NAME must end in to be a symbol reference rather than
-   * prose (Service, Repository, …). A bare suffix used as a word is prose. */
+   * prose (Service, Repository, …). A bare suffix used as a word is prose. Never empty. */
   readonly suffixes: readonly string[];
   /** Symbols a framework or library owns — named in docs, never defined here. */
   readonly external?: readonly string[];
   /** Identifiers that are deliberate illustrations (a naming rule's bad example). */
   readonly illustrative?: readonly string[];
-  readonly ratchet?: number;
-  /** How a symbol is written in prose. Replaces `DEFAULT_SYMBOL_REF_RE`; must be
-   * global and must capture the name. */
+  /** How a symbol is written in prose. Replaces `DEFAULT_SYMBOL_REF`; must be global and
+   * must capture the name. */
   readonly symbolRef?: RegExp;
   /** How a declaration is written in this repository's language. Replaces
-   * `DEFAULT_DECL_RE`; must be global and must capture the name. */
+   * `DEFAULT_DECLARATION`; must be global and must capture the name. */
   readonly declaration?: RegExp;
 }
 
@@ -39,8 +38,9 @@ export interface IDocSymbolsOptions extends IDocCheckIdentity {
  *
  * Both are defaults. Both are options.
  */
-export const DEFAULT_SYMBOL_REF_RE = /`([A-Z][A-Za-z0-9]{4,})`/g;
-export const DEFAULT_DECL_RE = /(?:export\s+)?(?:abstract\s+)?(?:class|const|function|enum|interface|type)\s+(\w+)/g;
+export const DEFAULT_SYMBOL_REF = /`([A-Z][A-Za-z0-9]{4,})`/g;
+export const DEFAULT_DECLARATION =
+  /(?:export\s+)?(?:abstract\s+)?(?:class|const|function|enum|interface|type)\s+(\w+)/g;
 
 /**
  * Documentation names a class that no longer exists. Docs decay through NAMES
@@ -55,11 +55,9 @@ export const DEFAULT_DECL_RE = /(?:export\s+)?(?:abstract\s+)?(?:class|const|fun
  */
 export function docSymbols(options: IDocSymbolsOptions): ICheck {
   checkOptions('docSymbols', options, {
-    code: { kind: 'array', required: true },
-    docs: { kind: 'string' },
-    excludeCode: { kind: 'array' },
-    skipDirs: { kind: 'array' },
-    suffixes: { kind: 'array', required: true },
+    ...DOCS_CORPUS_OPTIONS,
+    code: { kind: ['string', 'array'], required: true, nonEmpty: true },
+    suffixes: { kind: 'array', required: true, nonEmpty: true },
     external: { kind: 'array' },
     illustrative: { kind: 'array' },
     symbolRef: { kind: 'regexp' },
@@ -68,19 +66,11 @@ export function docSymbols(options: IDocSymbolsOptions): ICheck {
   // EMPTY IS NOT INERT. The suffix group is an alternation, and an alternation of nothing
   // matches the empty string — so `[]` made every backticked PascalCase name a symbol
   // reference, the widest setting there is, while the templates' comment called it off.
-  if (options.suffixes.length === 0 || options.suffixes.includes('')) {
-    throw optionsError(
-      'docSymbols',
-      options.id,
-      '`suffixes` is empty — an empty list matches every backticked PascalCase name, not none. ' +
-        "Name the endings that make a word a symbol here, e.g. ['Service', 'Repository'].",
-    );
-  }
-  if (options.code.length === 0) {
-    throw optionsError(
-      'docSymbols',
-      options.id,
-      "`code` is empty — name the pathspecs the declarations live in, e.g. ['src/**/*.ts'].",
+  // `nonEmpty` refuses the list; an empty string inside it widens the match the same way.
+  if (options.suffixes.includes('')) {
+    throw new CheckOptionsError(
+      `docSymbols${options.id ? ` '${options.id}'` : ''}: \`suffixes\` holds an empty string, which matches every ` +
+        "backticked PascalCase name, not none. Name the endings that make a word a symbol here, e.g. ['Service', 'Repository'].",
     );
   }
   const docs = options.docs ?? DEFAULT_DOCS;
@@ -88,11 +78,8 @@ export function docSymbols(options: IDocSymbolsOptions): ICheck {
   const bareRe = new RegExp(`^(?:${options.suffixes.join('|')})$`);
   const external = new Set(options.external ?? []);
   const illustrative = new Set(options.illustrative ?? []);
-  const excludeCode = options.excludeCode ?? [];
-  const skipDirs = options.skipDirs ?? [];
-  const codeSpecs = options.code;
-  const declRe = options.declaration ?? DEFAULT_DECL_RE;
-  const symbolRefRe = options.symbolRef ?? DEFAULT_SYMBOL_REF_RE;
+  const declRe = options.declaration ?? DEFAULT_DECLARATION;
+  const symbolRefRe = options.symbolRef ?? DEFAULT_SYMBOL_REF;
 
   const isReference = (id: string): boolean =>
     !bareRe.test(id) && suffixRe.test(id) && !external.has(id) && !illustrative.has(id);
@@ -100,28 +87,28 @@ export function docSymbols(options: IDocSymbolsOptions): ICheck {
   return buildCheck(
     {
       ...options,
+      id: options.id ?? 'doc-symbols',
       rule: options.rule ?? {
         statement: 'a class the documentation names exists in the code',
         owner: '@specwarden/docs',
         implied: true,
       },
-      tier: options.tier ?? 'fast',
       zone: 'product',
     },
     ['read'],
-    (ctx) => {
-      const defined = new Set<string>();
-      const codeFiles = codeSpecs
-        .flatMap((s) => ctx.vcs.trackedFiles(s))
-        .filter((f) => !excludeCode.some((e) => f.includes(e)));
-      // Either corpus empty is a failure. No code means nothing is declared and the answer
-      // is compared against nothing; no documents means nothing is read and every symbol
-      // "exists" by default.
-      if (codeFiles.length === 0) return nothingExamined(options.id, codeSpecs.join(', '), 'code file');
-      const docFiles = ctx.vcs.trackedFiles(docs).filter((file) => !skipDirs.some((d) => file.startsWith(d)));
-      if (docFiles.length === 0) return nothingExamined(options.id, docs);
+    (ctx, self) => {
+      // Either corpus below its floor is a failure. No code means nothing is declared and the
+      // answer is compared against nothing; no documents means nothing is read and every
+      // symbol "exists" by default.
+      const code = corpusOf(ctx.vcs, options.code, options.except);
+      const noCode = refusedCorpus(self.id, options.code, code, options.corpus, 'code file');
+      if (noCode) return noCode;
+      const documents = corpusOf(ctx.vcs, docs, options.except);
+      const noDocs = refusedCorpus(self.id, docs, documents, options.corpus);
+      if (noDocs) return noDocs;
 
-      for (const file of codeFiles) {
+      const defined = new Set<string>();
+      for (const file of code.files) {
         // `d\.ts` before `tsx?` so `foo.d.ts` → `foo`, not `foo.d` (the `tsx?` branch
         // would otherwise match the trailing `.ts` first and leave `.d`).
         const base = (file.split('/').pop() ?? '').replace(/\.(d\.ts|tsx?)$/, '');
@@ -131,24 +118,27 @@ export function docSymbols(options: IDocSymbolsOptions): ICheck {
         for (const m of src.matchAll(declRe)) defined.add(m[1]);
       }
 
-      const offenders = new Map<string, string>(); // symbol → first file naming it
-      for (const file of docFiles) {
+      const offenders = new Map<string, { file: string; line: number }>(); // symbol → first place naming it
+      for (const file of documents.files) {
         const src = ctx.files.tryRead(file);
         if (src === undefined) continue;
         for (const m of src.matchAll(symbolRefRe)) {
           const id = m[1];
           if (!isReference(id) || defined.has(id) || offenders.has(id)) continue;
-          offenders.set(id, file);
+          offenders.set(id, { file, line: src.slice(0, m.index ?? 0).split('\n').length });
         }
       }
 
-      const findings: IFinding[] = [...offenders.entries()].map(([id, file]) => ({
+      const findings: IFinding[] = [...offenders.entries()].map(([id, { file, line }]) => ({
         severity: 'error',
         file,
-        message: `${file} names \`${id}\`, which nothing in the code corpus declares. A renamed class leaves the old name in prose; fix the doc, or add the symbol to the framework allowlist.`,
-        ruleId: options.id,
+        line,
+        message: `${file} names \`${id}\`, which nothing in the code corpus declares. Rename it to the symbol that replaced it, or name it in \`external\` if a framework owns it.`,
       }));
-      return verdictFrom(findings, ctx.ratchet ?? options.ratchet);
+      return verdictFrom(
+        withExaminedNote(findings, self.id, documents.files.length, 'document'),
+        thresholdOf(ctx, self),
+      );
     },
   );
 }

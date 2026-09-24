@@ -3,7 +3,7 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import { SpecwardenZoneError, type TZone, assertZoneMatchesLocation } from './zone.model';
+import { ZONES } from './zone.model';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // Two levels up from src/domain/zone/ IS src/. Spelled as a climb rather than as
@@ -50,20 +50,6 @@ function scanForLiterals(source: string): string[] {
   return FORBIDDEN_LITERALS.filter((f) => f.re.test(source)).map((f) => f.label);
 }
 
-/**
- * The location-to-zone mapping. It lives HERE and not in the engine because it is
- * a fact about one repository's layout — product code under `core/src/`, consumer
- * checks at `.specwarden/` — and would not survive moving the product anywhere
- * else. That is exactly the "rename the project" test the zone doctrine turns on:
- * knowledge that fails it is consumer/test knowledge, never P.
- */
-function zoneForLocation(path: string): TZone | undefined {
-  const p = path.replace(/\\/g, '/');
-  if (p.includes('core/src/')) return 'product';
-  if (p.includes('.specwarden/')) return 'consumer';
-  return undefined;
-}
-
 describe('zone P source carries no host-repository literals', () => {
   // First: prove the detector CATCHES. A check nobody has seen fail is a hope.
   it('flags a source that reaches into a host workspace or names the host domain', () => {
@@ -94,64 +80,8 @@ describe('zone P source carries no host-repository literals', () => {
   });
 });
 
-describe('a declared zone must match the zone its location implies', () => {
-  it('rejects a product-zone file tagged consumer', () => {
-    expect(() => assertZoneMatchesLocation('consumer', zoneForLocation('core/src/checks/x.ts'), 'x.ts')).toThrow(
-      SpecwardenZoneError,
-    );
-  });
-
-  it('rejects a consumer-zone file tagged product', () => {
-    expect(() =>
-      assertZoneMatchesLocation('product', zoneForLocation('/repo/.specwarden/checks/y.ts'), 'y.ts'),
-    ).toThrow(SpecwardenZoneError);
-  });
-
-  it('accepts a matching pair', () => {
-    expect(() => assertZoneMatchesLocation('product', zoneForLocation('core/src/zone.ts'))).not.toThrow();
-  });
-
-  it('is a no-op where the location implies no zone', () => {
-    expect(() => assertZoneMatchesLocation('product', zoneForLocation('/tmp/scratch/z.ts'))).not.toThrow();
-  });
-});
-
-describe('SpecwardenZoneError says which zones disagree', () => {
-  /**
-   * The message is the whole diagnostic: the reader has a file and this sentence. It
-   * once rendered both zones as empty quotes — "declares zone '' but its location
-   * implies ''" — which names the problem and withholds the only two facts needed to
-   * fix it.
-   */
-  it('names the declared zone, the implied zone and the location', () => {
-    const error = new SpecwardenZoneError('consumer', 'product', 'core/src/checks/x.ts');
-
-    expect(error.message).toContain("declares zone 'consumer'");
-    expect(error.message).toContain("its location implies 'product'");
-    expect(error.message).toContain('at core/src/checks/x.ts');
-    expect(error.message).not.toContain("''");
-    expect(error.message).not.toMatch(/declares declares/);
-  });
-
-  it('reads cleanly without a location, rather than printing "at undefined"', () => {
-    const error = new SpecwardenZoneError('product', 'consumer');
-
-    expect(error.message.startsWith('zone mismatch: the file declares')).toBe(true);
-    expect(error.message).not.toContain('undefined');
-  });
-
-  it('carries both zones as fields, so a caller can branch without parsing the text', () => {
-    try {
-      assertZoneMatchesLocation('product', 'consumer', 'y.ts');
-      expect.unreachable('a mismatch passed');
-    } catch (error) {
-      expect(error).toBeInstanceOf(SpecwardenZoneError);
-      expect(error).toMatchObject({
-        name: 'SpecwardenZoneError',
-        declared: 'product',
-        implied: 'consumer',
-        location: 'y.ts',
-      });
-    }
+describe('the zones', () => {
+  it('are the product and the consumer, and nothing else', () => {
+    expect(ZONES).toEqual(['product', 'consumer']);
   });
 });

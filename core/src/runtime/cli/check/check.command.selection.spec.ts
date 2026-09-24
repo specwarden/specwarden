@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { CHECK_CONTRACT_VERSION, type ICheck, type IVcs } from '../../../domain';
 import { testContext } from '../../../testing';
-import { CheckRegistry } from '../../container';
-import type { IWardenConfig } from '../../config/config.model';
+import { CheckRoster } from '../../container';
+import type { ISpecwardenConfig } from '../../config/config.model';
 import type { IParsedArgs } from '../_shared/parse-args/parse-args.util';
 import { check } from './check.command';
 
@@ -47,15 +47,16 @@ const inert = (id: string, over: Partial<ICheck> = {}): ICheck => ({
 });
 
 function setup(checks: readonly ICheck[], vcs: IVcs = testContext({ changed: [] }).vcs) {
-  const registry = new CheckRegistry();
-  registry.registerAll(checks);
+  const checkRoster = new CheckRoster();
+  checkRoster.registerAll(checks);
   const t = testContext();
-  const config: IWardenConfig = { adapters: () => ({ vcs, files: t.files, clock: t.clock, proc: t.proc }) };
+  const config: ISpecwardenConfig = { adapters: () => ({ vcs, files: t.files, clock: t.clock, proc: t.proc }) };
   let out = '';
   let err = '';
   const io = { out: (s: string) => (out += s), err: (s: string) => (err += s) };
   return {
-    run: (a: Partial<IParsedArgs>, env: NodeJS.ProcessEnv = {}) => check(args(a), config, registry, '/repo', env, io),
+    run: (a: Partial<IParsedArgs>, env: NodeJS.ProcessEnv = {}) =>
+      check(args(a), config, checkRoster, '/repo', env, io),
     out: () => out,
     err: () => err,
   };
@@ -64,7 +65,7 @@ function setup(checks: readonly ICheck[], vcs: IVcs = testContext({ changed: [] 
 describe('--list', () => {
   const roster = [inert('a'), inert('b', { tier: 'heavy' }), inert('c')];
 
-  it('prints every check as id<TAB>title, in registry order, and exits 0', async () => {
+  it('prints every check as id<TAB>title, in roster order, and exits 0', async () => {
     const s = setup(roster);
     expect(await s.run({ list: true })).toBe(0);
     expect(s.out()).toBe('a\ta title\nb\tb title\nc\tc title\n');
@@ -95,16 +96,19 @@ describe('--list', () => {
   it('prints the roster as JSON under --json — it printed the tab-separated list', async () => {
     const s = setup([inert('a'), inert('b', { tier: 'heavy', advisory: true, exclusive: true })]);
     expect(await s.run({ list: true, json: true })).toBe(0);
-    expect(JSON.parse(s.out())).toEqual([
-      { id: 'a', title: 'a title', tier: 'fast', advisory: false, exclusive: false },
-      { id: 'b', title: 'b title', tier: 'heavy', advisory: true, exclusive: true },
-    ]);
+    expect(JSON.parse(s.out())).toEqual({
+      version: 1,
+      checks: [
+        { id: 'a', title: 'a title', tier: 'fast', advisory: false, exclusive: false },
+        { id: 'b', title: 'b title', tier: 'heavy', advisory: true, exclusive: true },
+      ],
+    });
   });
 
   it('refuses an id outside the named tier, as a run does', async () => {
     const s = setup(roster);
     expect(await s.run({ list: true, tier: 'heavy', ids: ['a'] })).toBe(2);
-    expect(s.err()).toBe("'a' is in tier fast, not heavy — with --tier, --id names checks of that tier\n");
+    expect(s.err()).toBe("'a' is in tier fast, not heavy — with --tier, --id names checks of that tier.\n");
   });
 
   it('answers an empty tier with nothing — a question, not a run', async () => {
@@ -147,14 +151,14 @@ describe('--relevance', () => {
   });
 
   it('answers "run" when a shared build input changed, from the config’s own list', async () => {
-    const registry = new CheckRegistry();
-    registry.registerAll([touches('db/schema.sql')]);
+    const checkRoster = new CheckRoster();
+    checkRoster.registerAll([touches('db/schema.sql')]);
     let out = '';
     const vcs = testContext({ changed: ['pnpm-lock.yaml'] }).vcs;
     await check(
       args({ relevance: true, ids: ['gate'] }),
       { adapters: () => ({ vcs }), sharedBuildInputs: ['pnpm-lock.yaml'] },
-      registry,
+      checkRoster,
       '/repo',
       {},
       { out: (t) => (out += t), err: () => {} },
@@ -165,7 +169,7 @@ describe('--relevance', () => {
   it.each([[[]], [['a', 'b']]])('refuses with 2 unless exactly one id is named (%j)', async (ids) => {
     const s = setup([inert('a'), inert('b')]);
     expect(await s.run({ relevance: true, ids })).toBe(2);
-    expect(s.err()).toBe('--relevance requires exactly one --id\n');
+    expect(s.err()).toBe('--relevance answers for exactly one check — name one id.\n');
     expect(s.out()).toBe('');
   });
 
@@ -173,7 +177,7 @@ describe('--relevance', () => {
     // A misspelt id answered "skip" would let CI skip a gate's setup forever.
     const s = setup([inert('a')]);
     expect(await s.run({ relevance: true, ids: ['typo'] })).toBe(2);
-    expect(s.err()).toBe("unknown check id 'typo'\n");
+    expect(s.err()).toBe("unknown check id 'typo'.\n");
     expect(s.out()).toBe('');
   });
 
@@ -192,11 +196,11 @@ describe('--relevance', () => {
 describe('a run the line selects nothing for', () => {
   const roster = [inert('a'), inert('b', { tier: 'heavy' })];
 
-  // Both used to exit 0: "0 gate(s) passed", and a fast check run by a job named heavy.
+  // Both used to exit 0: "0 check(s) passed", and a fast check run by a job named heavy.
   it('refuses a tier that holds no check, exit 2, before anything runs', async () => {
     const s = setup(roster);
     expect(await s.run({ all: true, tier: 'nightly' })).toBe(2);
-    expect(s.err()).toBe("tier 'nightly' holds no check — a run over it would pass having run nothing\n");
+    expect(s.err()).toBe("tier 'nightly' holds no check — a run over it would pass having run nothing.\n");
     expect(s.out()).toBe('');
   });
 

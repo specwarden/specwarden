@@ -14,11 +14,11 @@ description: What each kind of test answers, where it lives, what it must assert
 | package playground  | `<pkg>/_playground/playground.spec.ts`  | does the package work imported BY NAME, as a consumer wires it    |
 | template playground | `templates/<name>/_playground/`         | is `init` green over a real repository, and can each check go red |
 | root playground     | `_playgrounds/`                         | do all the packages compose — in-process and through the CLI      |
-| gate spec           | `scripts/<script>.test.mjs`             | does this repository's own guard still fail on what it exists for |
+| script spec         | `scripts/<script>.test.mjs`             | does this repository's own guard still fail on what it exists for |
 
 Each answers something the others cannot; `skills/playgrounds/SKILL.md` owns the three
-playgrounds. `pnpm -r` never reaches the gate specs — they are not a workspace package — so
-the `scripts-unit` gate runs the root `vitest.config.mjs`, whose `include` is PINNED to
+playgrounds. `pnpm -r` never reaches the script specs — they are not a workspace package — so
+the `scripts-unit` check runs the root `vitest.config.mjs`, whose `include` is PINNED to
 `scripts/**/*.test.mjs`. It was not pinned once: with no config, the root run collected
 every package's specs, 892 tests, and not one script had a test.
 
@@ -58,10 +58,10 @@ by it too. The two used to disagree — the adapter passed pathspecs to git as w
 `README.md` its real run never read. `core/src/infrastructure/_contract/vcs.contract.spec.ts` now holds both sides
 to the same cases.
 
-## 4. Coverage is a ratchet, and the `unit` gate turns it
+## 4. Coverage is a ratchet, and the `unit` check turns it
 
 Each package's thresholds live in its entry in `scripts/registry.mjs` (`coverage`), and the
-generated `vitest.config.ts` enforces them. The `unit` gate runs `test:coverage`, never bare
+generated `vitest.config.ts` enforces them. The `unit` check runs `test:coverage`, never bare
 `test` — a threshold nothing turns is a number in a file. That was the state before: the
 script existed in every manifest and could not start, because nothing installed the
 provider.

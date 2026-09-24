@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import type { ITemplateContext } from 'specwarden';
 
-import { agentic } from './agentic.template';
+import { agenticTemplate } from './agentic.template';
 
 const ctx = (over: Partial<ITemplateContext> = {}): ITemplateContext => ({
   docs: '**/*.md',
@@ -16,8 +16,8 @@ const ctx = (over: Partial<ITemplateContext> = {}): ITemplateContext => ({
   ...over,
 });
 
-const paths = (c = ctx()) => agentic.files(c).map((f) => f.path);
-const live = (c = ctx()) => agentic.files(c).filter((f) => f.path.endsWith('.check.mjs'));
+const paths = (c = ctx()) => agenticTemplate.files(c).map((f) => f.path);
+const live = (c = ctx()) => agenticTemplate.files(c).filter((f) => f.path.endsWith('.check.mjs'));
 
 /** Written inside the package so the generated imports resolve as a consumer's would. */
 const scratch = mkdtempSync(
@@ -44,21 +44,21 @@ describe('the generated tree actually loads', () => {
     }
   });
 
-  it('the perimeter loads and its rules evaluate an intent', async () => {
+  it('the perimeter loads and its policies evaluate an intent', async () => {
     // The perimeter is DATA the engine runs, not prose: if it does not evaluate, the
     // repository has a file that looks like a guard and guards nothing.
-    const file = agentic.files(ctx()).find((f) => f.path === 'perimeter.mjs');
+    const file = agenticTemplate.files(ctx()).find((f) => f.path === 'perimeter.mjs');
     const abs = write('perimeter.mjs', file?.body ?? '');
     const mod = (await import(pathToFileURL(abs).href)) as {
-      rules?: readonly { id: string; evaluate: (i: unknown) => { blocked: boolean } }[];
+      policies?: readonly { id: string; evaluate: (i: unknown) => { blocked: boolean } }[];
     };
-    expect(mod.rules?.length).toBe(2);
+    expect(mod.policies?.length).toBe(2);
 
-    const forcePush = mod.rules?.find((r) => r.id === 'no-force-push');
+    const forcePush = mod.policies?.find((r) => r.id === 'no-force-push');
     expect(forcePush?.evaluate({ tool: 'Bash', command: 'git push --force origin main' }).blocked).toBe(true);
     expect(forcePush?.evaluate({ tool: 'Bash', command: 'git push origin main' }).blocked).toBe(false);
 
-    const rewrite = mod.rules?.find((r) => r.id === 'no-history-rewrite-of-a-shared-branch');
+    const rewrite = mod.policies?.find((r) => r.id === 'no-history-rewrite-of-a-shared-branch');
     expect(rewrite?.evaluate({ tool: 'Bash', command: 'git reset --hard HEAD~3' }).blocked).toBe(true);
     expect(rewrite?.evaluate({ tool: 'Bash', command: 'git status' }).blocked).toBe(false);
   });
@@ -88,16 +88,17 @@ describe('it wires what an agentic repository actually needs', () => {
   it('names the options that replace the English defaults, rather than restating the defaults', () => {
     // They are English. A repository writing plans in another language has to see what
     // to replace; the patterns themselves are the module's, one copy, and not forty lines here.
-    const body = agentic.files(ctx()).find((f) => f.path.includes('plan-shape'))?.body ?? '';
-    for (const option of ['sizingPatterns', 'phaseHeadingRe', 'commandRe']) expect(body).toContain(option);
+    const body = agenticTemplate.files(ctx()).find((f) => f.path.includes('plan-shape'))?.body ?? '';
+    for (const option of ['sizing', 'phaseHeading', 'command']) expect(body).toContain(option);
     expect(body).not.toContain('story');
   });
 
   it('reads every tracked document — AGENTS.md and CLAUDE.md are what an agent follows first', () => {
-    const body = agentic.files(ctx({ docs: 'docs/**/*.md' })).find((f) => f.path.includes('doc-paths'))?.body ?? '';
+    const body =
+      agenticTemplate.files(ctx({ docs: 'docs/**/*.md' })).find((f) => f.path.includes('doc-paths'))?.body ?? '';
     expect(body).toContain("docs: '**/*.md'");
     // A finished plan names files as they were; its paths are history, not claims.
-    expect(body).toContain("skipDirs: ['docs/_plans-archive/']");
+    expect(body).toContain("except: ['docs/_plans-archive/']");
   });
 
   it('the perimeter ships LIVE, not as an example', () => {
@@ -107,7 +108,7 @@ describe('it wires what an agentic repository actually needs', () => {
   });
 
   it('says how to wire the hook, and how to use another assistant', () => {
-    const body = agentic.files(ctx()).find((f) => f.path === 'perimeter.mjs')?.body ?? '';
+    const body = agenticTemplate.files(ctx()).find((f) => f.path === 'perimeter.mjs')?.body ?? '';
     expect(body).toContain('PreToolUse');
     expect(body).toContain('IAgentRuntime');
     expect(body).toMatch(/fails OPEN/i);
@@ -116,32 +117,32 @@ describe('it wires what an agentic repository actually needs', () => {
   });
 
   it('every rule in the perimeter says what to do INSTEAD', () => {
-    const body = agentic.files(ctx()).find((f) => f.path === 'perimeter.mjs')?.body ?? '';
+    const body = agenticTemplate.files(ctx()).find((f) => f.path === 'perimeter.mjs')?.body ?? '';
     for (const why of ['Push a new commit, or ask the owner', 'discards work that is not yours'])
       expect(body).toContain(why);
   });
 });
 
 describe('every rule lives where it can be read', () => {
-  it('a live check states its own rule, so the register holds only the perimeter rule', () => {
+  it('a live check states its own rule, so the register holds only the rule its perimeter policies enforce', () => {
     // A check with its rule in a register far away is two lists kept in step by memory;
     // on the check, a fresh tree has no orphan by construction.
-    expect(agentic.rules(ctx()).map((r) => r.id)).toEqual(['no-irreversible-action-without-a-person']);
+    expect(agenticTemplate.rules(ctx()).map((r) => r.id)).toEqual(['no-irreversible-action-without-a-person']);
     for (const f of live()) expect(f.body, `${f.path} states no rule`).toMatch(/^\s+rule: '/m);
   });
 
-  it('hands init no config fragment — the engine reads the perimeter rule ids as enforcers itself', () => {
+  it('hands init no config fragment — the engine reads the perimeter policy ids as enforcers itself', () => {
     // It used to import perimeter.mjs into the config to list them, a second copy of a
     // list the engine can read.
-    expect(agentic.configExtras).toBeUndefined();
+    expect(agenticTemplate.configExtras).toBeUndefined();
   });
 });
 
 describe('every rule resolves to something this tree registers', () => {
-  it('a check it writes, or a perimeter rule it writes — never a name that resolves to nothing', async () => {
+  it('a check it writes, or a perimeter policy it writes — never a name that resolves to nothing', async () => {
     // The reverse of "no orphan": a rule naming an enforcer nobody registered fails
     // `enforcement-resolves` on the tree the scaffold just wrote.
-    const checkIds = new Set(
+    const writtenIds = new Set(
       live().map((f) =>
         f.path
           .split('/')
@@ -149,14 +150,14 @@ describe('every rule resolves to something this tree registers', () => {
           ?.replace(/\.check\.mjs$/, ''),
       ),
     );
-    const perimeter = agentic.files(ctx()).find((f) => f.path === 'perimeter.mjs');
+    const perimeter = agenticTemplate.files(ctx()).find((f) => f.path === 'perimeter.mjs');
     const abs = write('perimeter-ids.mjs', perimeter?.body ?? '');
-    const { rules } = (await import(pathToFileURL(abs).href)) as { rules: readonly { id: string }[] };
-    const perimeterIds = new Set(rules.map((r) => r.id));
+    const { policies } = (await import(pathToFileURL(abs).href)) as { policies: readonly { id: string }[] };
+    const perimeterIds = new Set(policies.map((p) => p.id));
 
-    for (const rule of agentic.rules(ctx())) {
-      for (const id of (rule.enforcement as { checkIds: readonly string[] }).checkIds) {
-        expect(checkIds.has(id) || perimeterIds.has(id), `rule ${rule.id} names ${id}, which nothing registers`).toBe(
+    for (const rule of agenticTemplate.rules(ctx())) {
+      for (const id of (rule.enforcement as { enforcedBy: readonly string[] }).enforcedBy) {
+        expect(writtenIds.has(id) || perimeterIds.has(id), `rule ${rule.id} names ${id}, which nothing registers`).toBe(
           true,
         );
       }

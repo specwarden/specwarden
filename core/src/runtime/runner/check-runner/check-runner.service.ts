@@ -11,8 +11,9 @@ import type {
 import { isFixable } from '../../../domain';
 import type { TSharedBuildInput } from '../../config/config.model';
 import { type IEngineAdapters, buildContext } from '../../container';
-import { CheckRegistry } from '../../container/check-registry/check-registry.service';
+import { CheckRoster } from '../../container/check-roster/check-roster.service';
 import { didYouMean } from '../../_shared/did-you-mean/did-you-mean.util';
+import { attributionOf } from '../../../primitives/_shared';
 
 /** What the caller asked for on the command line. */
 export interface ICheckRunnerOptions {
@@ -28,7 +29,7 @@ export interface ICheckRunnerOptions {
   readonly all?: boolean;
   /** Apply the relevance filter even to explicitly named `ids`. Off by default: a
    * named id runs regardless of relevance (the caller chose it). CI turns it on for
-   * the per-gate jobs so an irrelevant gate skips its expensive setup. */
+   * the per-check jobs so an irrelevant check skips its expensive setup. */
   readonly ifRelevant?: boolean;
   /** Path prefixes that, when any is in the changed set, make EVERY check relevant —
    * a lockfile, a root tsconfig, a shared package. A relevance filter that let a
@@ -69,7 +70,7 @@ export interface ICheckRunnerOptions {
    * ratchet store — and a concurrent writer is a corruption nobody would trace back
    * to a flag. Speed is not worth a ratchet that silently records the wrong number.
    */
-  readonly concurrency?: number;
+  readonly jobs?: number;
 }
 
 /** The ambient environment, read as data rather than off `process.env` directly,
@@ -98,25 +99,21 @@ export class RunnerUsageError extends Error {
  * the truth, recording a fiction.
  */
 function measurementOf(verdict: IVerdict): number {
-  return verdict.ratchet?.value ?? verdict.findings.filter((f) => f.severity === 'error').length;
+  return verdict.measured ?? verdict.findings.filter((f) => f.severity === 'error').length;
 }
 
 /**
- * Attribute every finding to the rule it proves, unless it already names one.
+ * Attribute every finding to the rule it proves — the check's rule, else the check.
  *
- * A finding's `ruleId` is what links evidence back to the assertion it disproves, and
- * for the overwhelming majority of checks that is simply the check's own id. Written
- * out by hand it appeared on 34 findings across one consumer's check bodies and was
- * absent from the rest, so the same run produced findings that could be traced and
- * findings that could not, for no reason a reader could see. Stamped here, it is
- * uniform for every check however it was built.
+ * A finding's `ruleId` is what links evidence back to the assertion it disproves.
+ * `buildCheck` stamps it on every factory's findings; this covers a check built any other
+ * way, and a finding the runner itself writes (a throw, a denied capability), so the same
+ * run never produces findings that can be traced beside findings that cannot.
  */
-function attributed(verdict: IVerdict, checkId: string): IVerdict {
-  if (verdict.findings.every((f) => f.ruleId !== undefined)) return verdict;
-  return {
-    ...verdict,
-    findings: verdict.findings.map((f) => (f.ruleId === undefined ? { ...f, ruleId: checkId } : f)),
-  };
+function attributed(verdict: IVerdict, check: ICheck): IVerdict {
+  const ruleId = attributionOf(check);
+  if (verdict.findings.every((f) => f.ruleId === ruleId)) return verdict;
+  return { ...verdict, findings: verdict.findings.map((f) => ({ ...f, ruleId })) };
 }
 
 /** A verdict that holds and says it could not look. One that found a defect did look. */
@@ -133,7 +130,7 @@ function resultOf(check: ICheck, verdict: IVerdict, durationMs: number): ICheckR
 
 /** How a run ended: the exit code plus the results, so a caller (and a test) can
  * inspect what happened without parsing printed output. */
-export interface IRunOutcome {
+export interface IRunResult {
   readonly exitCode: number;
   readonly results: readonly ICheckResult[];
   /**
@@ -150,18 +147,18 @@ export interface IRunOutcome {
  * When an unknown id is a check FILE's name, the id that file declares. A file's id may
  * differ from its name, and `--id <file name>` then found nothing, with no clue why.
  */
-function declaredInstead(registry: CheckRegistry, id: string): string {
+function declaredInstead(roster: CheckRoster, id: string): string {
   const stem = (origin: string): string => origin.slice(origin.lastIndexOf('/') + 1).replace(/\.check\.mjs$/, '');
-  const named = registry.all().filter((check) => {
-    const origin = registry.originOf(check);
+  const named = roster.all().filter((check) => {
+    const origin = roster.originOf(check);
     return origin !== undefined && stem(origin) === id;
   });
   if (named.length === 0)
     return didYouMean(
       id,
-      registry.all().map((check) => check.id),
+      roster.all().map((check) => check.id),
     );
-  return ` — ${registry.originOf(named[0])} declares ${named.map((check) => `'${check.id}'`).join(', ')}`;
+  return ` — ${roster.originOf(named[0])} declares ${named.map((check) => `'${check.id}'`).join(', ')}`;
 }
 
 /**
@@ -171,19 +168,18 @@ function declaredInstead(registry: CheckRegistry, id: string): string {
  * it is refused: `--tier heavy --id no-todo` ran the fast `no-todo`, so a CI job
  * named for one tier ran a check from another and nobody could tell from the line.
  *
- * A tier holding NO check is refused for a run (`forRun`): it passed, "0 gate(s)
- * passed", a job green over nothing — the founding failure, reached by a typo in a
+ * A tier holding NO check is refused for a run (`forRun`): it passed, "0 check(s) passed", a job green over nothing — the founding failure, reached by a typo in a
  * workflow or a tier whose last check moved. `--list` answers the question instead.
  */
 export function selectChecks(
-  registry: CheckRegistry,
+  roster: CheckRoster,
   options: Pick<ICheckRunnerOptions, 'ids' | 'tier'>,
   forRun = false,
 ): readonly ICheck[] {
   if (options.ids?.length) {
     return options.ids.map((id) => {
-      const check = registry.byId(id);
-      if (!check) throw new RunnerUsageError(`unknown check id '${id}'${declaredInstead(registry, id)}`);
+      const check = roster.byId(id);
+      if (!check) throw new RunnerUsageError(`unknown check id '${id}'${declaredInstead(roster, id)}`);
       if (options.tier !== undefined && check.tier !== options.tier) {
         throw new RunnerUsageError(
           `'${id}' is in tier ${check.tier}, not ${options.tier} — with --tier, --id names checks of that tier`,
@@ -192,8 +188,8 @@ export function selectChecks(
       return check;
     });
   }
-  if (options.tier === undefined) return registry.all();
-  const inTier = registry.forTier(options.tier);
+  if (options.tier === undefined) return roster.all();
+  const inTier = roster.forTier(options.tier);
   if (forRun && inTier.length === 0) {
     throw new RunnerUsageError(`tier '${options.tier}' holds no check — a run over it would pass having run nothing`);
   }
@@ -207,7 +203,7 @@ export function selectChecks(
  *
  * Relevance is filtered by the changed set (an unknowable set runs everything, never
  * nothing); an explicit full run drops the filter; SPECWARDEN_SKIP is honoured locally
- * and IGNORED under CI, because a skip that reaches the arbiter is a hole, not a skip.
+ * and IGNORED under CI, because a skip that reaches CI is a hole, not a skip.
  *
  * Every route to "run everything" goes through `reasonToRunEverything`, and it returns
  * a STRING rather than a boolean on purpose: a full run that cannot say why it is one
@@ -215,18 +211,18 @@ export function selectChecks(
  */
 export class CheckRunner {
   constructor(
-    private readonly registry: CheckRegistry,
+    private readonly roster: CheckRoster,
     private readonly adapters: IEngineAdapters,
     private readonly reporter: IReporter,
   ) {}
 
-  async run(options: ICheckRunnerOptions, env: ICheckRunnerEnv): Promise<IRunOutcome> {
+  async run(options: ICheckRunnerOptions, env: ICheckRunnerEnv): Promise<IRunResult> {
     const base = options.base ?? env.base;
     const full = Boolean(options.all) || Boolean(env.all);
     // `undefined` changed set means "cannot tell" → run everything, never nothing.
     const changed = full ? undefined : this.adapters.vcs.changedFiles(base);
 
-    const candidates = selectChecks(this.registry, options, true);
+    const candidates = selectChecks(this.roster, options, true);
     const skip = this.resolveSkip(env, candidates);
     const denied = new Set<TCapability>(options.denyCapabilities ?? []);
     // One derivation of "relevance does not apply here", shared with relevanceOf: a
@@ -240,8 +236,8 @@ export class CheckRunner {
     const results: ICheckResult[] = [];
     const runStart = this.adapters.clock.monotonicMs();
 
-    // A run that writes runs alone; see `concurrency` on the options.
-    const lanes = options.fix || options.tighten ? 1 : Math.max(1, Math.trunc(options.concurrency ?? 1));
+    // A run that writes runs alone; see `jobs` on the options.
+    const lanes = options.fix || options.tighten ? 1 : Math.max(1, Math.trunc(options.jobs ?? 1));
 
     if (lanes > 1) {
       const outcome = await this.runConcurrently(candidates, lanes, {
@@ -260,7 +256,7 @@ export class CheckRunner {
 
     for (const check of candidates) {
       // A named check runs regardless of relevance — the caller chose it — UNLESS
-      // ifRelevant is set (CI, to skip an irrelevant gate's setup). An unnamed run
+      // ifRelevant is set (CI, to skip an irrelevant check's setup). An unnamed run
       // always applies the filter.
       if ((!named || options.ifRelevant) && !isRelevant(check)) {
         results.push(this.report(this.skipped(check, 'not-relevant')));
@@ -282,7 +278,7 @@ export class CheckRunner {
               {
                 severity: 'error',
                 message: `${check.id} declares capability ${forbidden.join(', ')}, which this repository denies (denyCapabilities). It was not run.`,
-                ruleId: check.id,
+                ruleId: attributionOf(check),
               },
             ],
           },
@@ -294,7 +290,7 @@ export class CheckRunner {
 
       this.reporter.checkStarted(check);
       const stored = check.ratchet ? this.adapters.ratchets.read(check.ratchet.id)?.value : undefined;
-      const ctx = buildContext(check, this.adapters, changed ?? [], options.shard, stored, () => this.registry.all());
+      const ctx = buildContext(check, this.adapters, changed ?? [], options.shard, stored, () => this.roster.all());
       const started = this.adapters.clock.monotonicMs();
       let verdict = await this.execute(check, ctx);
       if (options.fix && !verdict.ok && isFixable(check)) {
@@ -309,7 +305,7 @@ export class CheckRunner {
             {
               severity: 'info',
               message: `${check.id} has no fix — --fix repairs only what a check can derive, and this one declares no repair.`,
-              ruleId: check.id,
+              ruleId: attributionOf(check),
             },
           ],
         };
@@ -412,13 +408,13 @@ export class CheckRunner {
    * migration) for a check the diff cannot affect. Same relevance rule the run loop
    * uses: unknown diff or a shared-input change means run. */
   relevanceOf(id: string, options: ICheckRunnerOptions, env: ICheckRunnerEnv): 'run' | 'skip' {
-    const check = this.registry.byId(id);
-    if (!check) throw new RunnerUsageError(`unknown check id '${id}'${declaredInstead(this.registry, id)}`);
+    const check = this.roster.byId(id);
+    if (!check) throw new RunnerUsageError(`unknown check id '${id}'${declaredInstead(this.roster, id)}`);
     const full = Boolean(options.all) || Boolean(env.all);
     const base = options.base ?? env.base;
     const changed = full ? undefined : this.adapters.vcs.changedFiles(base);
     // The SAME derivation the run loop uses. Two copies of it would let a CI job skip
-    // an expensive setup for a gate the run would then have insisted on running.
+    // an expensive setup for a check the run would then have insisted on running.
     if (this.reasonToRunEverything(options, env, changed, base) !== undefined) return 'run';
     return check.when(changed ?? []) ? 'run' : 'skip';
   }
@@ -427,12 +423,12 @@ export class CheckRunner {
    * finding so the reporter can show it and the run continues to the next check. */
   private async execute(check: ICheck, ctx: Parameters<ICheck['run']>[0]): Promise<IVerdict> {
     try {
-      return attributed(await this.withDeadline(check, ctx), check.id);
+      return attributed(await this.withDeadline(check, ctx), check);
     } catch (err) {
-      return {
-        ok: false,
-        findings: [{ severity: 'error', message: err instanceof Error ? err.message : String(err), ruleId: check.id }],
-      };
+      return attributed(
+        { ok: false, findings: [{ severity: 'error', message: err instanceof Error ? err.message : String(err) }] },
+        check,
+      );
     }
   }
 
@@ -484,7 +480,7 @@ export class CheckRunner {
           {
             severity: 'info',
             message: `fixed ${outcome.fixed} finding(s)${outcome.summary ? `: ${outcome.summary}` : ''}`,
-            ruleId: check.id,
+            ruleId: attributionOf(check),
           },
           ...after.findings,
         ],
@@ -497,7 +493,7 @@ export class CheckRunner {
           {
             severity: 'error',
             message: `fix failed: ${err instanceof Error ? err.message : String(err)}`,
-            ruleId: check.id,
+            ruleId: attributionOf(check),
           },
         ],
       };
@@ -507,15 +503,15 @@ export class CheckRunner {
   private resolveSkip(env: ICheckRunnerEnv, candidates: readonly ICheck[]): Set<string> {
     const raw = (env.skip ?? '').trim();
     if (raw === '') return new Set();
-    if (env.ci) return new Set(); // a skip that reaches the arbiter is a hole
+    if (env.ci) return new Set(); // a skip that reaches CI is a hole
     if (raw.toLowerCase() === 'all') return new Set(candidates.map((c) => c.id));
     const wanted = raw
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
-    const unknown = wanted.filter((id) => !this.registry.byId(id));
+    const unknown = wanted.filter((id) => !this.roster.byId(id));
     if (unknown.length > 0) {
-      const ids = this.registry.all().map((check) => check.id);
+      const ids = this.roster.all().map((check) => check.id);
       throw new RunnerUsageError(
         `unknown check id(s) in skip: ${unknown.map((id) => `${id}${didYouMean(id, ids)}`).join(', ')}`,
       );
@@ -572,7 +568,7 @@ export class CheckRunner {
       while (flushed < slots.length && slots[flushed] !== undefined) {
         // A skipped check is reported like any other — it was never announced as
         // STARTED, which is right, but withholding its result left the reporter unable
-        // to name a single skipped gate. Same rule as the serial path.
+        // to name a single skipped check. Same rule as the serial path.
         this.reporter.checkFinished(slots[flushed] as ICheckResult);
         flushed++;
       }
@@ -665,7 +661,7 @@ export class CheckRunner {
           {
             severity: 'error',
             message: `${check.id} declares capability ${forbidden.join(', ')}, which this repository denies (denyCapabilities). It was not run.`,
-            ruleId: check.id,
+            ruleId: attributionOf(check),
           },
         ],
       },
@@ -679,7 +675,7 @@ export class CheckRunner {
     changed: readonly string[] | undefined,
   ): Promise<ICheckResult> {
     const stored = check.ratchet ? this.adapters.ratchets.read(check.ratchet.id)?.value : undefined;
-    const context = buildContext(check, this.adapters, changed ?? [], options.shard, stored, () => this.registry.all());
+    const context = buildContext(check, this.adapters, changed ?? [], options.shard, stored, () => this.roster.all());
     const startedAt = this.adapters.clock.monotonicMs();
     const verdict = await this.execute(check, context);
     return resultOf(check, verdict, this.adapters.clock.monotonicMs() - startedAt);

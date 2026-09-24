@@ -17,7 +17,7 @@ import {
 } from '../../../domain';
 import { InMemoryFileSource, SystemClock } from '../../../infrastructure';
 import type { IEngineAdapters } from '../../container';
-import { CheckRegistry } from '../../container/check-registry/check-registry.service';
+import { CheckRoster } from '../../container/check-roster/check-roster.service';
 
 export function vcsWith(changed: readonly string[] | undefined, lines?: number): IVcs {
   return {
@@ -78,13 +78,14 @@ export function check(over: Partial<ICheck> & { verdict?: IVerdict } = {}): IChe
     capabilities: over.capabilities ?? [],
     contractVersion: CHECK_CONTRACT_VERSION,
     advisory: over.advisory,
+    rule: over.rule,
     when: over.when ?? (() => true),
     run: over.run ?? (() => verdict),
   };
 }
 
-export function registryOf(checks: readonly ICheck[]): CheckRegistry {
-  const reg = new CheckRegistry();
+export function rosterOf(checks: readonly ICheck[]): CheckRoster {
+  const reg = new CheckRoster();
   reg.registerAll(checks);
   return reg;
 }

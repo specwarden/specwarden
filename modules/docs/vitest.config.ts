@@ -26,7 +26,7 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   test: {
-    // `_playground/*.spec.ts` and not `**`: a template's playground holds a stranger's
+    // `_playground/*.spec.ts` and not `**`: a template's playground holds a consumer's
     // repository, and nothing in it is this package's test.
     include: ['src/**/*.spec.ts', '_playground/*.spec.ts'],
     environment: 'node',
@@ -34,7 +34,7 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**/*.ts'],
       // A spec and its helpers are the instrument, not the subject: counted, they
-      // report themselves as covered and lift the number that gates real code.
+      // report themselves as covered and lift the number that judges real code.
       exclude: ['src/**/*.spec.ts', 'src/**/*.spec-helpers.ts'],
       reporter: ['text-summary', 'json-summary'],
       thresholds: { statements: 98, branches: 96, functions: 99, lines: 99 },

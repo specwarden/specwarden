@@ -1,5 +1,5 @@
 /**
- * The template playgrounds: one stranger's repository per template, inside the template's
+ * The template playgrounds: one consumer's repository per template, inside the template's
  * own package, with the tree `init` wrote into it committed beside it.
  *
  * ```
@@ -29,9 +29,9 @@
  *
  * ## What is checked, and where
  *
- * - HERE (`verify`, the `playgrounds` gate): the committed `.specwarden/` is exactly what
+ * - HERE (`verify`, the `playgrounds` check): the committed `.specwarden/` is exactly what
  *   `init` writes into that repository today.
- * - IN `playground.spec.ts` (the `unit` gate): the repository is green under `check --all`
+ * - IN `playground.spec.ts` (the `unit` check): the repository is green under `check --all`
  *   with nothing edited, and the same repository with one defect per check is red for
  *   EVERY check the template wrote — so no generated check can be one that cannot fail.
  *
@@ -58,7 +58,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { HARNESS_CHECK_IDS } from 'specwarden';
+import { SELF_CHECK_IDS } from 'specwarden';
 
 import { PACKAGES, pkgDeps, pkgDir, pkgName } from './registry.mjs';
 
@@ -74,7 +74,7 @@ export const playgroundDir = (pkg) => join(ROOT, pkgDir(pkg), '_playground');
 export const repositoryDir = (pkg) => join(playgroundDir(pkg), 'repository');
 
 /** The CLI, run out of this repository rather than an installed copy. */
-const WARDEN = join(ROOT, 'core', 'bin', 'warden.mjs');
+const ENGINE = join(ROOT, 'core', 'bin', 'specwarden.mjs');
 
 /** What a tree walk never descends into: installed packages and a checkout's own git. */
 const NEVER = new Set(['node_modules', '.git']);
@@ -104,7 +104,7 @@ export function treeOf(dir, { skip = [] } = {}) {
  * because on Windows a bare `bash` is often WSL's launcher and a wrapped `npm test` then ran
  * inside Linux. The engine resolves Git's own bash itself now (`resolveShell`), and a
  * playground run from PowerShell is how that resolution is proved — a PATH arranged here
- * would prove only that the harness had arranged it.
+ * would prove only that the proof had arranged it.
  */
 export function playgroundEnv() {
   // NODE_PATH is dropped. pnpm's bin shim exports it pointing at the workspace's own
@@ -248,8 +248,8 @@ function installWithPnpm(dir, source) {
 export const removeScratch = (dir) => rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
 
 /** Run the CLI in `dir`. Never throws on a non-zero exit: the exit IS the answer. */
-export function warden(dir, args, { timeoutSec = 300, input } = {}) {
-  const r = spawnSync(process.execPath, [WARDEN, ...args], {
+export function specwarden(dir, args, { timeoutSec = 300, input } = {}) {
+  const r = spawnSync(process.execPath, [ENGINE, ...args], {
     cwd: dir,
     input,
     encoding: 'utf8',
@@ -265,7 +265,7 @@ export function warden(dir, args, { timeoutSec = 300, input } = {}) {
  * whose exit is 1 is a finding about the engine rather than about the tree.
  */
 export function verdictsIn(dir) {
-  const run = warden(dir, ['check', '--all', '--json']);
+  const run = specwarden(dir, ['check', '--all', '--json']);
   let parsed;
   try {
     parsed = JSON.parse(run.stdout);
@@ -284,19 +284,19 @@ export function verdictsIn(dir) {
 /**
  * The checks a TEMPLATE wrote, out of everything a run reported.
  *
- * The rest are the harness auditing itself, and the engine publishes their ids. Asked of
- * the engine rather than listed here: a list kept by hand goes stale the day a harness
- * check is added, and every playground would then demand a defect for a check it never
+ * The rest are the self-checks, and the engine publishes their ids. Asked of
+ * the engine rather than listed here: a list kept by hand goes stale the day a self-check
+ * is added, and every playground would then demand a defect for a check it never
  * wrote.
  */
-export const writtenByTemplate = (ids) => ids.filter((id) => !HARNESS_CHECK_IDS.includes(id));
+export const writtenByTemplate = (ids) => ids.filter((id) => !SELF_CHECK_IDS.includes(id));
 
 /** What `init --template <name>` writes into this template's repository today, as
  * path → contents under `.specwarden/`. */
 export function freshConfig(pkg) {
   const dir = scratchRepository(pkg, { withConfig: false });
   try {
-    const run = warden(dir, ['init', '--template', pkg.slug]);
+    const run = specwarden(dir, ['init', '--template', pkg.slug]);
     if (run.status !== 0)
       throw new Error(`init --template ${pkg.slug} exited ${run.status}:\n${run.stdout}${run.stderr}`);
     const out = new Map();

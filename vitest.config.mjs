@@ -5,12 +5,12 @@ import { defineConfig } from 'vitest/config';
  *
  * They live at the root rather than in a package: they are never published, and the
  * workspace buckets hold packages only. `pnpm -r` therefore never reaches them, so the
- * `scripts-unit` gate runs this config separately.
+ * `scripts-unit` check runs this config separately.
  *
  * `include` is PINNED, and the reason is the defect this file was written to close. There
  * was no config here, so `vitest run` at the root fell back to its default glob and
  * collected every `*.spec.ts` in every package — 92 files, 892 tests, all green — while
- * not one script had a test. The gate titled "the repository's own guard scripts are
+ * not one script had a test. The check titled "the repository's own guard scripts are
  * tested" passed on that for as long as it existed.
  */
 export default defineConfig({

@@ -46,7 +46,7 @@ export function belowCorpusFloor(
               'Point the pathspec at where the files are, or declare `corpus: { atLeast: 0 }` if an empty set is expected.'),
       },
     ],
-    ratchet: { value: 0 },
+    measured: 0,
   };
 }
 

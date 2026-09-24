@@ -14,8 +14,8 @@ export const docSymbolsExamplePart = (ctx: ITemplateContext): IPart => ({
       path: 'checks/docs/doc-symbols.check.mjs.example',
       body: `${header(
         '`doc-symbols` — documentation names no class that no longer exists.',
-        `OFF until \`suffixes\` are the endings that make a word a symbol HERE — the four below are a
-guess — and \`code\` is where they are declared. Outside TypeScript, pass \`declaration\`.
+        `Switched off until \`suffixes\` are the endings that make a word a symbol HERE — the four
+below are a guess — and \`code\` is where they are declared. Outside TypeScript, pass \`declaration\`.
 ${switchOn('doc-symbols')}`,
       )}
 import { docSymbols } from '@specwarden/docs';

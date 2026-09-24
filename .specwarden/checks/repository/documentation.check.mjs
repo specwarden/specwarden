@@ -3,7 +3,7 @@
  * three that rot: the router mirror, the shipped skills, and the scaffolded playgrounds.
  *
  * Each is written for somebody else — an agent that loads `CLAUDE.md`, an agent that
- * installed a plugin, a stranger who ran `init` once. None of them can tell us it broke.
+ * installed a plugin, a consumer who ran `init` once. None of them can tell us it broke.
  */
 import { defineCheck, fromResult } from 'specwarden';
 
@@ -31,7 +31,7 @@ export const checks = [
   }),
 
   /**
-   * The skills gate spawns nothing and reads a lot; the playgrounds gate scaffolds eight
+   * The `skills` check spawns nothing and reads a lot; the `playgrounds` check scaffolds eight
    * repositories and runs the engine over each. They are wrapped through `fromResult`
    * because both scripts already return a list of human strings, which is exactly the
    * shape that adapter exists to carry — rewriting them to build findings by hand is

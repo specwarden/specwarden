@@ -1,6 +1,6 @@
 # @specwarden/template-docs-only
 
-⚒ **template** — A repository whose product IS documentation.
+⚒ **template** — A repository whose product is documentation — paths, hygiene, counts, placement.
 
 Every documentation check the docs module has, and nothing that assumes code.
 
@@ -11,7 +11,7 @@ A starting tree for one kind of repository, so day one is one command rather tha
 ## Install
 
 ```bash
-npm install @specwarden/template-docs-only specwarden
+pnpm add -D specwarden @specwarden/template-docs-only @specwarden/docs
 ```
 
 It depends on [`specwarden`](https://github.com/specwarden/specwarden/tree/main/core#readme), [`@specwarden/scaffold-parts`](https://github.com/specwarden/specwarden/tree/main/templates/_parts#readme), [`@specwarden/docs`](https://github.com/specwarden/specwarden/tree/main/modules/docs#readme).

@@ -36,7 +36,7 @@ function run(check: ICheck, files: InMemoryFileSource, proc?: (cmd: string) => I
 }
 
 describe('siblingRequired', () => {
-  const check = siblingRequired({ ...ID, subjects: 'server/src/**/*.service.ts', require: '{name}.spec.ts' });
+  const check = siblingRequired({ ...ID, files: 'server/src/**/*.service.ts', require: '{name}.spec.ts' });
   it('fails when a service has no spec beside it', () => {
     const v = run(check, new InMemoryFileSource({ 'server/src/a.service.ts': '' }));
     expect(v.ok).toBe(false);
@@ -52,7 +52,7 @@ describe('siblingRequired', () => {
 describe('forbidImport', () => {
   const check = forbidImport({
     ...ID,
-    from: 'server/src/modules/**',
+    files: 'server/src/modules/**',
     to: 'drizzle-orm',
     except: ['server/src/modules/**/repositories/**'],
   });
@@ -77,7 +77,7 @@ describe('forbidImport', () => {
     ).toBe(true);
   });
   it('a violation within the ratchet passes, keeps the error finding, and frames it as tolerated', () => {
-    const ratcheted = forbidImport({ ...ID, from: 'server/src/modules/**', to: 'drizzle-orm', ratchet: 1 });
+    const ratcheted = forbidImport({ ...ID, files: 'server/src/modules/**', to: 'drizzle-orm', ratchet: 1 });
     const v = run(
       ratcheted,
       new InMemoryFileSource({ 'server/src/modules/x/x.service.ts': "import { sql } from 'drizzle-orm';\n" }),
@@ -96,7 +96,12 @@ describe('forbidPattern', () => {
   // A synthetic token, not a real-secret shape — the primitive's job is to catch a
   // pattern; using an AWS-key-shaped fixture would (rightly) trip the repo's own
   // secret scanner on this very test file.
-  const check = forbidPattern({ ...ID, in: '**/*.ts', pattern: /BANNED-[0-9]{4}/, message: 'banned token: {match}' });
+  const check = forbidPattern({
+    ...ID,
+    files: '**/*.ts',
+    pattern: /BANNED-[0-9]{4}/,
+    message: 'banned token: {match}',
+  });
   it('fails on a match', () => {
     const v = run(check, new InMemoryFileSource({ 'a.ts': 'const k = "BANNED-1234";\n' }));
     expect(v.ok).toBe(false);
@@ -104,7 +109,7 @@ describe('forbidPattern', () => {
   });
   it('passes clean source, and honours allow for a lookalike', () => {
     expect(run(check, new InMemoryFileSource({ 'a.ts': 'const k = "fine";\n' })).ok).toBe(true);
-    const allowed = forbidPattern({ ...ID, in: '**/*.ts', pattern: /BANNED-[0-9]{4}/, allow: /BANNED-0000/ });
+    const allowed = forbidPattern({ ...ID, files: '**/*.ts', pattern: /BANNED-[0-9]{4}/, allowMatch: /BANNED-0000/ });
     expect(run(allowed, new InMemoryFileSource({ 'a.ts': 'BANNED-0000\n' })).ok).toBe(true);
   });
 });
@@ -122,7 +127,7 @@ describe('mustDeclare', () => {
 });
 
 describe('pathContract', () => {
-  const check = pathContract({ ...ID, kind: '**/*_MODULE.md', allowedIn: ['server/src/**'] });
+  const check = pathContract({ ...ID, files: '**/*_MODULE.md', allowedIn: ['server/src/**'] });
   it('fails for a file of the kind outside its contract', () => {
     const v = run(check, new InMemoryFileSource({ 'docs/FOO_MODULE.md': '' }));
     expect(v.ok).toBe(false);
@@ -133,7 +138,7 @@ describe('pathContract', () => {
 });
 
 describe('referencesResolve', () => {
-  const check = referencesResolve({ ...ID, in: 'docs/*.md', extract: /\]\(([^)]+\.md)\)/g });
+  const check = referencesResolve({ ...ID, files: 'docs/*.md', extract: /\]\(([^)]+\.md)\)/g });
   it('fails on a link that does not resolve', () => {
     const v = run(check, new InMemoryFileSource({ 'docs/a.md': 'see [b](docs/missing.md)\n' }));
     expect(v.ok).toBe(false);
@@ -145,7 +150,7 @@ describe('referencesResolve', () => {
 });
 
 describe('regenerable', () => {
-  const check = regenerable({ ...ID, artifact: 'CLAUDE.md', by: 'node build-router.mjs' });
+  const check = regenerable({ ...ID, artifact: 'CLAUDE.md', cmd: 'node build-router.mjs' });
   it('fails when the artifact differs from the generator output', () => {
     const v = run(check, new InMemoryFileSource({ 'CLAUDE.md': 'stale\n' }), () => ({
       status: 0,
@@ -207,7 +212,7 @@ describe('a factory carries the relevance it was given', () => {
   const id = { id: 'x', title: 'x', tier: 'fast' as const };
 
   it('honours a declarative when', () => {
-    const check = forbidImport({ ...id, when: { under: ['src/'] }, from: 'src/**/*.ts', to: 'x' });
+    const check = forbidImport({ ...id, when: { under: ['src/'] }, files: 'src/**/*.ts', to: 'x' });
 
     expect(check.when(['src/a.ts'])).toBe(true);
     expect(check.when(['docs/a.md'])).toBe(false);
@@ -217,7 +222,7 @@ describe('a factory carries the relevance it was given', () => {
     const check = forbidPattern({
       ...id,
       when: (c: readonly string[]) => c.includes('x'),
-      in: '**/*.ts',
+      files: '**/*.ts',
       pattern: /x/,
       message: 'm',
     });
@@ -227,19 +232,66 @@ describe('a factory carries the relevance it was given', () => {
   });
 
   it('is always relevant when none was given — the conservative answer', () => {
-    expect(siblingRequired({ ...id, subjects: '**/*.ts', require: '{name}.spec.ts' }).when(['anything'])).toBe(true);
+    expect(siblingRequired({ ...id, files: '**/*.ts', require: '{name}.spec.ts' }).when(['anything'])).toBe(true);
   });
 
   it('applies to every factory, not the one that happened to be fixed', () => {
     const cases = [
-      forbidImport({ ...id, when: { under: ['a/'] }, from: 'a/**', to: 'x' }),
-      siblingRequired({ ...id, when: { under: ['a/'] }, subjects: 'a/**', require: '{name}.spec.ts' }),
-      pathContract({ ...id, when: { under: ['a/'] }, kind: 'a/**', allowedIn: ['a/**'] }),
+      forbidImport({ ...id, when: { under: ['a/'] }, files: 'a/**', to: 'x' }),
+      siblingRequired({ ...id, when: { under: ['a/'] }, files: 'a/**', require: '{name}.spec.ts' }),
+      pathContract({ ...id, when: { under: ['a/'] }, files: 'a/**', allowedIn: ['a/**'] }),
     ];
 
     for (const check of cases) {
       expect(check.when(['a/x.ts']), check.id).toBe(true);
       expect(check.when(['b/x.ts']), check.id).toBe(false);
     }
+  });
+});
+
+/**
+ * One corpus, one spelling: `files` — a pathspec or several — and `except`, on every
+ * primitive that reads files. Five spellings (`in`, `from`, `subjects`, `kind`, `files`)
+ * named one thing, and three primitives had no `except` at all, so a generated or vendored
+ * file could only be left out by rewriting the pathspec around it.
+ */
+describe('every file-reading primitive takes `files` as a list, and `except`', () => {
+  const tree = () =>
+    new InMemoryFileSource({
+      'a/one.md': 'BAD [x](gone.md)',
+      'b/two.md': 'BAD [x](gone.md)',
+      'b/vendor.md': 'BAD [x](gone.md)',
+    });
+  const files = ['a/*.md', 'b/*.md'];
+  const except = ['b/vendor.md'];
+  const flagged = (check: ICheck) =>
+    run(check, tree())
+      .findings.filter((f) => f.severity === 'error')
+      .map((f) => f.file);
+
+  it.each([
+    ['forbidPattern', () => forbidPattern({ ...ID, files, except, pattern: /BAD/ })],
+    ['forbidImport', () => forbidImport({ ...ID, files, except, to: 'x' })],
+    ['referencesResolve', () => referencesResolve({ ...ID, files, except, extract: /\]\(([^)]+)\)/ })],
+    ['mustDeclare', () => mustDeclare({ ...ID, files, except, fields: [{ name: 'Owner', pattern: /Owner/ }] })],
+    ['pathContract', () => pathContract({ ...ID, files, except, allowedIn: ['c/**'] })],
+    ['siblingRequired', () => siblingRequired({ ...ID, files, except, require: '{name}.test.md' })],
+  ])('%s reads both pathspecs and leaves the exempt file out', (name, build) => {
+    const check = build();
+    const got = flagged(check);
+    if (name === 'forbidImport') expect(run(check, tree()).ok, name).toBe(true);
+    else expect(got, name).toEqual(['a/one.md', 'b/two.md']);
+  });
+
+  it('refuses an empty `files` list at load — a scan of nothing reports success', () => {
+    expect(() => forbidPattern({ ...ID, files: [], pattern: /x/ })).toThrow(
+      "forbidPattern 'r': `files` is empty, which selects nothing to check",
+    );
+  });
+
+  it('names every pathspec when the list matched nothing', () => {
+    const verdict = run(forbidPattern({ ...ID, files: ['x/**', 'y/**'], pattern: /x/ }), tree());
+    expect(verdict.ok).toBe(false);
+    expect(verdict.findings[0].message).toContain('`x/**`, `y/**` matched nothing to scan');
   });
 });

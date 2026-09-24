@@ -13,7 +13,7 @@ step 1 comes before any code.
 ## 1. Decide, before writing
 
 - **Which package?** "If a check could be wrong about a repository that has never heard of
-  it, it is an opinion and it ships as a module." Nothing a house could disagree with goes
+  it, it is an opinion and it ships as a module." Nothing a consumer could disagree with goes
   in `core/`. `skills/structure/SKILL.md` §1.
 - **Is it a promise at all?** A shape still settling ships behind an option whose default is
   today's behaviour, or not at all.

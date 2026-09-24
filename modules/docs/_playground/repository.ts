@@ -51,3 +51,10 @@ export const BROKEN: Record<string, string> = {
 
 /** The factories this playground claims to exercise — the five checks and the preset. */
 export const COVERED = ['docPaths', 'docSymbols', 'docCounts', 'docPlacement', 'docHygiene', 'docsChecks'];
+
+/**
+ * What every export is probed with to tell a factory from a helper: nothing. A factory
+ * builds a check from it or refuses it by name; a helper — `claimPattern`, `scanCounts` —
+ * fails some other way, which is the answer "not a factory".
+ */
+export const PROBE = {};

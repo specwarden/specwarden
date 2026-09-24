@@ -77,7 +77,7 @@ describe('every path is an option, because layouts move', () => {
       '.specify/features/alpha/requirements.md': '- **NFR-9**: it MUST be fast',
       '.specify/features/alpha/todo.md': '- [ ] measure it',
     });
-    const source = speckit({ root: '.specify/features', specFile: 'requirements.md', tasksFile: 'todo.md' });
+    const source = speckit({ featuresDir: '.specify/features', specFile: 'requirements.md', tasksFile: 'todo.md' });
     expect(source.requirements(files).items[0]).toEqual({ id: 'alpha#NFR-9', statement: 'it MUST be fast' });
     expect(source.tasks(files).items[0].title).toBe('measure it');
   });
@@ -152,5 +152,37 @@ describe('task numbering', () => {
 describe('speckit — its options', () => {
   it('refuses an option it does not have, by name, when the config loads', () => {
     expect(() => speckit({ task: 'tasks.md' } as never)).toThrow('`task` is not an option of speckit');
+    expect(() => speckit({ root: 'specs' } as never)).toThrow('`root` is not an option of speckit');
+  });
+
+  it('refuses the identity a check takes, an empty path and a pattern given as a string', () => {
+    expect(() => speckit({ tier: 'fast' } as never)).toThrow('`tier` is not an option of speckit');
+    expect(() => speckit({ featuresDir: '' })).toThrow('`featuresDir` is empty');
+    expect(() => speckit({ requirementPattern: 'FR-' } as never)).toThrow('`requirementPattern` must be a RegExp');
+  });
+
+  it('takes the requirement grammar a house writes — the id first, then the statement', () => {
+    // OpenSpec's source let a consumer change its grammar and this one did not: a house
+    // numbering `REQ-1` had no requirement read, and nothing to set.
+    const files = new InMemoryFileSource({ 'specs/001-x/spec.md': 'REQ-1 :: the system MUST do it\n' });
+
+    expect(speckit().requirements(files).items).toEqual([]);
+    expect(speckit().requirements(files).note).toContain('Pass `requirementPattern`');
+    expect(speckit({ requirementPattern: /^(REQ-\d+)\s*::\s*(.+)$/ }).requirements(files).items).toEqual([
+      { id: '001-x#REQ-1', statement: 'the system MUST do it' },
+    ]);
+  });
+
+  it('reads EVERY line with a `/g` grammar, not every second one', () => {
+    const files = new InMemoryFileSource({
+      'specs/001-x/spec.md': ['- **FR-001**: one', '- **FR-002**: two', '- **FR-003**: three'].join('\n'),
+    });
+    const re = /^\s*-\s*\*\*([A-Z]+-\d+)\*\*:\s*(.+)$/g;
+
+    expect(
+      speckit({ requirementPattern: re })
+        .requirements(files)
+        .items.map((r) => r.statement),
+    ).toEqual(['one', 'two', 'three']);
   });
 });

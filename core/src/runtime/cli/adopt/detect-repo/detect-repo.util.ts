@@ -13,9 +13,9 @@ export interface IRepoShape {
   readonly hasAgentRouter: boolean;
   readonly docDirs: readonly string[];
   /**
-   * The CI system, when there is one. A template wiring "every heavy gate has a job"
+   * The CI system, when there is one. A template wiring "every heavy check has a job"
    * needs to know there IS a workflow to reconcile against — written blind, that check
-   * reconciles a gate list against nothing and reports success.
+   * reconciles a check list against nothing and reports success.
    */
   readonly ci?: TCi;
   /** The spec framework in use, when the repository keeps its specs in one. */
@@ -98,7 +98,7 @@ function scriptsOf(files: IFileSource): Record<string, string> {
   }
 }
 
-/** GitHub's workflows, `ci.yml` first because that is the one a gate-coverage check means. */
+/** GitHub's workflows, `ci.yml` first because that is the one a CI-coverage check means. */
 function detectWorkflows(find: (glob: string) => readonly string[]): readonly string[] {
   const github = unique([...find('.github/workflows/*.yml'), ...find('.github/workflows/*.yaml')])
     .slice()

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { CHECK_CONTRACT_VERSION, type ICheck, type IRule, type ISpecSource } from '../../../domain';
-import { CheckRegistry } from '../../container';
-import type { IWardenConfig } from '../../config/config.model';
+import { CheckRoster } from '../../container';
+import type { ISpecwardenConfig } from '../../config/config.model';
 import { doctor } from './doctor.command';
 
 const aCheck = (id: string, over: Partial<ICheck> = {}): ICheck => ({
@@ -19,12 +19,12 @@ const aCheck = (id: string, over: Partial<ICheck> = {}): ICheck => ({
   ...over,
 });
 
-function run(config: IWardenConfig, checks: readonly ICheck[] = []) {
-  const registry = new CheckRegistry();
-  registry.registerAll(checks);
+function run(config: ISpecwardenConfig, checks: readonly ICheck[] = []) {
+  const roster = new CheckRoster();
+  roster.registerAll(checks);
   let out = '';
   let err = '';
-  const code = doctor(config, registry, { out: (t) => (out += t), err: (t) => (err += t) });
+  const code = doctor(config, roster, { out: (t) => (out += t), err: (t) => (err += t) });
   return { code, out, err };
 }
 
@@ -36,7 +36,7 @@ const rule = (id: string, enforcement: IRule['enforcement']): IRule => ({
 });
 
 /**
- * `doctor` answers "is the harness itself wired", which a green gate cannot. Every
+ * `doctor` answers "are the declarations themselves wired", which a green check cannot. Every
  * line is read from declarations and nothing is run — the checks above throw if they
  * are, so a doctor that started executing the roster would fail every test here.
  */
@@ -69,12 +69,12 @@ describe('the roster', () => {
   // It said neither which file to open nor whether a check blocks or needs the machine alone.
   it('marks an advisory and an exclusive check, and names the file a check came from', () => {
     const found = aCheck('found', { advisory: true, exclusive: true });
-    const registry = new CheckRegistry({
+    const roster = new CheckRoster({
       originOf: (c) => (c === found ? '.specwarden/checks/x/found.check.mjs' : undefined),
     });
-    registry.registerAll([found, aCheck('declared')]);
+    roster.registerAll([found, aCheck('declared')]);
     let out = '';
-    doctor({}, registry, { out: (t) => (out += t), err: () => {} });
+    doctor({}, roster, { out: (t) => (out += t), err: () => {} });
     expect(out).toContain(
       'found\tfast\tconsumer\t[—] advisory exclusive\tfound title\t.specwarden/checks/x/found.check.mjs\n',
     );
@@ -115,9 +115,9 @@ describe('rule coverage', () => {
     const r = run(
       {
         rules: [
-          rule('enforced', { checkIds: ['a'] }),
+          rule('enforced', { enforcedBy: ['a'] }),
           rule('reasoned', { notMechanizable: 'branch protection, in the forge' }),
-          rule('debt', { checkIds: [] }),
+          rule('debt', { enforcedBy: [] }),
         ],
       },
       [aCheck('a'), aCheck('orphan')],
@@ -129,7 +129,7 @@ describe('rule coverage', () => {
     expect(r.out).toContain('  not mechanizable (with reason): 1\n');
     expect(r.out).toContain('  unenforced without a reason: 1\n');
     // `orphan` enforces no rule; `a` does. A count that included `a` would report
-    // the harness broken exactly where it is not.
+    // the self-checks broken exactly where they are not.
     expect(r.out).toContain('  checks enforcing no rule (orphans): 1\n');
   });
 
@@ -140,15 +140,15 @@ describe('rule coverage', () => {
 
   // An empty rules.mjs printed "declared: 1, enforced: 1" — a rule nobody could find.
   it("names the engine's own rule beside the count", () => {
-    const harness = rule('harness-integrity', { checkIds: ['a'] });
-    expect(run({ rules: [harness] }, [aCheck('a')]).out).toContain(
-      "  declared: 1 (the engine's own: harness-integrity)\n",
+    const selfRule = rule('self-checks-hold', { enforcedBy: ['a'] });
+    expect(run({ rules: [selfRule] }, [aCheck('a')]).out).toContain(
+      "  declared: 1 (the engine's own: self-checks-hold)\n",
     );
-    expect(run({ rules: [rule('mine', { checkIds: ['a'] })] }, [aCheck('a')]).out).toContain('  declared: 1\n');
+    expect(run({ rules: [rule('mine', { enforcedBy: ['a'] })] }, [aCheck('a')]).out).toContain('  declared: 1\n');
   });
 
   it('a fully covered register does not mask an ownership conflict — the exit code is what CI reads', () => {
-    const r = run({ ownership: { tasks: 'nobody' }, rules: [rule('x', { checkIds: ['a'] })] }, [aCheck('a')]);
+    const r = run({ ownership: { tasks: 'nobody' }, rules: [rule('x', { enforcedBy: ['a'] })] }, [aCheck('a')]);
     expect(r.code).toBe(1);
   });
 });
@@ -156,10 +156,10 @@ describe('rule coverage', () => {
 describe('doctor --json', () => {
   // `--json` was accepted and ignored: the text was all a script had to parse.
   it('is the same report as one document, and runs nothing', () => {
-    const registry = new CheckRegistry({
+    const roster = new CheckRoster({
       originOf: (c) => (c.id === 'a' ? '.specwarden/checks/a.check.mjs' : undefined),
     });
-    registry.registerAll([
+    roster.registerAll([
       aCheck('a', {
         advisory: true,
         capabilities: ['exec'],
@@ -168,8 +168,8 @@ describe('doctor --json', () => {
     ]);
     let out = '';
     const code = doctor(
-      { denyCapabilities: ['exec'], rules: [rule('harness-integrity', { checkIds: ['a'] })] },
-      registry,
+      { denyCapabilities: ['exec'], rules: [rule('self-checks-hold', { enforcedBy: ['a'] })] },
+      roster,
       { out: (t) => (out += t), err: () => {} },
       { json: true },
     );
@@ -194,7 +194,7 @@ describe('doctor --json', () => {
       denyCapabilities: ['exec'],
       rules: {
         declared: 1,
-        engine: ['harness-integrity'],
+        engine: ['self-checks-hold'],
         enforced: 1,
         notMechanizable: 0,
         unenforcedWithoutReason: 0,
@@ -207,7 +207,7 @@ describe('doctor --json', () => {
     let out = '';
     const code = doctor(
       { ownership: { tasks: 'openspec' } },
-      new CheckRegistry(),
+      new CheckRoster(),
       { out: (t) => (out += t), err: () => {} },
       {
         json: true,

@@ -11,8 +11,8 @@ description: Which package a thing belongs in, which folder, which file — and 
 opinion and it ships as a module.**
 
 That is the whole taxonomy. A documentation layout, a plan lifecycle, a compose file, a
-vendor's credential format — each is a house's decision, and a house that disagrees
-should not inherit it. Zones, ratchets, the rule register and the runner are the engine's
+vendor's credential format — each is one repository's decision, and a repository that
+disagrees should not inherit it. Zones, ratchets, the rule register and the runner are the engine's
 own mechanics, and nothing else can own them.
 
 | Kind       | Directory           | Answers                                                              |
@@ -73,7 +73,7 @@ Every package publishes exactly `.` and nothing else. The moment a subpath is ex
 the first consumer reaches for an internal and it becomes unremovable.
 
 The engine's own `public-surface.spec.ts` pins this, and it is a deliberate departure
-from what a framework would do: a framework's consumer wants `pkg/subsystem`, a harness's
+from what a framework would do: a framework's consumer wants `pkg/subsystem`, a check engine's
 consumer wants one import and a config file.
 
 ## 5. Adding a package

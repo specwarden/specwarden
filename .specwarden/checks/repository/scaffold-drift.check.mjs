@@ -2,7 +2,7 @@
  * `scaffold-drift` — every generated file still equals what the registry generates.
  *
  * The logic is `scripts/scaffold.mjs`, which a person also runs directly. This wraps it
- * as a gate so it runs in the same list as everything else, at a tier the engine
+ * as a check so it runs in the same list as everything else, at a tier the engine
  * decides, rather than in a shell chain where the order is whatever somebody typed.
  */
 import { defineCheck } from 'specwarden';

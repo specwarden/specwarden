@@ -18,7 +18,7 @@ The window to unpublish is 72 hours and exists once per version. Stop at any red
 4. **Review the version diff.** Only versions and changelogs should have moved. Then
    `pnpm scaffold` — plugin manifests and the marketplace carry the new numbers — and
    `pnpm gate --id scaffold-drift`.
-5. **`pnpm release`** — the whole list, then the publish-readiness gate with `--releasing`
+5. **`pnpm release`** — the whole list, then the publish-readiness check with `--releasing`
    (which refuses a package still at `0.0.0`), then publish. Add `--otp=<code>` for 2FA.
 
 A changeset describes the change for whoever INSTALLS the package; the commit describes it

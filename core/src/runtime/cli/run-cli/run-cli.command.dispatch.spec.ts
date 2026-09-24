@@ -28,7 +28,7 @@ describe('dispatch on a repository with no config', () => {
   it('init writes the starting tree into the working directory', async () => {
     const cap = captureIo();
     expect(await main(['init'], {}, dir, cap.io)).toBe(0);
-    expect(existsSync(join(dir, '.specwarden', 'warden.config.mjs'))).toBe(true);
+    expect(existsSync(join(dir, '.specwarden', 'config.mjs'))).toBe(true);
     expect(existsSync(join(dir, '.specwarden', 'rules.mjs'))).toBe(true);
     expect(cap.out()).toContain('specwarden init — wrote .specwarden/');
   });
@@ -42,7 +42,7 @@ describe('dispatch on a repository with no config', () => {
 
   it('a second init refuses and leaves the first config byte-identical', async () => {
     await main(['init'], {}, dir, captureIo().io);
-    const config = join(dir, '.specwarden', 'warden.config.mjs');
+    const config = join(dir, '.specwarden', 'config.mjs');
     writeFileSync(config, '// edited by hand\nexport default {};\n');
     const cap = captureIo();
     expect(await main(['init'], {}, dir, cap.io)).toBe(2);
@@ -52,7 +52,7 @@ describe('dispatch on a repository with no config', () => {
 
   it('new scaffolds the check and its test under the consumer folder, in the named family', async () => {
     mkdirSync(join(dir, '.specwarden'));
-    writeFileSync(join(dir, '.specwarden', 'warden.config.mjs'), 'export default {};');
+    writeFileSync(join(dir, '.specwarden', 'config.mjs'), 'export default {};');
     const cap = captureIo();
     expect(await main(['new', 'doc-links', '--family', 'docs'], {}, dir, cap.io)).toBe(0);
     const unit = join(dir, '.specwarden', 'checks', 'docs');
@@ -65,7 +65,7 @@ describe('dispatch on a repository with no config', () => {
     // Otherwise the check lands in `packages/a/.specwarden/checks/`, where the engine —
     // which reads from the root — never discovers it.
     mkdirSync(join(dir, '.specwarden'));
-    writeFileSync(join(dir, '.specwarden', 'warden.config.mjs'), 'export default {};');
+    writeFileSync(join(dir, '.specwarden', 'config.mjs'), 'export default {};');
     const nested = join(dir, 'packages', 'a');
     mkdirSync(nested, { recursive: true });
     expect(await main(['new', 'x-check'], {}, nested, captureIo().io)).toBe(0);

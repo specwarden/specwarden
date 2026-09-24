@@ -7,5 +7,9 @@
  */
 export { secretScan } from './secret-scan/secret-scan.check';
 export type { ISecretScanOptions, ISecretAllowEntry } from './secret-scan/secret-scan.check';
-export { BUILT_IN_SECRET_PATTERNS, DEFAULT_PLACEHOLDER_MARKERS } from './secret-scan/secret-scan.check';
+export {
+  BUILT_IN_SECRET_PATTERNS,
+  DEFAULT_PLACEHOLDER_MARKERS,
+  DEFAULT_SECRET_EXCEPT,
+} from './secret-scan/secret-scan.check';
 export type { ISecretPattern } from './secret-scan/secret-scan.check';

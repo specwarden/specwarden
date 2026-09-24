@@ -54,7 +54,7 @@ export class GithubReporter implements IReporter {
 
   checkFinished(result: ICheckResult): void {
     // A skipped check opened no group, so it closes none. Reported as a plain line so
-    // the log still says the gate existed and did not run.
+    // the log still says the check existed and did not run.
     // A check that ran and could not look DID open a group: its notes go inside it, as
     // plain lines — nothing it says is a defect at a location.
     if (result.skipped === 'cannot-tell') {
@@ -70,7 +70,7 @@ export class GithubReporter implements IReporter {
 
     for (const finding of result.verdict.findings) {
       // An advisory check does not block, so its errors are not errors on the diff: an
-      // `::error` on a green job reads as a gate that failed.
+      // `::error` on a green job reads as a check that failed.
       const level = result.meta.advisory && finding.severity === 'error' ? 'warning' : ANNOTATION[finding.severity];
       if (level === undefined) {
         this.write(`${escapeData(finding.message)}\n`);
@@ -100,14 +100,14 @@ export class GithubReporter implements IReporter {
       // A NOTICE rather than an error: the failures are already annotated one by one,
       // and a second error for the summary would double every count a reader sees.
       this.write(
-        `::notice title=specwarden::${escapeData(`${failed.length} gate(s) failed: ${failed.map((r) => r.meta.id).join(', ')}`)}\n`,
+        `::notice title=specwarden::${escapeData(`${failed.length} check(s) failed: ${failed.map((r) => r.meta.id).join(', ')}`)}\n`,
       );
     } else if (passed + warned === 0 && skipped > 0) {
       this.write(
         `::notice title=specwarden::${escapeData(`nothing ran — ${skipped} skipped, 0 checked, in ${secs}s`)}\n`,
       );
     } else {
-      this.write(`::notice title=specwarden::${escapeData(`${passed} gate(s) passed${aside} in ${secs}s`)}\n`);
+      this.write(`::notice title=specwarden::${escapeData(`${passed} check(s) passed${aside} in ${secs}s`)}\n`);
     }
   }
 }

@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import type { ITemplateContext } from 'specwarden';
 
-import { nodeTs } from './node-ts.template';
+import { nodeTsTemplate } from './node-ts.template';
 
 const ctx = (over: Partial<ITemplateContext> = {}): ITemplateContext => ({
   docs: 'docs/**/*.md',
@@ -17,8 +17,8 @@ const ctx = (over: Partial<ITemplateContext> = {}): ITemplateContext => ({
   ...over,
 });
 
-const paths = (c: ITemplateContext) => nodeTs.files(c).map((f) => f.path);
-const bodyOf = (c: ITemplateContext, path: string) => nodeTs.files(c).find((f) => f.path === path)?.body ?? '';
+const paths = (c: ITemplateContext) => nodeTsTemplate.files(c).map((f) => f.path);
+const bodyOf = (c: ITemplateContext, path: string) => nodeTsTemplate.files(c).find((f) => f.path === path)?.body ?? '';
 
 describe('it emits a tree, not a config', () => {
   it('writes one check file per gate, under a family folder', () => {
@@ -34,7 +34,7 @@ describe('it emits a tree, not a config', () => {
   it('every file exports one check and names no id — discovery names it after its file', () => {
     // The convention the engine discovers by: `<id>.check.mjs` exporting one check is
     // that id. An `id:` restating the file name is a second copy that can disagree.
-    for (const f of nodeTs.files(ctx())) {
+    for (const f of nodeTsTemplate.files(ctx())) {
       // The example names the id its commented rule names, so the two stay linked.
       if (f.path.endsWith('.check.mjs')) expect(f.body).not.toMatch(/^\s+id: '/m);
       else expect(f.body).toContain("  id: 'doc-symbols',");
@@ -43,8 +43,8 @@ describe('it emits a tree, not a config', () => {
   });
 
   it('imports only from the packages it declares it requires', () => {
-    const allowed = new Set(['specwarden', ...(nodeTs.requires as readonly string[])]);
-    for (const f of nodeTs.files(ctx())) {
+    const allowed = new Set(['specwarden', ...(nodeTsTemplate.requires as readonly string[])]);
+    for (const f of nodeTsTemplate.files(ctx())) {
       for (const [, pkg] of f.body.matchAll(/^import .* from '([^']+)';$/gm)) {
         expect(allowed.has(pkg), `${f.path} imports ${pkg}`).toBe(true);
       }
@@ -93,12 +93,12 @@ describe('every generated check carries its rule', () => {
   it('so a fresh tree has no orphan', () => {
     // On the check, owned by its file: a rule in a register far away is a second list
     // kept in step by memory.
-    for (const f of nodeTs.files(ctx()).filter((x) => x.path.endsWith('.check.mjs')))
+    for (const f of nodeTsTemplate.files(ctx()).filter((x) => x.path.endsWith('.check.mjs')))
       expect(f.body, `${f.path} states no rule`).toMatch(/^\s+rule: '/m);
   });
 
   it("and the register holds only the example's rule, for init to write commented out", () => {
-    expect(nodeTs.rules(ctx()).map((r) => r.id)).toEqual(['doc-symbols']);
+    expect(nodeTsTemplate.rules(ctx()).map((r) => r.id)).toEqual(['doc-symbols']);
   });
 
   it('and every rule names a check the template actually writes', () => {
@@ -110,15 +110,15 @@ describe('every generated check carries its rule', () => {
           ?.replace(/\.check\.mjs(\.example)?$/, ''),
       ),
     );
-    for (const rule of nodeTs.rules(ctx())) {
-      for (const id of (rule.enforcement as { checkIds: readonly string[] }).checkIds) {
+    for (const rule of nodeTsTemplate.rules(ctx())) {
+      for (const id of (rule.enforcement as { enforcedBy: readonly string[] }).enforcedBy) {
         expect(ids.has(id), `rule ${rule.id} names ${id}, which is not written`).toBe(true);
       }
     }
   });
 
   it('leaves the owner for init to fill — it knows which file it wrote holds the reasoning', () => {
-    for (const rule of nodeTs.rules(ctx())) expect(rule.owner).toBe('');
+    for (const rule of nodeTsTemplate.rules(ctx())) expect(rule.owner).toBe('');
   });
 });
 
@@ -139,11 +139,11 @@ describe('a wrapper is written only when the script exists', () => {
   });
 
   it('and each wrapper carries its own rule, so a missing script takes its rule with it', () => {
-    const files = nodeTs.files(ctx({ scripts: ['test'] }));
+    const files = nodeTsTemplate.files(ctx({ scripts: ['test'] }));
     expect(files.find((f) => f.path.endsWith('unit.check.mjs'))?.body).toContain(
       "rule: 'Nothing merges while the test suite is red.'",
     );
-    expect(nodeTs.rules(ctx({ scripts: [] })).map((r) => r.id)).toEqual(['doc-symbols']);
+    expect(nodeTsTemplate.rules(ctx({ scripts: [] })).map((r) => r.id)).toEqual(['doc-symbols']);
   });
 });
 
@@ -162,7 +162,7 @@ afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
 describe('the generated tree actually loads', () => {
   it('every live check and every example, renamed, imports and constructs a check', async () => {
-    const files = nodeTs.files(ctx()).filter((f) => /\.check\.mjs(\.example)?$/.test(f.path));
+    const files = nodeTsTemplate.files(ctx()).filter((f) => /\.check\.mjs(\.example)?$/.test(f.path));
     expect(files.length).toBeGreaterThan(0);
 
     for (const file of files) {

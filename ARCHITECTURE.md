@@ -1,12 +1,12 @@
 # specwarden
 
-The quality-gate harness, as a small monorepo: an ENGINE that knows nothing about any
+specwarden as a small monorepo: a quality-gate ENGINE that knows nothing about any
 repository, and packages beside it that know one thing each.
 
 ```
 specwarden/
   core/            the engine — ports, primitives, the runner, the CLI, and only the
-                   checks that verify the harness ITSELF (zones, ratchets, the rules)
+                   self-checks, which audit the declarations (zones, ratchets, the rules)
   modules/         optional functionality a repository chooses
     docs/          documentation: paths, symbols, counts, placement, hygiene
     plans/         plans and decision logs — one way of working, not the only one
@@ -43,8 +43,8 @@ green, which is the failure this engine exists against. `init` lists those files
 separately so they are a decision rather than something somebody finds in six months.
 
 A template is a list of DECISIONS, not four hundred lines of generated prose. The pieces
-themselves live once, in `templates/_parts/`: a part is one check — the file that
-configures it, the rule that file enforces, and where one is needed the config field that
+themselves live once, in `templates/_parts/`: a part is the check or checks it writes — the
+files that configure them, the rules those files enforce, and where one is needed the config field that
 makes the two resolve. A template composes parts and phrases what is different about
 them here, because "why this check earns its place" is genuinely not the same sentence in
 a handbook and in a repository agents work in. `_parts` is a build-time dependency of the
@@ -73,7 +73,7 @@ exactly that check to go red; `_playgrounds/README.md` lists what that found on 
 **What decides where a check goes:** if it could be WRONG about a repository that has
 never heard of it, it is an opinion and it ships as a module. A documentation layout, a
 plan lifecycle, a compose file, a vendor's credential format — every one of those is a
-house's decision. Zones, ratchets and the rule registry are the engine's own mechanics,
+repository's own decision. Zones, ratchets and the rule register are the engine's own mechanics,
 and nothing else can own them.
 
 That test is why `modules/` exists at all. The engine used to hold nineteen checks, and
@@ -82,16 +82,16 @@ not use, an English hedging vocabulary, and a TypeScript declaration grammar. No
 that was wrong; all of it was someone else's opinion arriving unasked.
 
 Everything that knows THIS repository lives outside this folder, in `.specwarden/` at the
-root: the gate list, the check bodies configured with local facts, the declared rules, the
+root: the check list, the check bodies configured with local facts, the declared rules, the
 perimeter and the ratchets. `.specwarden/README.md` states that boundary from the other side.
 
 ## Why it is shaped this way
 
 The split is not tidiness — it is the difference between a rule and a repository. "Every
-heavy gate has a CI job" is true of any project with a gate list and a CI; "the workflow is
-`ci.yml` and the arbiter is `ci-ok`" is true of exactly one. Keeping the first in `core/`
+heavy check has a CI job" is true of any project with a check list and a CI; "the workflow
+is `ci.yml` and the required job is `ci-ok`" is true of exactly one. Keeping the first in `core/`
 and the second in a consumer's config is what makes the first REUSABLE, and it is enforced
-rather than trusted: the `zone-boundary` check fails a product source that names a host
+rather than trusted: the `zone-boundary` check fails a product source that names a consumer
 literal — a workspace path, an ORM, a domain noun — anywhere, comments included.
 
 A plugin sits between the two. NestJS conventions are not this project's and not the
@@ -99,10 +99,10 @@ engine's: any codebase drawing the line "a module reaches the database through a
 wants the same check, and only the module root and the ORM name differ. So a plugin
 DECLARES checks built from the engine's primitives, takes what varies as options, and never
 supplies a port adapter — the loader refuses one, because a plugin that could reach the
-filesystem itself would be a way around the capability gating that makes installing someone
+filesystem itself would be a way around the capabilities that make installing someone
 else's check safe at all.
 
-A debt ratchet is likewise the consumer's: the plugin takes an id, the host owns the file
+A debt ratchet is likewise the consumer's: the plugin takes an id, the consumer owns the file
 behind it. A plugin shipping a NUMBER would be asserting something about a tree it has
 never seen.
 
@@ -168,7 +168,7 @@ was until you opened it. Those four are gone, and the rules above are what close
 
 | You want                                               | Read                                                                      |
 | ------------------------------------------------------ | ------------------------------------------------------------------------- |
-| how the engine works, and how to add a check or a rule | `core/README.md`                                                          |
+| how the engine works, and how to add a check or a rule | `core/GUIDE.md`                                                           |
 | what a plugin may declare                              | `plugins/nestjs/src/nestjs/nestjs.plugin.ts` — the header is the contract |
 | where a repository's own facts go                      | `.specwarden/README.md`                                                   |
 
@@ -184,20 +184,20 @@ specwarden check --tier fast --all --jobs 4   53s
 specwarden check --tier fast --all --jobs 6   52s
 ```
 
-Measured on this repository, 51 gates, two samples each. Past four lanes the curve is
-flat: what remains is one 46-second gate, and nothing overlaps a critical path.
+Measured on this repository, 51 checks, two samples each. Past four lanes the curve is
+flat: what remains is one 46-second check, and nothing overlaps a critical path.
 
 Three properties are preserved, and each is pinned by a test:
 
 - **The report is identical**, order included. A run whose output order shifted between
   runs could not be diffed against another, which is the cheapest debugging tool this
-  output has. Results are flushed in registry order as their prefix completes, so work
+  output has. Results are flushed in roster order as their prefix completes, so work
   still starts as early as a lane allows and only the SPEAKING is ordered.
 - **A writing run stays serial.** `--fix` and `--tighten` ignore concurrency: a
   concurrent writer is a corruption nobody would trace back to a flag.
 - **Isolation is declared, not assumed.** A check that cannot share the machine sets
   `exclusive`. This is not hypothetical — at six lanes a suite spawning a process per
-  file failed two runs out of three, with no message naming a cause, and a gate that
+  file failed two runs out of three, with no message naming a cause, and a check that
   fails only sometimes teaches a team to re-run rather than to read.
 
 The default is 1. Concurrency is opt-in because the promise it makes on a check's
@@ -205,7 +205,8 @@ behalf — that the check is isolated — is not the engine's to make.
 
 ## Build and test
 
-Each package builds and tests on its own (`pnpm --dir packages/specwarden/core run build`,
-`pnpm --dir packages/specwarden/plugins/nestjs test`). Both are covered by the
-`lint-specwarden` and `specwarden-unit` gates, which name them explicitly — a package with
-no gate is a package nobody checks, and this repository has paid for that shape before.
+Each package builds and tests on its own (`pnpm --dir core run build`,
+`pnpm --dir plugins/nestjs test`). Every package is covered by this repository's `lint`,
+`typecheck` and `unit` checks, which reach each one through `pnpm -r` and refuse a
+selection that matched no package — a package no check reaches is a package nobody
+checks, and this repository has paid for that shape before.

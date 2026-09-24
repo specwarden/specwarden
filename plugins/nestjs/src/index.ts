@@ -5,5 +5,5 @@
  * stays the only file a consumer's import path depends on — and adding a second
  * NestJS rule means a sibling folder, not a longer index.
  */
-export { DEFAULT_ALLOWED_FROM, nestjs } from './nestjs/nestjs.plugin';
+export { DEFAULT_NESTJS_EXCEPT, NESTJS_DB_ACCESS_ID, nestjs } from './nestjs/nestjs.plugin';
 export type { INestjsOptions } from './nestjs/nestjs.plugin';

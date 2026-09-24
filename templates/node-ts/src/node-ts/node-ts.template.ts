@@ -15,7 +15,7 @@ import {
  * doc-path check, because the commonest way documentation rots is a file moving while
  * the prose does not. Lint and test as wrapped commands — when the manifest declares
  * them — because every repository of this kind already has both, and running them
- * through the harness is what puts them in one tier with everything else.
+ * as checks is what puts them in one tier with everything else.
  *
  * WHAT IT LEAVES OUT, deliberately. No count check — its vocabulary is English. No plan
  * or decision checks — those assume a way of working. The symbol check ships as an
@@ -30,9 +30,9 @@ import {
 const assembled = (ctx: ITemplateContext) =>
   compose(secretScanPart(ctx), docPathsPart(ctx), docSymbolsExamplePart(ctx), scriptWrappersPart(ctx));
 
-export const nodeTs: ITemplate = {
+export const nodeTsTemplate: ITemplate = {
   name: 'node-ts',
-  describe: 'an ordinary TypeScript repository — credential scan, doc paths and symbols, lint and tests',
+  describe: 'An ordinary TypeScript repository — credential scan, doc paths and symbols, lint and tests.',
   requires: ['@specwarden/security', '@specwarden/docs'],
 
   files: (ctx: ITemplateContext): readonly ITemplateFile[] => assembled(ctx).files,

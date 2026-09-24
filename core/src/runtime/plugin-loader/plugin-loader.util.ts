@@ -20,7 +20,7 @@ export interface ILoadedPlugins {
  * Collect the declarations a set of plugins contributes, enforcing the contract:
  * a plugin may only declare, never supply an adapter. The checks come back in
  * plugin order for a stable manifest; duplicate ids across plugins and the config
- * are caught later, by the registry.
+ * are caught later, by the roster.
  */
 export function loadPlugins(plugins: readonly IPlugin[]): ILoadedPlugins {
   const checks: ICheck[] = [];

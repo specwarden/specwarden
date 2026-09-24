@@ -2,10 +2,11 @@
 
 # specwarden — guide
 
-A repository declares its rules; the warden proves which hold.
+A repository declares its rules; specwarden proves which hold.
 
 This is the engine end to end: adopting it, writing a check, the eight primitives, the
 things that make a check unable to pass quietly, the CLI, and the ports you can replace.
+Every term it uses is defined once, in [`GLOSSARY.md`](https://github.com/specwarden/specwarden/blob/main/core/GLOSSARY.md).
 
 ---
 
@@ -19,7 +20,7 @@ npx specwarden init       # write the starting tree
 ```
 
 `adopt` reports; `suggest` proposes and enables nothing; `init` writes. In that order,
-because a harness that arrives with opinions about a repository it has not read is one
+because a tool that arrives with opinions about a repository it has not read is one
 that gets deleted.
 
 `init --template <name>` starts from a shape: `node-ts`, `docs-only`, `monorepo`,
@@ -30,13 +31,11 @@ its subject exists.
 
 ```
 .specwarden/
-  warden.config.mjs   the ENTRY — only what the tree cannot say for itself
+  config.mjs          the ENTRY — only what the tree cannot say for itself
   rules.mjs           what this repository has decided, and who owns each decision
   checks/             one file per check, by family; the engine discovers them
   perimeter.mjs       what an assistant may not do here (optional)
-  relevance.mjs       which paths a gate cares about (optional)
   ratchets/           DATA, written by --tighten — commit it
-  baseline/           DATA — same reasoning
 ```
 
 Checks are discovered under `checks/` at any depth. A check does not have to be named in
@@ -81,8 +80,8 @@ A body returns findings and never builds a verdict, so a ratchet means the same 
 every check.
 
 **The body never touches the world directly.** `ctx.files`, `ctx.vcs`, `ctx.proc`,
-`ctx.clock`, `ctx.writer` are ports, and the engine gates each one on a declared
-capability. That is what makes a check testable against a described repository rather
+`ctx.clock`, `ctx.writer` are ports, and each one opens only to a check that declares
+its capability. That is what makes a check testable against a described repository rather
 than the machine it happens to be on — and what makes installing somebody else's check
 something other than running arbitrary code in your pre-push.
 
@@ -158,7 +157,7 @@ already pushed — and it is read the same way: everything runs, and the run say
 printed error lines instead would have rewritten thresholds of 17 and 37 down to 0 under
 `--tighten` — a command whose whole purpose is to record the truth, recording a fiction.
 
-**A skip that reaches the arbiter is a hole.** `SPECWARDEN_SKIP` is honoured locally and
+**A skip that reaches CI is a hole.** `SPECWARDEN_SKIP` is honoured locally and
 ignored under CI.
 
 **A duplicate check id throws.** The alternative is a check silently unreachable by
@@ -172,8 +171,8 @@ A ratchet arms a rule against a tree that cannot satisfy it today.
 specwarden check --tighten     # lower each threshold to today's count
 ```
 
-`direction: 'down'` is a debt count (the default); `'up'` is a floor a score must stay
-above. Commit `.specwarden/ratchets/` — it is data, and the next run compares against it.
+`direction: 'down'` is a debt count (the default); `direction: 'up'` is a score that may
+only rise, failing below its threshold. Commit `.specwarden/ratchets/` — it is data, and the next run compares against it.
 
 `--tighten` records only what a passing run measured, and never past the ceiling a check
 declares with `ratchet`: a red run's count is the regression, not a new bar.
@@ -185,8 +184,8 @@ unreachable target and fail forever.
 
 ```bash
 specwarden check                      # the relevant checks for this diff
-specwarden check --tier fast          # a schedule
-specwarden check --id doc-paths       # one gate, for a CI job
+specwarden check --tier fast          # one tier
+specwarden check doc-paths            # one check, for a CI job — the same as --id doc-paths
 specwarden check --all                # ignore relevance
 specwarden check --list               # the manifest, in run order
 specwarden check --jobs 4             # overlap; a check that cannot share declares exclusive
@@ -195,15 +194,19 @@ specwarden doctor                     # what is declared, without running any of
 specwarden doctor --json              # the same, as one document for a script; `version` names its shape
 ```
 
-`--reporter tty|json|github`. A reporter never prints the value of an environment
-variable: a finding names what is wrong, not the secret behind it.
+`--reporter tty|json|github`; `--json` is `--reporter json`, and every JSON document the
+command line prints carries `version`. A value flag takes `--flag value` or `--flag=value`,
+and a flag belongs to one command — `--fix` on `doctor` is refused, not ignored. A reporter
+never prints the value of an environment variable: a finding names what is wrong, not the
+secret behind it.
 
 ### Exit codes
 
-`0` every gate held, or the question was answered. `1` a gate failed — and nothing else is
-ever `1`. `2` the line, the config or a check file could not be used: an unknown flag, a
-config that does not parse, a check file that throws, a tier outside the vocabulary, two
-checks with one id. A load error names its file; a CI log that says `1` means a gate.
+`0` every check held, or the question was answered. `1` the answer is no: a check failed,
+`doctor` found a defect, a plan is not ready to archive. `2` the line, the config or a file
+could not be used: an unknown flag, a config that does not parse, a check file that throws,
+a tier outside the vocabulary, two checks with one id, `new` over a file that exists. A
+refusal goes to stderr, one sentence ending with a period; a load error names its file.
 
 ### Environment
 
@@ -228,7 +231,7 @@ Without `SPECWARDEN_SHELL`, a command runs under `bash` — on Windows the Git b
   is empty by construction, and an empty range read as "nothing changed" would skip the
   tier. The run says so, on stderr when the reporter writes machine output.
 - **One job per tier** is the parallelism: `check --tier fast` and `check --tier heavy`
-  as two jobs, or `--id <id>` per job for a gate with its own setup, with
+  as two jobs, or `--id <id>` per job for a check with its own setup, with
   `check --relevance --id <id>` deciding whether that setup is needed at all. A job for a
   tier that holds no check is refused, exit 2 — a green job over nothing is the one this
   product exists against — so a tier's job arrives with its first check.
@@ -240,7 +243,7 @@ Without `SPECWARDEN_SHELL`, a command runs under `bash` — on Windows the Git b
 
 `specwarden plan status <file>` lists a plan's phases and the acceptance each declares;
 `--verify` runs every acceptance and prints the output of a red one.
-`plan archive <file>` refuses, exit 2, until the plan declares its harvest and every
+`plan archive <file>` answers no, exit 1, until the plan declares its harvest and every
 destination resolves; it never moves the file — `git mv` does, in a reviewable commit.
 
 A plan declares `**Status:**` — `draft`, `active` or `done` — and each
@@ -264,7 +267,7 @@ export const rules = [
 
 A rule with no enforcer is allowed **when it declares why** — that is what separates "we
 never got to it" from "this cannot be automated". An enforcer with no rule is a defect,
-and the harness's own checks report both.
+and the self-checks report both.
 
 A check may declare its rule beside it, rather than in a register kept in step by hand.
 

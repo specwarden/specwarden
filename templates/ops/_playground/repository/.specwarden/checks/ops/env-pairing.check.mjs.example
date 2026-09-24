@@ -1,0 +1,18 @@
+// `env-pairing` — a key the application reads is a key its env file sets, in every mode.
+// Switched off until `verifierService` names the service that VERIFIES a key another sends (it must hold
+// that key too) and `modes` are yours; switched on as it is, it fails naming `your-verifier`.
+// Switch it on: rename to env-pairing.check.mjs AND uncomment its rule in rules.mjs.
+import { envPairing } from '@specwarden/ops';
+
+export const check = envPairing({
+  id: 'env-pairing',
+  composeFile: 'compose.yaml',
+  // REPLACE: the deployment modes, substituted into ${MODE} in an env_file path.
+  modes: ['dev', 'prod'],
+  // REPLACE: the compose service that VERIFIES a key another service sends. An empty name is
+  // refused when the file loads, so the guess is one no compose file declares.
+  verifierService: 'your-verifier',
+  // The keys the application declares — here, the ones .env.example lists.
+  declaredKeys: (read) =>
+    new Set((read('.env.example') ?? '').split('\n').map((l) => l.split('=')[0].trim()).filter((k) => k && !k.startsWith('#'))),
+});

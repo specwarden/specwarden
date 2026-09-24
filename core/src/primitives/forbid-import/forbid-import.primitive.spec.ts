@@ -10,7 +10,7 @@ import { forbidImport, type IForbidImportOptions } from './forbid-import.primiti
  */
 const ID = { id: 'no-orm-in-handlers', title: 'handlers do not touch the ORM', tier: 'fast' as const };
 const check = (over: Partial<IForbidImportOptions> = {}) =>
-  forbidImport({ ...ID, from: 'src/handlers/**', to: 'orm', ...over });
+  forbidImport({ ...ID, files: 'src/handlers/**', to: 'orm', ...over });
 
 describe('forbidImport — the refusing verdict', () => {
   it('fails on an import of the banned module and says where', async () => {
@@ -102,7 +102,7 @@ describe('forbidImport — the passing verdict', () => {
 
     expect((await runCheck(check({ ratchet: 2 }), { tree })).ok).toBe(true);
     expect((await runCheck(check({ ratchet: 1 }), { tree })).ok).toBe(false);
-    expect((await runCheck(check({ ratchet: 1 }), { tree, ratchet: 2 })).ok).toBe(true);
+    expect((await runCheck(check({ ratchet: 1 }), { tree, threshold: 2 })).ok).toBe(true);
   });
 });
 
@@ -112,7 +112,7 @@ describe('forbidImport — an empty corpus', () => {
    * folder that was renamed away is a ban on nothing, and it is now refused by default.
    */
   it('refuses a `from` that matched no file — the ban guarded nothing, and the import is right there', async () => {
-    const verdict = await runCheck(check({ from: 'src/controllers/**' }), {
+    const verdict = await runCheck(check({ files: 'src/controllers/**' }), {
       tree: { 'src/handlers/a.ts': "import 'orm';" },
     });
 
@@ -129,7 +129,7 @@ describe('forbidImport — an empty corpus', () => {
   });
 
   it('accepts an empty corpus only when the check says so in writing', async () => {
-    const verdict = await runCheck(check({ from: 'src/controllers/**', corpus: { atLeast: 0 } }), {
+    const verdict = await runCheck(check({ files: 'src/controllers/**', corpus: { atLeast: 0 } }), {
       tree: { 'src/handlers/a.ts': "import 'orm';" },
     });
 

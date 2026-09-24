@@ -2,7 +2,7 @@
   "name": "@specwarden/template-openspec",
   "version": "0.0.0",
   "type": "module",
-  "description": "template: A repository specified with OpenSpec — the spec seam wired.",
+  "description": "template: A repository specified with OpenSpec — the spec source wired, credential scan, doc paths, lint and tests.",
   "license": "MIT",
   "repository": {
     "type": "git",

@@ -1,5 +1,5 @@
 ---
-description: Read or amend the canon — a SKILL.md, and the gate that enforces it.
+description: Read or amend the canon — a SKILL.md, and the check that enforces it.
 argument-hint: '[the rule, or the area]'
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash
 ---
@@ -30,9 +30,9 @@ decision re-litigated twice. Not when it merely sounds sensible.
 4. **Make it fail.** A rule nothing checks diverges from the code silently. Follow
    `skills/gates/SKILL.md`: pure logic in `scripts/`, a check wrapping it, the rule declared
    on the check, and the declaration that stops it going silent.
-5. **Show it red.** Break something on purpose, watch the gate fail with its message,
+5. **Show it red.** Break something on purpose, watch the check fail with its message,
    restore.
-6. **Pin it** — `scripts/<name>.test.mjs`, including the case the gate exists to catch.
+6. **Pin it** — `scripts/<name>.test.mjs`, including the case the check exists to catch.
 
 ## Then
 

@@ -1,9 +1,9 @@
-import { shellLocalScope } from '@specwarden/ops';
+import { shellScope } from '@specwarden/ops';
 
-export const check = shellLocalScope({
+export const check = shellScope({
   id: 'shell-local-scope',
   title: 'local only inside a function',
   tier: 'fast',
-  pathspecs: ['scripts/*.sh'],
+  scripts: ['scripts/*.sh'],
   when: () => true,
 });

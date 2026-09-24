@@ -14,15 +14,15 @@ specifically.
 ## The line this package is drawn along
 
 **The engine carries only what is true of ANY repository.** A documentation layout, a
-plan lifecycle, a compose file, a vendor's credential format — each of those is a house's
+plan lifecycle, a compose file, a vendor's credential format — each of those is one repository's
 decision and ships as a module. The test: _could this check be WRONG about a repository
 that has never heard of it?_ If yes, it is an opinion and it leaves.
 
-Zones, ratchets, capabilities, relevance and the rule registry are this engine's own
+Zones, ratchets, capabilities, relevance and the rule register are this engine's own
 mechanics, and nothing else can own them.
 
 The `zone-boundary` check enforces the half of this that is mechanizable: a product
-source names no host literal and never imports the consumer zone.
+source names no consumer literal and never imports the consumer zone.
 
 ## Invariants
 
@@ -45,7 +45,7 @@ source names no host literal and never imports the consumer zone.
    summarised their violations into one line. Counting findings alone rewrote thresholds
    of 17 and 37 to 0.
 
-6. **`SPECWARDEN_SKIP` is ignored under CI.** A skip that reaches the arbiter is a hole.
+6. **`SPECWARDEN_SKIP` is ignored under CI.** A skip that reaches CI is a hole.
 
 7. **A duplicate check id throws at registration.** The alternative is a check silently
    unreachable by `--id`.
@@ -67,17 +67,17 @@ source names no host literal and never imports the consumer zone.
   `CHECK_CONTRACT_VERSION`, and every module must be rebuilt against it — the workspace
   playground asserts they agree, which is the one place a module built against an older
   engine is caught before a consumer's first run.
-- **The scaffolded README is a product surface.** It is written into a stranger's
-  repository and then checked by that repository's own gates. It must not, for instance,
+- **The scaffolded README is a product surface.** It is written into a consumer's
+  repository and then checked by that repository's own checks. It must not, for instance,
   name a backticked path the template does not write — a starter tree that fails the
-  first gate it ships with teaches the wrong thing about the gate.
+  first check it ships with teaches the wrong thing about the check.
 - Run `pnpm --filter specwarden test`, then `pnpm gate --tier fast`, then
   `pnpm gate --tier heavy` — `verify-build` and `playgrounds` are where a change to the
   published shape actually surfaces.
 
 ## Where the rest lives
 
-- [`_playground/`](./_playground/) — the engine assembled and run, the way a host
+- [`_playground/`](./_playground/) — the engine assembled and run, the way a consumer
   assembles it. The unit suites all pass against an engine whose pieces no longer fit
   together; this is where the assembly is exercised.
 - [`../_playgrounds/`](../_playgrounds/) — every package in one config, in-process and through the CLI.

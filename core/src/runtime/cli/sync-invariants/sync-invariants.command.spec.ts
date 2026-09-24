@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ISpecRequirement, ISpecSource, ISpecSourceResult } from '../../../domain';
 import { InMemoryFileSource } from '../../../infrastructure';
-import type { IWardenConfig } from '../../config/config.model';
+import type { ISpecwardenConfig } from '../../config/config.model';
 import { testContext } from '../../../testing';
 import { syncInvariants } from './sync-invariants.command';
 
@@ -31,7 +31,7 @@ const REQUIREMENTS = [
   { id: 'checkout#refunds-are-partial', statement: 'The system SHALL allow a partial refund' },
 ];
 
-const run = (config: IWardenConfig, tree: Record<string, string> = {}) => {
+const run = (config: ISpecwardenConfig, tree: Record<string, string> = {}) => {
   const { io, text } = capture();
   const code = syncInvariants(config, new InMemoryFileSource(tree), io);
   return { code, text: text() };

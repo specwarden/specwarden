@@ -2,7 +2,7 @@
   "name": "specwarden",
   "version": "0.0.0",
   "type": "module",
-  "description": "core: A repository declares its rules; the warden proves which hold.",
+  "description": "core: A repository declares its rules; specwarden proves which hold.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -20,8 +20,8 @@
     }
   },
   "bin": {
-    "specwarden": "./bin/warden.mjs",
-    "spw": "./bin/warden.mjs"
+    "specwarden": "./bin/specwarden.mjs",
+    "spw": "./bin/specwarden.mjs"
   },
   "sideEffects": false,
   "files": [

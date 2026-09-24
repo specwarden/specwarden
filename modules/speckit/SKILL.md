@@ -31,16 +31,23 @@ stay in step.
    job; rewording another tool's requirement is not. The requirement line is matched
    loosely on purpose — the id is what must be exact.
 
-4. **Every path is an option.** `root`, `specFile`, `tasksFile`. A memorised layout turns
-   the tool's next reorganisation into a source that finds nothing while reporting
-   success.
+4. **Every path is an option, and so is the grammar.** `featuresDir`, `specFile`,
+   `tasksFile`, `requirementPattern` (capturing the id, then the statement). A memorised
+   layout turns the tool's next reorganisation into a source that finds nothing while
+   reporting success; the grammar was the one thing the OpenSpec source let a consumer
+   change and this one did not, so a consumer numbering `REQ-1` had nothing read and nothing
+   to set.
 
-5. **SpecWarden never writes here.**
+5. **specwarden never writes here.**
 
 6. **The documented marker carries the FULL id — `001-invites#FR-001`.** The GUIDE's
    `idPattern` once captured `INV-…`, which can never equal a feature-prefixed id, so "in
    sync" was unreachable by following the documentation. The journey spec runs the GUIDE's
    config as written over a deposit; change the convention and that scene changes too.
+
+7. **A source is not a check.** `checkOptions(…, { identity: false })`: `id`, `tier`,
+   `rule` and the rest are refused rather than accepted and dropped, and an empty path is
+   refused.
 
 ## Changing the adapter
 

@@ -15,7 +15,7 @@ export const rules = [
     id: 'engine-depends-on-nothing',
     statement: 'the engine imports no module, plugin or template — everything depends on core, and core on nothing',
     owner: 'skills/structure/SKILL.md',
-    enforcement: { checkIds: ['lint'] },
+    enforcement: { enforcedBy: ['lint'] },
     zone: 'consumer',
     /**
      * Not undoable in the sense that matters: the day core imports a module, a consumer
@@ -34,28 +34,28 @@ export const rules = [
     id: 'published-surface-is-one-door',
     statement: 'every package publishes exactly one entry point, and what it publishes is reachable from a tarball',
     owner: 'skills/publishing/SKILL.md',
-    enforcement: { checkIds: ['publishable', 'verify-build'] },
+    enforcement: { enforcedBy: ['publishable', 'verify-build'] },
     zone: 'consumer',
   },
   {
     id: 'a-check-is-tested-against-a-tree-it-describes',
     statement: 'every package proves its own behaviour, and the engine proves its tests would notice it breaking',
     owner: 'skills/testing/SKILL.md',
-    enforcement: { checkIds: ['unit', 'scripts-unit'] },
+    enforcement: { enforcedBy: ['unit', 'scripts-unit'] },
     zone: 'consumer',
   },
   {
     id: 'the-router-has-one-wording',
     statement: 'AGENTS.md and CLAUDE.md are one router under two names, and the second is generated',
     owner: 'AGENTS.md',
-    enforcement: { checkIds: ['router-mirror'] },
+    enforcement: { enforcedBy: ['router-mirror'] },
     zone: 'consumer',
   },
   {
     id: 'a-shipped-skill-is-installable',
     statement: 'every shipped skill is listed in the marketplace, carries a plugin manifest, and ships in its package',
     owner: 'skills/skills/SKILL.md',
-    enforcement: { checkIds: ['skills'] },
+    enforcement: { enforcedBy: ['skills'] },
     zone: 'consumer',
   },
   {
@@ -66,7 +66,7 @@ export const rules = [
     // Two halves: `playgrounds` holds the committed tree to what init writes today; the
     // template's own playground spec, run by `unit`, proves that tree green and each of its
     // checks red once.
-    enforcement: { checkIds: ['playgrounds', 'unit'] },
+    enforcement: { enforcedBy: ['playgrounds', 'unit'] },
     zone: 'consumer',
   },
   {
@@ -74,21 +74,21 @@ export const rules = [
     statement:
       'the committed lockfile satisfies every manifest, so a local install and a CI install resolve the same tree',
     owner: 'CONTRIBUTING.md',
-    enforcement: { checkIds: ['lockfile'] },
+    enforcement: { enforcedBy: ['lockfile'] },
     zone: 'consumer',
   },
   {
     id: 'types-compile-in-every-package',
     statement: 'every package typechecks on its own, in its own program',
     owner: 'skills/typescript/SKILL.md',
-    enforcement: { checkIds: ['typecheck'] },
+    enforcement: { enforcedBy: ['typecheck'] },
     zone: 'consumer',
   },
   {
     id: 'one-formatting',
     statement: 'source formatting is decided by a formatter, not by review',
     owner: 'CONTRIBUTING.md',
-    enforcement: { checkIds: ['format'] },
+    enforcement: { enforcedBy: ['format'] },
     zone: 'consumer',
   },
 
@@ -97,7 +97,7 @@ export const rules = [
     statement:
       'a plan whose work has landed is harvested into the canon and deleted — an active plan’s branch resolves',
     owner: 'skills/plans/SKILL.md',
-    enforcement: { checkIds: ['plan-staleness'] },
+    enforcement: { enforcedBy: ['plan-staleness'] },
     zone: 'consumer',
   },
   {

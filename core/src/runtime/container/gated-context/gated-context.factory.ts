@@ -54,7 +54,7 @@ export function buildContext(
   adapters: Omit<IEngineAdapters, 'ratchets'>,
   changed: readonly string[],
   shard?: string,
-  ratchet?: number,
+  threshold?: number,
   // The manifest, read lazily; defaults to "just me" so a context built for one
   // check in isolation (a test, a REPL) still answers rather than throwing.
   roster: () => readonly ICheckMeta[] = () => [check],
@@ -63,7 +63,7 @@ export function buildContext(
   return {
     changed,
     shard,
-    ratchet,
+    threshold,
     roster,
     files: gate(check.id, 'read', adapters.files, caps.has('read')),
     vcs: gate(check.id, 'read', adapters.vcs, caps.has('read')),

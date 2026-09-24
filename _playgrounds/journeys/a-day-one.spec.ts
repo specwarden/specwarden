@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { removeScratch, scratchTree, warden } from '../../scripts/playgrounds.mjs';
+import { removeScratch, scratchTree, specwarden } from '../../scripts/playgrounds.mjs';
 
 /**
  * Journey A — day one, no template.
@@ -33,7 +33,7 @@ const INSTALLED = Object.keys(
   .map((name) => [name, join(PLAYGROUND, 'node_modules', ...name.split('/'))] as const);
 
 type Tree = Record<string, string>;
-type Run = ReturnType<typeof warden>;
+type Run = ReturnType<typeof specwarden>;
 
 /** The repository the developer already has. */
 const REPO: Tree = {
@@ -48,12 +48,20 @@ const REPO: Tree = {
     'name: ci\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: npm test\n',
 };
 
-const HARNESS = ['rule-owner-resolves', 'rule-coverage', 'orphan-check', 'enforcement-resolves', 'ratchet-direction'];
+const SELF_CHECKS = [
+  'rule-owner-resolves',
+  'rule-coverage',
+  'orphan-check',
+  'enforcement-resolves',
+  'ratchet-direction',
+];
 const CHECKS = '.specwarden/checks';
 const RULE = "rule: { statement: 'no TODO in shipped source', owner: 'README.md' }";
 const fp = (opts: string) =>
   `import { forbidPattern } from 'specwarden';\nexport const check = forbidPattern({ ${opts} });\n`;
-const NO_TODO = fp(`id: 'no-todo', title: 'no TODO in src', tier: 'fast', in: 'src/**/*.ts', pattern: /TODO/, ${RULE}`);
+const NO_TODO = fp(
+  `id: 'no-todo', title: 'no TODO in src', tier: 'fast', files: 'src/**/*.ts', pattern: /TODO/, ${RULE}`,
+);
 const TODO_IN_UTIL: Tree = { 'src/util.ts': '// TODO: remove\n' };
 
 const said = (r: Run) => r.stdout + r.stderr;
@@ -81,7 +89,7 @@ const writtenUnder = (dir: string, sub: string): Tree =>
       .map((f) => [f, readFileSync(join(dir, f), 'utf8')]),
   );
 
-/** Set environment variables for the duration of `fn` — `warden` spawns with `process.env`. */
+/** Set environment variables for the duration of `fn` — `specwarden` spawns with `process.env`. */
 function withEnv<T>(vars: Record<string, string | undefined>, fn: () => T): T {
   const saved = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]));
   const apply = (v: Record<string, string | undefined>) => {
@@ -108,17 +116,17 @@ function repo(extra: Tree = {}, { initialised = true } = {}): string {
 /** One repository, several CLI runs, torn down. */
 function scene(extra: Tree, ...runs: string[][]): Run[] {
   const dir = repo(extra);
-  return runs.map((args) => warden(dir, args));
+  return runs.map((args) => specwarden(dir, args));
 }
 
 /** What `init` wrote into REPO, captured once and reused as every later scene's config.
- * No NODE_PATH workaround: the harness drops it, so a scene with only the engine installed
+ * No NODE_PATH workaround: the playground helper drops it, so a scene with only the engine installed
  * resolves only the engine. */
 let INIT: Tree = {};
 let initRun: Run;
 beforeAll(() => {
   const dir = repo({}, { initialised: false });
-  initRun = warden(dir, ['init']);
+  initRun = specwarden(dir, ['init']);
   INIT = writtenUnder(dir, '.specwarden');
 });
 afterAll(() => {
@@ -127,7 +135,7 @@ afterAll(() => {
 
 describe('1. adopt', () => {
   let r: Run;
-  beforeAll(() => (r = warden(repo({}, { initialised: false }), ['adopt'])));
+  beforeAll(() => (r = specwarden(repo({}, { initialised: false }), ['adopt'])));
 
   it('reports what the repository is, and writes nothing', () => {
     expect(r.status).toBe(0);
@@ -144,13 +152,13 @@ describe('1. adopt', () => {
     expect(initRun.stdout).toContain('github actions');
   });
 
-  // It said to copy suggestions into warden.config.mjs — a file that did not exist yet, and
+  // It said to copy suggestions into config.mjs — a file that did not exist yet, and
   // not where a check lives.
   it('names init and the checks folder, and never the config', () => {
     expect(r.stdout).toContain(
       'Next: `specwarden init` writes .specwarden/, one check per file under its checks folder.',
     );
-    expect(r.stdout).not.toContain('warden.config.mjs');
+    expect(r.stdout).not.toContain('config.mjs');
   });
 });
 
@@ -162,7 +170,7 @@ describe('2. suggest', () => {
         ...(i < withSpec ? [[`src/s${i}.service.spec.ts`, 'test\n']] : []),
       ]).flat(),
     );
-  const suggestOver = (extra: Tree) => warden(repo(extra, { initialised: false }), ['suggest']);
+  const suggestOver = (extra: Tree) => specwarden(repo(extra, { initialised: false }), ['suggest']);
 
   // It knew only `*.service.ts` and `*.controller.ts`, and an ordinary repository whose
   // every module sat beside its test got "nothing to suggest".
@@ -184,7 +192,7 @@ describe('2. suggest', () => {
     const all = suggestOver(services(10, 10));
     expect(all.stdout).toContain('100% of **/*.service.ts have {name}.spec.ts (10 of 10).');
     expect(all.stdout).toContain(
-      "siblingRequired({ subjects: '**/*.service.ts', require: '{name}.spec.ts' }), ratchet 0.",
+      "siblingRequired({ files: '**/*.service.ts', require: '{name}.spec.ts' }), ratchet 0.",
     );
     const most = suggestOver(services(10, 9));
     expect(most.stdout).toContain('90% of **/*.service.ts');
@@ -205,7 +213,7 @@ describe('2. suggest', () => {
     const [r] = scene(
       {
         ...services(10, 10),
-        [`${CHECKS}/tests/sibling.check.mjs`]: `import { siblingRequired } from 'specwarden';\nexport const check = siblingRequired({ subjects: '**/*.service.ts', require: '{name}.spec.ts' });\n`,
+        [`${CHECKS}/tests/sibling.check.mjs`]: `import { siblingRequired } from 'specwarden';\nexport const check = siblingRequired({ files: '**/*.service.ts', require: '{name}.spec.ts' });\n`,
       },
       ['check', '--all'],
     );
@@ -221,8 +229,8 @@ describe('3. init, no template', () => {
     expect(Object.keys(INIT).sort()).toEqual([
       '.specwarden/README.md',
       '.specwarden/checks/README.md',
+      '.specwarden/config.mjs',
       '.specwarden/rules.mjs',
-      '.specwarden/warden.config.mjs',
     ]);
     expect(INIT['.specwarden/rules.mjs']).toContain('export const rules = [');
   });
@@ -232,21 +240,21 @@ describe('3. init, no template', () => {
     () => ([all, list, doctor, again] = scene({}, ['check', '--all'], ['check', '--list'], ['doctor'], ['init'])),
   );
 
-  it('is green on the first `check --all`, `--list` and `doctor`: the five harness audits', () => {
+  it('is green on the first `check --all`, `--list` and `doctor`: the five self-checks', () => {
     expect(all.status).toBe(0);
-    expect(all.stdout).toContain('✅ 5 gate(s) passed');
+    expect(all.stdout).toContain('✅ 5 check(s) passed');
     expect(
       list.stdout
         .trim()
         .split('\n')
         .map((l) => l.split('\t')[0]),
-    ).toEqual(HARNESS);
+    ).toEqual(SELF_CHECKS);
     expect(doctor.status).toBe(0);
   });
 
   // It counted "declared: 1, enforced: 1" over an empty rules.mjs, the rule unnamed.
   it("doctor names the engine's own rule beside the count", () => {
-    expect(doctor.stdout).toContain("  declared: 1 (the engine's own: harness-integrity)\n  enforced: 1\n");
+    expect(doctor.stdout).toContain("  declared: 1 (the engine's own: self-checks-hold)\n  enforced: 1\n");
   });
 
   // It said the README "lists what to add"; the README listed nothing and named factories
@@ -272,7 +280,7 @@ describe('3. init, no template', () => {
 
   it('a second init is refused, and says why', () => {
     expect(again.status).toBe(2);
-    expect(again.stderr).toContain('already exists — init refuses to overwrite a config.');
+    expect(again.stderr).toContain('already exists — init refuses to overwrite a config; delete it first, or edit it.');
   });
 });
 
@@ -310,14 +318,14 @@ describe('4. new no-todo-in-src --family hygiene', () => {
   let scaffolded: Run;
   beforeAll(() => {
     dir = repo(TODO_IN_UTIL);
-    scaffolded = warden(dir, ['new', 'no-todo-in-src', '--family', 'hygiene']);
+    scaffolded = specwarden(dir, ['new', 'no-todo-in-src', '--family', 'hygiene']);
     commit(dir);
   });
 
   // It held `as const` in a `.mjs`, and the next run died on a SyntaxError with exit 1.
   it('the scaffold — a check and its test, side by side — is plain JavaScript that loads, and is RED until written', () => {
     expect(scaffolded.stdout).toContain(`wrote ${CHECK}\nwrote ${TEST}`);
-    const r = warden(dir, ['check', '--id', 'no-todo-in-src']);
+    const r = specwarden(dir, ['check', '--id', 'no-todo-in-src']);
     expect(r.status).toBe(1);
     expect(r.stderr).not.toContain('SyntaxError');
     expect(r.stdout).toContain(
@@ -338,27 +346,28 @@ describe('4. new no-todo-in-src --family hygiene', () => {
     put(dir, TEST, edit(readFileSync(join(dir, TEST), 'utf8'), TEST_EDITS));
     expect(git(dir, ['diff', '--numstat']).trim().split('\n')).toEqual([`7\t7\t${CHECK}`, `5\t5\t${TEST}`]);
     commit(dir);
-    const red = warden(dir, ['check', '--id', 'no-todo-in-src']);
+    const red = specwarden(dir, ['check', '--id', 'no-todo-in-src']);
     expect(red.status).toBe(1);
     expect(red.stdout).toContain('src/util.ts: TODO in shipped source.');
     expect(red.stdout).toContain('💡 resolve the TODO, or move it to an issue');
     put(dir, 'src/util.ts', 'export const add = 1;\n');
     commit(dir);
-    const green = warden(dir, ['check', '--id', 'no-todo-in-src']);
+    const green = specwarden(dir, ['check', '--id', 'no-todo-in-src']);
     expect(green.status).toBe(0);
     expect(green.stdout).toContain('4 files examined, clean');
     expect(nodeTest(dir, TEST).stdout).toMatch(/pass 4/);
   });
 
-  it('refuses to overwrite (exit 1) and refuses a bad id (exit 2)', () => {
-    expect(warden(dir, ['new', 'no-todo-in-src', '--family', 'hygiene']).status).toBe(1);
-    expect(warden(dir, ['new', 'Bad_Id']).stderr).toContain("'Bad_Id' is not a usable check id.");
+  // Both are the line not being usable — 2; 1 is kept for a check that ran and said no.
+  it('refuses to overwrite (exit 2) and refuses a bad id (exit 2)', () => {
+    expect(specwarden(dir, ['new', 'no-todo-in-src', '--family', 'hygiene']).status).toBe(2);
+    expect(specwarden(dir, ['new', 'Bad_Id']).stderr).toContain("'Bad_Id' is not a usable check id.");
   });
 
   // It wrote a check under a .specwarden/ that `check` then refused — a file run by nothing.
   it('`new` before `init` is refused, exit 2, names init, and writes nothing', () => {
     const bare = repo({}, { initialised: false });
-    const r = warden(bare, ['new', 'x-y']);
+    const r = specwarden(bare, ['new', 'x-y']);
     expect(r.status).toBe(2);
     expect(r.stderr).toContain('run `specwarden init` first; a check written now would be run by nothing.');
     expect(existsSync(join(bare, '.specwarden'))).toBe(false);
@@ -380,7 +389,7 @@ describe('5. the same rule as one forbidPattern file', () => {
   });
 
   it('the one-line check: the pattern, where, and the rule as a string — the file names it, owns it, and it runs', () => {
-    const one = `import { forbidPattern } from 'specwarden';\nexport const check = forbidPattern({ in: 'src/**/*.ts', pattern: /TODO/, rule: 'no TODO in shipped source' });\n`;
+    const one = `import { forbidPattern } from 'specwarden';\nexport const check = forbidPattern({ files: 'src/**/*.ts', pattern: /TODO/, rule: 'no TODO in shipped source' });\n`;
     const [r] = scene({ ...TODO_IN_UTIL, [`${CHECKS}/hygiene/no-todo.check.mjs`]: one }, ['check', '--all', '--json']);
     const rows = (JSON.parse(r.stdout) as { results: { id: string; ok: boolean; tier: string }[] }).results;
     expect(rows.filter((x) => !x.ok).map((x) => x.id)).toEqual(['no-todo']);
@@ -389,14 +398,14 @@ describe('5. the same rule as one forbidPattern file', () => {
 
   // The hint pointed at rules.mjs; the smallest fix is one line on the check itself.
   it('without `rule`, orphan-check is red and its hint names the one-line fix on the check', () => {
-    const bare = fp("id: 'no-todo', title: 't', tier: 'fast', in: 'src/**/*.ts', pattern: /TODO/");
+    const bare = fp("id: 'no-todo', title: 't', tier: 'fast', files: 'src/**/*.ts', pattern: /TODO/");
     const [r] = scene({ [`${CHECKS}/hygiene/no-todo.check.mjs`]: bare }, ['check', '--all']);
     expect(r.stdout).toContain('1 check(s) enforce no declared rule: no-todo');
     expect(r.stdout).toContain("💡 Add `rule: '<the statement it enforces>'` to the check");
   });
 
   it('a glob that matches nothing is a legible red, not a green', () => {
-    const miss = fp(`id: 'no-todo', title: 't', tier: 'fast', in: 'source/**/*.ts', pattern: /TODO/, ${RULE}`);
+    const miss = fp(`id: 'no-todo', title: 't', tier: 'fast', files: 'source/**/*.ts', pattern: /TODO/, ${RULE}`);
     const [r] = scene({ [`${CHECKS}/hygiene/no-todo.check.mjs`]: miss }, ['check', '--id', 'no-todo']);
     expect(r.status).toBe(1);
     expect(r.stdout).toContain('`source/**/*.ts` matched nothing to scan — below the floor of 1.');
@@ -404,7 +413,7 @@ describe('5. the same rule as one forbidPattern file', () => {
 
   // It was absent from every `--tier` (exit 0 over a TODO) and listed its title as "undefined".
   it('with no `tier`, the check is in `fast`, red there; with no title, the title is the rule', () => {
-    const noTier = fp(`id: 'no-todo', in: 'src/**/*.ts', pattern: /TODO/, ${RULE}`);
+    const noTier = fp(`id: 'no-todo', files: 'src/**/*.ts', pattern: /TODO/, ${RULE}`);
     const [all, fast] = scene(
       { ...TODO_IN_UTIL, [`${CHECKS}/hygiene/no-todo.check.mjs`]: noTier },
       ['check', '--all'],
@@ -420,57 +429,55 @@ describe('5. the same rule as one forbidPattern file', () => {
   it('forbidPattern scans tracked files only — an untracked scratch file is not the repository', () => {
     const dir = repo({
       [`${CHECKS}/hygiene/no-todo.check.mjs`]: fp(
-        `id: 'no-todo', title: 't', tier: 'fast', in: '**/*.ts', pattern: /TODO/, ${RULE}`,
+        `id: 'no-todo', title: 't', tier: 'fast', files: '**/*.ts', pattern: /TODO/, ${RULE}`,
       ),
     });
     put(dir, 'scratch/untracked.ts', '// TODO untracked\n');
-    const r = warden(dir, ['check', '--id', 'no-todo']);
+    const r = specwarden(dir, ['check', '--id', 'no-todo']);
     expect(r.status).toBe(0);
     expect(r.stdout).not.toContain('scratch/untracked.ts');
     commit(dir);
-    expect(warden(dir, ['check', '--id', 'no-todo']).stdout).toContain('forbidden pattern in scratch/untracked.ts');
+    expect(specwarden(dir, ['check', '--id', 'no-todo']).stdout).toContain('forbidden pattern in scratch/untracked.ts');
   });
 });
 
 describe('6. ratchets', () => {
   const THREE: Tree = { 'src/index.ts': '// TODO a\n', 'src/util.ts': '// TODO b\n', 'src/format.ts': '// TODO c\n' };
   const ratcheted = (inline: string) =>
-    fp(
-      `id: 'no-todo', title: 'no TODO in src', tier: 'fast', in: 'src/**/*.ts', pattern: /TODO/, ratchetId: 'no-todo', ${inline}${RULE}`,
-    );
+    fp(`id: 'no-todo', title: 'no TODO in src', tier: 'fast', files: 'src/**/*.ts', pattern: /TODO/, ${inline}${RULE}`);
 
   it('armed at 3: green at 3, red at 4; two paid and --tighten moves the file to 1, which cannot move back up', () => {
     const dir = repo({ ...THREE, [`${CHECKS}/hygiene/no-todo.check.mjs`]: ratcheted('ratchet: 3, ') });
-    const armed = warden(dir, ['check', '--id', 'no-todo']);
+    const armed = specwarden(dir, ['check', '--id', 'no-todo']);
     expect(armed.status).toBe(0);
     expect(armed.stdout).toContain('↑ 3 pre-existing violation(s) tolerated under ratchet 3');
     put(dir, 'src/types.ts', '// TODO d\n');
     commit(dir);
-    const fourth = warden(dir, ['check', '--id', 'no-todo']);
+    const fourth = specwarden(dir, ['check', '--id', 'no-todo']);
     expect(fourth.status).toBe(1);
     // Should: say "4 violations, ratchet 3" — the red run lists four findings and never names the ratchet.
     expect(fourth.stdout).not.toContain('ratchet');
     for (const f of ['src/types.ts', 'src/index.ts', 'src/util.ts']) put(dir, f, 'x\n');
     commit(dir);
-    const tightened = warden(dir, ['check', '--id', 'no-todo', '--tighten']);
+    const tightened = specwarden(dir, ['check', '--id', 'no-todo', '--tighten']);
     expect(tightened.status).toBe(0);
     // Should: say what it recorded ("no-todo: 3 → 1"); the run prints nothing about the write.
     expect(said(tightened)).not.toMatch(/→ 1|recorded|wrote/);
     expect(ratchetFile(dir, 'no-todo').value).toBe(1);
     put(dir, 'src/index.ts', '// TODO again\n');
     commit(dir);
-    expect(warden(dir, ['check', '--id', 'no-todo', '--tighten']).status).toBe(1);
+    expect(specwarden(dir, ['check', '--id', 'no-todo', '--tighten']).status).toBe(1);
     expect(ratchetFile(dir, 'no-todo').value).toBe(1);
   });
 
   // It recorded 3: the bar moved 0 → 3 and the next run was green — `--tighten` loosening.
   it('with no inline ratchet, --tighten on a red run records nothing, and the next run is still red', () => {
     const dir = repo({ ...THREE, [`${CHECKS}/hygiene/no-todo.check.mjs`]: ratcheted('') });
-    expect(warden(dir, ['check', '--id', 'no-todo']).status).toBe(1);
-    expect(warden(dir, ['check', '--id', 'no-todo', '--tighten']).status).toBe(1);
+    expect(specwarden(dir, ['check', '--id', 'no-todo']).status).toBe(1);
+    expect(specwarden(dir, ['check', '--id', 'no-todo', '--tighten']).status).toBe(1);
     expect(existsSync(join(dir, '.specwarden/ratchets/no-todo.json'))).toBe(false);
     commit(dir);
-    const after = warden(dir, ['check', '--all']);
+    const after = specwarden(dir, ['check', '--all']);
     expect(after.status).toBe(1);
     expect(after.stdout).toContain('❌ no-todo FAILED');
   });
@@ -482,10 +489,10 @@ describe('6. ratchets', () => {
       'src/types.ts': '// TODO d\n',
       [`${CHECKS}/hygiene/no-todo.check.mjs`]: ratcheted('ratchet: 3, '),
     });
-    expect(warden(dir, ['check', '--id', 'no-todo', '--tighten']).status).toBe(1);
+    expect(specwarden(dir, ['check', '--id', 'no-todo', '--tighten']).status).toBe(1);
     expect(existsSync(join(dir, '.specwarden/ratchets/no-todo.json'))).toBe(false);
     commit(dir);
-    const r = warden(dir, ['check', '--all']);
+    const r = specwarden(dir, ['check', '--all']);
     expect(r.stdout).toContain('❌ no-todo FAILED');
     expect(r.stdout).not.toContain('above the ceiling');
     expect(r.stdout).toContain('✅ ratchet-direction');
@@ -496,7 +503,7 @@ describe('7. --fix over a regenerable artifact', () => {
   const GEN = "process.stdout.write(['index', 'util'].map((n) => `export * from './${n}';`).join('\\n') + '\\n');\n";
   const FRESH = "export * from './index';\nexport * from './util';\n";
   const regen = (fixable: boolean) =>
-    `import { regenerable } from 'specwarden';\nexport const check = regenerable({ id: 'barrel-fresh', title: 'the barrel is generated', tier: 'fast', artifact: 'src/barrel.ts', by: 'node scripts/gen.mjs', ${fixable ? 'fixable: true, ' : ''}${RULE} });\n`;
+    `import { regenerable } from 'specwarden';\nexport const check = regenerable({ id: 'barrel-fresh', title: 'the barrel is generated', tier: 'fast', artifact: 'src/barrel.ts', cmd: 'node scripts/gen.mjs', ${fixable ? 'fixable: true, ' : ''}${RULE} });\n`;
   const stale = (fixable: boolean) =>
     repo({
       'scripts/gen.mjs': GEN,
@@ -506,10 +513,10 @@ describe('7. --fix over a regenerable artifact', () => {
 
   it('red on a hand edit, and --fix writes the generator output back and reports what remains', () => {
     const dir = stale(true);
-    expect(warden(dir, ['check', '--id', 'barrel-fresh']).stdout).toContain(
+    expect(specwarden(dir, ['check', '--id', 'barrel-fresh']).stdout).toContain(
       '`specwarden check --fix` writes it for you.',
     );
-    const fixed = warden(dir, ['check', '--id', 'barrel-fresh', '--fix']);
+    const fixed = specwarden(dir, ['check', '--id', 'barrel-fresh', '--fix']);
     expect(fixed.status).toBe(0);
     expect(fixed.stdout).toContain('fixed 1 finding(s): regenerated src/barrel.ts');
     expect(readFileSync(join(dir, 'src/barrel.ts'), 'utf8')).toBe(FRESH);
@@ -517,7 +524,7 @@ describe('7. --fix over a regenerable artifact', () => {
 
   // It was silent, so the red run after `--fix` read as a repair that failed.
   it('--fix over a check with no fix says so, and the run stays red', () => {
-    const r = warden(stale(false), ['check', '--id', 'barrel-fresh', '--fix']);
+    const r = specwarden(stale(false), ['check', '--id', 'barrel-fresh', '--fix']);
     expect(r.status).toBe(1);
     expect(said(r)).toContain('barrel-fresh has no fix — --fix repairs only what a check can derive');
   });
@@ -527,16 +534,16 @@ describe('8. the edges of the CLI', () => {
   it('no config: check, doctor and migrate exit 2 and say so; init with no package.json works and is green', () => {
     const bare = repo({}, { initialised: false });
     for (const cmd of ['check', 'doctor', 'migrate']) {
-      const r = warden(bare, [cmd]);
+      const r = specwarden(bare, [cmd]);
       expect(r.status).toBe(2);
-      expect(r.stderr).toContain('no .specwarden/warden.config.mjs found');
+      expect(r.stderr).toContain('no .specwarden/config.mjs found');
     }
     const noManifest = Object.fromEntries(Object.entries(REPO).filter(([k]) => k !== 'package.json'));
     const dir = scratchTree(noManifest, { installed: INSTALLED });
     open.push(dir);
-    expect(warden(dir, ['init']).status).toBe(0);
+    expect(specwarden(dir, ['init']).status).toBe(0);
     commit(dir);
-    expect(warden(dir, ['check', '--all']).status).toBe(0);
+    expect(specwarden(dir, ['check', '--all']).status).toBe(0);
   });
 
   it('migrate says the config is current; --json has a fixed shape; init --template names the missing package', () => {
@@ -548,7 +555,7 @@ describe('8. the edges of the CLI', () => {
     expect(migrate.stdout).toContain('config is at version 1, the current version — nothing to migrate.');
     const parsed = JSON.parse(json.stdout) as { results: Record<string, unknown>[] };
     // `--all` is a full run, and the document says why.
-    expect(Object.keys(parsed).sort()).toEqual(['fullRunReason', 'results', 'totalMs']);
+    expect(Object.keys(parsed).sort()).toEqual(['fullRunReason', 'results', 'totalMs', 'version']);
     expect(Object.keys(parsed.results[0]).sort()).toEqual([
       'advisory',
       'durationMs',
@@ -567,41 +574,42 @@ describe('8. the edges of the CLI', () => {
         ruleId: 'no-todo',
       },
     ]);
-    const tpl = warden(repo({}, { initialised: false }), ['init', '--template', 'node-ts']);
+    const tpl = specwarden(repo({}, { initialised: false }), ['init', '--template', 'node-ts']);
     expect(tpl.status).toBe(2);
     expect(tpl.stderr).toContain('the package @specwarden/template-node-ts is not installed here.');
   });
 
   // It printed the tab-separated list.
-  it('`check --list --json` prints the roster as JSON', () => {
+  it('`check --list --json` prints the roster as one versioned JSON document', () => {
     const [r] = scene({}, ['check', '--list', '--json']);
-    expect(Array.isArray(JSON.parse(r.stdout))).toBe(true);
+    const doc = JSON.parse(r.stdout) as { version: number; checks: unknown[] };
+    expect([doc.version, Array.isArray(doc.checks)]).toEqual([1, true]);
   });
 
   describe('SPECWARDEN_SKIP', () => {
     let dir: string;
     beforeAll(() => (dir = repo({ ...TODO_IN_UTIL, [`${CHECKS}/hygiene/no-todo.check.mjs`]: NO_TODO })));
     const run = (env: Record<string, string | undefined>, args = ['check', '--all']) =>
-      withEnv({ ...LOCAL, SPECWARDEN_SKIP: 'no-todo', ...env }, () => warden(dir, args));
+      withEnv({ ...LOCAL, SPECWARDEN_SKIP: 'no-todo', ...env }, () => specwarden(dir, args));
 
     it('is honoured locally and said; ignored under CI=true; an unknown id in it is refused', () => {
       const local = run({});
       expect(local.status).toBe(0);
-      expect(local.stdout).toContain('✅ 5 gate(s) passed (1 skipped)');
+      expect(local.stdout).toContain('✅ 5 check(s) passed (1 skipped)');
       expect(run({ CI: 'true' }, ['check', '--id', 'no-todo']).status).toBe(1);
       const typo = run({ SPECWARDEN_SKIP: 'no-tod' });
       expect(typo.status).toBe(2);
       expect(typo.stderr).toContain('unknown check id(s) in skip: no-tod');
     });
 
-    // Only CI=true counted: under CI=1 the skip reached the arbiter and a red gate exited 0.
+    // Only CI=true counted: under CI=1 the skip reached CI and a red check exited 0.
     it('CI=1 and CI=True are CI: the skip is ignored and the red gate fails', () => {
       expect(run({ CI: '1' }, ['check', '--id', 'no-todo']).status).toBe(1);
       expect(run({ CI: 'True' }, ['check', '--id', 'no-todo']).status).toBe(1);
       expect(run({ CI: 'false' }, ['check', '--id', 'no-todo']).status).toBe(0);
     });
 
-    // "✅ 0 gate(s) passed (1 skipped)" was a green tick over nothing. The skip is the person's
+    // "✅ 0 check(s) passed (1 skipped)" was a green tick over nothing. The skip is the person's
     // own, locally, so the exit stays 0 — and the line says that nothing ran.
     it('a check named by --id and skipped by the environment says nothing ran, exit 0', () => {
       const r = run({}, ['check', '--id', 'no-todo']);
@@ -613,7 +621,7 @@ describe('8. the edges of the CLI', () => {
 
   // It printed the usage to stderr and exited 2, as if asking for help were a mistake.
   it('--help prints the usage to stdout and exits 0', () => {
-    const r = warden(repo({}, { initialised: false }), ['--help']);
+    const r = specwarden(repo({}, { initialised: false }), ['--help']);
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('usage: specwarden <command>');
     expect(r.stderr).toBe('');
@@ -699,7 +707,7 @@ describe('9. newcomer mistakes', () => {
   it('`--id` with a typo exits 2 and names the id it was close to', () => {
     const r = one('hygiene/no-todo.check.mjs', NO_TODO, ['check', '--id', 'no-tod']);
     expect(r.status).toBe(2);
-    expect(r.stderr).toContain("unknown check id 'no-tod' — did you mean 'no-todo'?");
+    expect(r.stderr).toContain("unknown check id 'no-tod' (did you mean 'no-todo'?)");
   });
 
   // They were silently not discovered: green over a TODO.

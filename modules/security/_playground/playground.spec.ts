@@ -15,8 +15,6 @@ import { errorsOf, publishedFactories, runCheck, uncoveredFactories } from 'spec
  * success.
  */
 
-const ID = { id: 'secret-scan', title: 'playground', tier: 'fast' as const };
-
 /** A repository with nothing credential-shaped in it. */
 const CLEAN = {
   'README.md': '# clean\n\nConfiguration is read from the environment.\n',
@@ -49,7 +47,7 @@ describe('@specwarden/security', () => {
     // fails here rather than shipping untested.
     const mod = (await import('@specwarden/security')) as Record<string, unknown>;
 
-    const probe = { ...ID, allowlist: [] };
+    const probe = { allowlist: [] };
     expect(uncoveredFactories(mod, { covered: ['secretScan'], probe })).toEqual([]);
     // And the probe is one the factory accepts: it refuses an option it does not have, so a
     // probe it refused would read it as a helper and the line above would pass over nothing.
@@ -63,13 +61,13 @@ describe('@specwarden/security', () => {
   });
 
   it('passes a repository with no credential in it', async () => {
-    const verdict = await runCheck(secretScan({ ...ID, ratchet: 0 }), { tree: CLEAN, tracked: Object.keys(CLEAN) });
+    const verdict = await runCheck(secretScan(), { tree: CLEAN, tracked: Object.keys(CLEAN) });
 
     expect(verdict.ok).toBe(true);
   });
 
   it('fails a repository carrying one, and names the file', async () => {
-    const verdict = await runCheck(secretScan({ ...ID, ratchet: 0 }), { tree: LEAKED, tracked: Object.keys(LEAKED) });
+    const verdict = await runCheck(secretScan(), { tree: LEAKED, tracked: Object.keys(LEAKED) });
 
     expect(verdict.ok).toBe(false);
     expect(errorsOf(verdict).join(' ')).toContain('src/config.ts');
@@ -79,18 +77,48 @@ describe('@specwarden/security', () => {
     // A document about credential formats, a fixture, the pattern library itself. Not
     // for a secret nobody has rotated yet: that is not an allowlist entry, it is an
     // incident.
-    const check = secretScan({ ...ID, ratchet: 0, allowlist: [{ file: 'src/config.ts', patternId: '*' }] });
+    const check = secretScan({ allowlist: [{ file: 'src/config.ts', patternId: '*' }] });
 
     expect((await runCheck(check, { tree: LEAKED, tracked: Object.keys(LEAKED) })).ok).toBe(true);
   });
 
   it('the ratchet tolerates the debt that exists and fails the next one', async () => {
-    const armed = secretScan({ ...ID, ratchet: 1 });
+    const armed = secretScan({ ratchet: 1 });
 
     expect((await runCheck(armed, { tree: LEAKED, tracked: Object.keys(LEAKED) })).ok).toBe(true);
 
     const second = { ...LEAKED, 'src/other.ts': `export const k = '${`ASIA${'ZYXWVUTSRQ987654'}`}';\n` };
     expect((await runCheck(armed, { tree: second, tracked: Object.keys(second) })).ok).toBe(false);
+  });
+
+  it('a corpus that scans nothing fails rather than reporting "no credentials" — unless said in writing', async () => {
+    // A `files` pointed where nothing is, or an `except` that swallowed everything: "no
+    // credential found" about a corpus of none is the one false green a scan cannot give.
+    const nowhere = await runCheck(secretScan({ files: 'deploy/**' }), { tree: LEAKED, tracked: Object.keys(LEAKED) });
+    expect(nowhere.ok).toBe(false);
+    expect(errorsOf(nowhere)[0]).toMatch(/^examined 0 file\(s\) — `deploy\/\*\*`/);
+
+    const swallowed = secretScan({ except: ['**'] });
+    expect((await runCheck(swallowed, { tree: LEAKED, tracked: Object.keys(LEAKED) })).ok).toBe(false);
+
+    const expected = secretScan({ files: 'deploy/**', corpus: { atLeast: 0 } });
+    expect((await runCheck(expected, { tree: LEAKED, tracked: Object.keys(LEAKED) })).ok).toBe(true);
+  });
+
+  it('prints the engine’s pass line, and each finding carries its file and line', async () => {
+    const clean = await runCheck(secretScan(), { tree: CLEAN, tracked: Object.keys(CLEAN) });
+    expect(clean.findings.map((f) => f.message)).toEqual(['✓ secret-scan — 2 file(s) examined, clean']);
+
+    const leaked = await runCheck(secretScan(), { tree: LEAKED, tracked: Object.keys(LEAKED) });
+    expect(leaked.findings.find((f) => f.severity === 'error')).toMatchObject({ file: 'src/config.ts', line: 1 });
+  });
+
+  it('refuses an option it does not have, the old spellings, and a wrong kind — by name, at load', () => {
+    expect(() => secretScan({ scan: 'src/**' } as never)).toThrow('`scan` is not an option of secretScan');
+    expect(() => secretScan({ skipPaths: ['dist/'] } as never)).toThrow('`skipPaths` is not an option of secretScan');
+    expect(() => secretScan({ patterns: { add: [] } } as never)).toThrow('`patterns.add` is not an option');
+    expect(() => secretScan({ files: [] })).toThrow('`files` is empty');
+    expect(() => secretScan({ maxBytes: '1MB' } as never)).toThrow('`maxBytes` must be a number');
   });
 });
 
@@ -98,13 +126,13 @@ describe('@specwarden/security', () => {
 // and a preset's checks had nowhere to put one. The module knows what its check enforces.
 describe('@specwarden/security — every check names the rule it enforces', () => {
   it('carries an implied rule owned by the package, and a rule the consumer writes wins', () => {
-    const built = [secretScan({ id: 'secret-scan' })];
+    const built = [secretScan()];
     for (const check of built) {
       expect(check.rule, check.id).toEqual(
         expect.objectContaining({ statement: expect.any(String), owner: '@specwarden/security', implied: true }),
       );
       expect(check.title, check.id).not.toBe(check.id);
     }
-    expect(secretScan({ id: 'secret-scan', rule: 'ours' }).rule).toEqual({ statement: 'ours' });
+    expect(secretScan({ rule: 'ours' }).rule).toEqual({ statement: 'ours' });
   });
 });

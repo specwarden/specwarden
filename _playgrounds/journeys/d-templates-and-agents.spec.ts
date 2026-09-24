@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmdirSync, unlinkSync
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { HARNESS_CHECK_IDS, PLAN_STATUSES } from 'specwarden';
+import { SELF_CHECK_IDS, PLAN_STATUSES } from 'specwarden';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { inScratchRepository, planted } from '../../scripts/playground-proof.mjs';
@@ -80,7 +80,7 @@ const withRule = (slug: TSlug, id: string, checkId: string) => ({
   '.specwarden/rules.mjs': planted(
     repoFile(slug, '.specwarden/rules.mjs'),
     'export const rules = [\n',
-    `export const rules = [\n  { id: '${id}', statement: 'switched on by hand', owner: '.specwarden/README.md', enforcement: { checkIds: ['${checkId}'] } },\n`,
+    `export const rules = [\n  { id: '${id}', statement: 'switched on by hand', owner: '.specwarden/README.md', enforcement: { enforcedBy: ['${checkId}'] } },\n`,
   ),
 });
 
@@ -90,10 +90,11 @@ describe('day one — what init writes, read as the newcomer reads it', () => {
     let init: { status: number | null; stdout: string; stderr: string };
     let check: { status: number | null; stdout: string; stderr: string };
     beforeAll(() => {
-      [init, check] = inScratchRepository(slug, { ...setupFor(slug), edits: { '.specwarden': null } }, ({ warden }) => [
-        warden(['init', '--template', slug]),
-        warden(['check', '--all']),
-      ]);
+      [init, check] = inScratchRepository(
+        slug,
+        { ...setupFor(slug), edits: { '.specwarden': null } },
+        ({ specwarden }) => [specwarden(['init', '--template', slug]), specwarden(['check', '--all'])],
+      );
     }, SLOW);
 
     it('init exits 0, lists what it wrote, names every example it left switched off, and says what to run next', () => {
@@ -133,8 +134,8 @@ describe('day one — what init writes, read as the newcomer reads it', () => {
       const run = inScratchRepository(
         'agentic',
         { ...setupFor('agentic'), edits: { '.specwarden': null } },
-        ({ dir, warden }) => ({
-          out: warden(['init', '--template', 'agentic']).stdout,
+        ({ dir, specwarden }) => ({
+          out: specwarden(['init', '--template', 'agentic']).stdout,
           atRoot: existsSync(join(dir, '.specwarden', 'perimeter.mjs')),
           underChecks: existsSync(join(dir, '.specwarden', 'checks', 'perimeter.mjs')),
         }),
@@ -155,7 +156,7 @@ describe('day one — what init writes, read as the newcomer reads it', () => {
         const out = inScratchRepository(
           slug,
           { edits: { '.specwarden': null } },
-          ({ warden }) => warden(['init', '--template', slug]).stdout,
+          ({ specwarden }) => specwarden(['init', '--template', slug]).stdout,
         );
         expect(out, slug).toMatch(/^ {2}spec-source\.mjs +where requirements and tasks come from/m);
         expect(out, slug).not.toMatch(/^ {4}spec-source\.mjs$/m);
@@ -171,7 +172,7 @@ describe('day one — what init writes, read as the newcomer reads it', () => {
       const out = inScratchRepository(
         'monorepo',
         { edits: { '.specwarden': null } },
-        ({ warden }) => warden(['init', '--template', 'monorepo']).stdout,
+        ({ specwarden }) => specwarden(['init', '--template', 'monorepo']).stdout,
       );
       expect(readdirSync(repoPath('monorepo', 'packages'))).toHaveLength(3);
       expect(out).toContain(
@@ -185,14 +186,14 @@ describe('day one — what init writes, read as the newcomer reads it', () => {
     'init does not recommend `suggest` after a template, and `suggest` never points at the config',
     () => {
       // It recommended a command with nothing to say in any template repository, which then
-      // said to copy a suggestion into warden.config.mjs — where no check of this tree lives.
-      const r = inScratchRepository('node-ts', { edits: { '.specwarden': null } }, ({ warden }) => [
-        warden(['init', '--template', 'node-ts']),
-        warden(['suggest']),
+      // said to copy a suggestion into config.mjs — where no check of this tree lives.
+      const r = inScratchRepository('node-ts', { edits: { '.specwarden': null } }, ({ specwarden }) => [
+        specwarden(['init', '--template', 'node-ts']),
+        specwarden(['suggest']),
       ]);
       expect(r[0].stdout).not.toContain('specwarden suggest');
       expect(r[1].stdout).toContain('nothing to suggest');
-      expect(r[1].stdout).not.toContain('warden.config.mjs');
+      expect(r[1].stdout).not.toContain('config.mjs');
     },
     SLOW,
   );
@@ -207,13 +208,13 @@ describe('day one — what init writes, read as the newcomer reads it', () => {
         specs[`src/modules/${name}/${name}.service.spec.ts`] = "import { it } from 'node:test';\nit('x', () => {});\n";
       specs['src/modules/payments/payments.service.ts'] = 'export class PaymentsService {}\n';
       specs['src/modules/refunds/refunds.service.ts'] = 'export class RefundsService {}\n';
-      const r = inScratchRepository('nestjs', { edits: specs }, ({ dir, warden }) => {
-        const out = warden(['suggest']).stdout;
+      const r = inScratchRepository('nestjs', { edits: specs }, ({ dir, specwarden }) => {
+        const out = specwarden(['suggest']).stdout;
         const target = /Save as (\S+):\n/.exec(out)?.[1] ?? '';
         const file = /\.check\.mjs:\n\n([\s\S]*?\n\}\);)\n/.exec(out)?.[1] ?? '';
         mkdirSync(dirname(join(dir, target)), { recursive: true });
         writeFileSync(join(dir, target), `${file}\n`);
-        return { out, target, check: warden(['check', '--id', 'service-has-spec']) };
+        return { out, target, check: specwarden(['check', '--id', 'service-has-spec']) };
       });
       expect(r.out).toContain('100% of **/*.service.ts have {name}.spec.ts (3 of 3).');
       expect(r.target).toBe('.specwarden/checks/tests/service-has-spec.check.mjs');
@@ -234,8 +235,8 @@ describe('day one — what init writes, read as the newcomer reads it', () => {
   it(
     'a template-less init writes the same family table, each module named',
     () => {
-      const readme = inScratchRepository('node-ts', { edits: { '.specwarden': null } }, ({ dir, warden }) => {
-        expect(warden(['init']).status).toBe(0);
+      const readme = inScratchRepository('node-ts', { edits: { '.specwarden': null } }, ({ dir, specwarden }) => {
+        expect(specwarden(['init']).status).toBe(0);
         return readFileSync(join(dir, '.specwarden', 'checks', 'README.md'), 'utf8');
       });
       expect(readme).toContain('| `security/` | secret-scan | `@specwarden/security` |');
@@ -272,10 +273,10 @@ describe('day one — what init writes, read as the newcomer reads it', () => {
   it(
     'the README claims no zone check the tree does not run',
     () => {
-      // "fails its own zone check" — the consumer's run has no zone-boundary without `harness.zone`.
+      // "fails its own zone check" — the consumer's run has no zone-boundary without `selfChecks.zone`.
       for (const slug of TEMPLATES) expect(repoFile(slug, '.specwarden/README.md')).not.toMatch(/zone check/i);
-      expect(HARNESS_CHECK_IDS).toContain('zone-boundary');
-      const list = inScratchRepository('node-ts', {}, ({ warden }) => warden(['check', '--list']).stdout);
+      expect(SELF_CHECK_IDS).toContain('zone-boundary');
+      const list = inScratchRepository('node-ts', {}, ({ specwarden }) => specwarden(['check', '--list']).stdout);
       expect(list).not.toContain('zone-boundary');
     },
     SLOW,
@@ -329,7 +330,7 @@ describe('day one — what init writes, read as the newcomer reads it', () => {
             ),
           },
         },
-        ({ warden }) => warden(['check', '--id', 'doc-paths']),
+        ({ specwarden }) => specwarden(['check', '--id', 'doc-paths']),
       );
       expect(r.status).toBe(1);
       expect(r.stdout).toMatch(/README\.md:\d+ names `docs\/runbooks\/restart-the-kraken\.md`, which does not resolve/);
@@ -348,7 +349,7 @@ describe('day one — what init writes, read as the newcomer reads it', () => {
             'CLAUDE.md': planted(repoFile('agentic', 'CLAUDE.md'), 'docs/architecture.md', 'docs/architecture-v2.md'),
           },
         },
-        ({ warden }) => warden(['check', '--id', 'doc-paths']),
+        ({ specwarden }) => specwarden(['check', '--id', 'doc-paths']),
       );
       expect(r.status).toBe(1);
       expect(r.stdout).toMatch(/CLAUDE\.md:\d+ names `docs\/architecture-v2\.md`, which does not resolve/);
@@ -359,19 +360,19 @@ describe('day one — what init writes, read as the newcomer reads it', () => {
   it('the ops and nestjs examples name the files their repository has — the ones init detected', () => {
     // They named `caddy/Caddyfile.${mode}`, `.github/workflows/ci.yml` and
     // `config/env.schema.json`, none of which these repositories have.
-    const up = repoFile('ops', '.specwarden/checks/ops/upstreams-resolve.check.mjs.example');
+    const up = repoFile('ops', '.specwarden/checks/ops/proxy-upstreams.check.mjs.example');
     expect(up).toContain("fileFor: () => 'deploy/nginx/upstreams.conf'");
     expect(existsSync(repoPath('ops', 'deploy/nginx/upstreams.conf'))).toBe(true);
     // …and says plainly that the check reads Caddy, not nginx.
     expect(up).toContain("not nginx's: over this file it finds no upstream and fails");
 
-    expect(repoFile('ops', '.specwarden/checks/harness/gate-coverage.check.mjs.example')).toContain(
-      "workflow: '.github/workflows/deploy.yml'",
+    expect(repoFile('ops', '.specwarden/checks/ops/ci-coverage.check.mjs.example')).toContain(
+      "workflowFile: '.github/workflows/deploy.yml'",
     );
     expect(existsSync(repoPath('ops', '.github/workflows/deploy.yml'))).toBe(true);
 
     for (const slug of ['ops', 'nestjs'] as const) {
-      const env = repoFile(slug, '.specwarden/checks/ops/env-files-agree.check.mjs.example');
+      const env = repoFile(slug, '.specwarden/checks/ops/env-pairing.check.mjs.example');
       expect(env).not.toContain('config/env.schema.json');
       expect(env).toContain("read('.env.example')");
       expect(existsSync(repoPath(slug, '.env.example'))).toBe(true);
@@ -391,8 +392,8 @@ describe('switching an example on', () => {
       expect(repoFile('docs-only', `.specwarden/checks/${example}`)).toContain(
         'rename to doc-placement.check.mjs AND uncomment its rule in rules.mjs',
       );
-      const r = inScratchRepository('docs-only', { edits: activate('docs-only', example) }, ({ warden }) =>
-        warden(['check', '--all']),
+      const r = inScratchRepository('docs-only', { edits: activate('docs-only', example) }, ({ specwarden }) =>
+        specwarden(['check', '--all']),
       );
       expect(r.status).toBe(0);
       expect(r.stdout).toMatch(/✅ doc-placement/);
@@ -405,16 +406,16 @@ describe('switching an example on', () => {
     'nestjs migrations example: an engine factory implies no rule — renamed alone orphan-check is red, uncommented it is green',
     () => {
       // Why the second step is there: `fromResult` carries no rule of its own.
-      const example = 'backend/migrations-backwards-compatible.check.mjs.example';
-      const r = inScratchRepository('nestjs', { edits: activate('nestjs', example) }, ({ warden }) =>
-        warden(['check', '--all']),
+      const example = 'workspace/migrations-backwards-compatible.check.mjs.example';
+      const r = inScratchRepository('nestjs', { edits: activate('nestjs', example) }, ({ specwarden }) =>
+        specwarden(['check', '--all']),
       );
       expect(r.status).toBe(1);
       expect(r.stdout).toContain('1 check(s) enforce no declared rule: migrations-backwards-compatible');
       const both = inScratchRepository(
         'nestjs',
         { edits: { ...activate('nestjs', example), ...uncomment('nestjs', 'migrations-backwards-compatible') } },
-        ({ warden }) => warden(['check', '--all']),
+        ({ specwarden }) => specwarden(['check', '--all']),
       );
       expect(both.status).toBe(0);
       expect(both.stdout).toContain('✓ migrations-backwards-compatible — 1 migration files examined, clean');
@@ -433,7 +434,7 @@ describe('switching an example on', () => {
             ...uncomment('docs-only', 'doc-placement'),
           },
         },
-        ({ warden }) => warden(['check', '--all']),
+        ({ specwarden }) => specwarden(['check', '--all']),
       );
       expect(r.status).toBe(0);
     },
@@ -451,7 +452,7 @@ describe('switching an example on', () => {
             ...withRule('docs-only', 'documents-sit-where-their-kind-lives', 'doc-placement'),
           },
         },
-        ({ warden }) => warden(['check', '--all']),
+        ({ specwarden }) => specwarden(['check', '--all']),
       );
       expect(r.status).toBe(0);
     },
@@ -474,7 +475,7 @@ describe('switching an example on', () => {
             ...uncomment('node-ts', 'doc-symbols'),
           },
         },
-        ({ warden }) => warden(['check', '--id', 'doc-symbols']),
+        ({ specwarden }) => specwarden(['check', '--id', 'doc-symbols']),
       );
       expect(r.status).toBe(0);
       expect(r.stdout).toContain('✅ doc-symbols');
@@ -500,7 +501,7 @@ describe('switching an example on', () => {
             'README.md': readme,
           },
         },
-        ({ warden }) => warden(['check', '--id', 'doc-symbols']),
+        ({ specwarden }) => specwarden(['check', '--id', 'doc-symbols']),
       );
       expect(r.status).toBe(1);
       expect(r.stdout).toContain('SlugifyError');
@@ -524,10 +525,10 @@ describe('switching an example on', () => {
             ...uncomment('docs-only', 'doc-counts'),
           },
         },
-        ({ warden }) => warden(['check', '--id', 'doc-counts']),
+        ({ specwarden }) => specwarden(['check', '--id', 'doc-counts']),
       );
       expect(r.status).toBe(0);
-      expect(r.stdout).toMatch(/✓ \d+ document\(s\), no restated counts/);
+      expect(r.stdout).toMatch(/✓ doc-counts — \d+ document\(s\) examined, clean/);
     },
     SLOW,
   );
@@ -537,12 +538,12 @@ describe('switching an example on', () => {
     () => {
       // Its comment said an empty corpus was "never passed over", while it printed a count
       // and went green. It declares `corpus: { atLeast: 1 }` now.
-      const example = 'backend/migrations-backwards-compatible.check.mjs.example';
+      const example = 'workspace/migrations-backwards-compatible.check.mjs.example';
       expect(repoFile('nestjs', `.specwarden/checks/${example}`)).toContain('corpus: { atLeast: 1,');
       const r = inScratchRepository(
         'nestjs',
         { edits: { ...activate('nestjs', example), migrations: null } },
-        ({ warden }) => warden(['check', '--id', 'migrations-backwards-compatible']),
+        ({ specwarden }) => specwarden(['check', '--id', 'migrations-backwards-compatible']),
       );
       expect(r.status).toBe(1);
       expect(r.stdout).toContain(
@@ -553,17 +554,18 @@ describe('switching an example on', () => {
   );
 
   it(
-    'ops env-files-agree, renamed as shipped: the empty `verifierService` is refused by name',
+    'ops env-pairing, renamed as shipped: the guessed verifier is named, with what to put there',
     () => {
-      // The finding named a service called ``.
+      // The finding named a service called ``. An empty name is a load error now, so the
+      // example ships a guess no compose file declares, and the finding says what to write.
       const r = inScratchRepository(
         'ops',
-        { edits: activate('ops', 'ops/env-files-agree.check.mjs.example') },
-        ({ warden }) => warden(['check', '--id', 'env-files-agree']),
+        { edits: activate('ops', 'ops/env-pairing.check.mjs.example') },
+        ({ specwarden }) => specwarden(['check', '--id', 'env-pairing']),
       );
       expect(r.status).toBe(1);
       expect(r.stdout).toContain(
-        '`verifierService` is not set — name the compose service that VERIFIES a key another service sends.',
+        'service `your-verifier` is not declared — name in `verifierService` the service that verifies',
       );
       expect(r.stdout).not.toContain('service ``');
     },
@@ -571,30 +573,30 @@ describe('switching an example on', () => {
   );
 
   it(
-    'ops gate-coverage, renamed as shipped, reads the workflow init found — and fails on it loudly, the right direction',
+    'ops ci-coverage, renamed as shipped, reads the workflow init found — and fails on it loudly, the right direction',
     () => {
       // It read `.github/workflows/ci.yml`, which this repository does not have.
       const r = inScratchRepository(
         'ops',
-        { edits: activate('ops', 'harness/gate-coverage.check.mjs.example') },
-        ({ warden }) => warden(['check', '--id', 'gate-coverage']),
+        { edits: activate('ops', 'ops/ci-coverage.check.mjs.example') },
+        ({ specwarden }) => specwarden(['check', '--id', 'ci-coverage']),
       );
       expect(r.status).toBe(1);
-      expect(r.stdout).toContain('.github/workflows/deploy.yml names no gate this scanner can see.');
+      expect(r.stdout).toContain('.github/workflows/deploy.yml names no check this scanner can read.');
     },
     SLOW,
   );
 
   it(
-    'ops upstreams-resolve, renamed as shipped, reads the nginx config init found and says it cannot see into it',
+    'ops proxy-upstreams, renamed as shipped, reads the nginx config init found and says it cannot see into it',
     () => {
       const r = inScratchRepository(
         'ops',
-        { edits: activate('ops', 'ops/upstreams-resolve.check.mjs.example') },
-        ({ warden }) => warden(['check', '--id', 'upstreams-resolve']),
+        { edits: activate('ops', 'ops/proxy-upstreams.check.mjs.example') },
+        ({ specwarden }) => specwarden(['check', '--id', 'proxy-upstreams']),
       );
       expect(r.status).toBe(1);
-      expect(r.stdout).toContain('deploy/nginx/upstreams.conf has no reverse_proxy upstream this check can see.');
+      expect(r.stdout).toContain('deploy/nginx/upstreams.conf has no `reverse_proxy` upstream this check can read');
     },
     SLOW,
   );
@@ -609,7 +611,7 @@ describe('the week after', () => {
         const r = inScratchRepository(
           'node-ts',
           { edits: { 'src/slugify.ts': null, 'src/slug.ts': repoFile('node-ts', 'src/slugify.ts') } },
-          ({ warden }) => warden(['check', '--id', 'doc-paths']),
+          ({ specwarden }) => specwarden(['check', '--id', 'doc-paths']),
         );
         expect(r.status).toBe(1);
         expect(r.stdout).toMatch(/README\.md:\d+ names `src\/slugify\.ts`, which does not resolve/);
@@ -618,7 +620,7 @@ describe('the week after', () => {
     );
 
     it(
-      'nestjs: the plugin over a modulesRoot that matches nothing fails its corpus floor, and says to move the pathspec',
+      'nestjs: the plugin over a modulesDir that matches nothing fails its corpus floor, and says to move the pathspec',
       () => {
         const moved: Record<string, string | null> = {};
         for (const rel of [
@@ -632,8 +634,8 @@ describe('the week after', () => {
           moved[`src/modules/invoices/${rel}`] = null;
           moved[`src/features/invoices/${rel}`] = repoFile('nestjs', `src/modules/invoices/${rel}`);
         }
-        const r = inScratchRepository('nestjs', { edits: moved }, ({ warden }) =>
-          warden(['check', '--id', 'nestjs/db-access-through-repositories']),
+        const r = inScratchRepository('nestjs', { edits: moved }, ({ specwarden }) =>
+          specwarden(['check', '--id', 'nestjs-db-access']),
         );
         expect(r.status).toBe(1);
         expect(r.stdout).toContain('`src/modules/**` matched nothing to scan');
@@ -645,7 +647,7 @@ describe('the week after', () => {
     );
 
     it(
-      'ops: shell-local-scope over scripts moved to bin/ says it examined nothing',
+      'ops: shell-scope over scripts moved to bin/ says it examined nothing',
       () => {
         const r = inScratchRepository(
           'ops',
@@ -657,11 +659,11 @@ describe('the week after', () => {
               'bin/deploy.sh': repoFile('ops', 'scripts/deploy.sh'),
             },
           },
-          ({ warden }) => warden(['check', '--all']),
+          ({ specwarden }) => specwarden(['check', '--all']),
         );
         expect(r.status).toBe(1);
         expect(r.stdout).toContain(
-          'no shell files matched scripts/**/*.sh, deploy/**/*.sh, *.sh — this check examined nothing',
+          'examined 0 shell file(s) — `scripts/**/*.sh`, `deploy/**/*.sh`, `*.sh` matched no tracked script — below the floor of 1.',
         );
         expect(r.stdout).toMatch(/docs\/runbooks\/restore-a-backup\.md:\d+ names `scripts\/backup\.sh`/);
       },
@@ -682,7 +684,7 @@ describe('the week after', () => {
           'decisions/0001-handbook-lives-in-git.md',
         ])
           edits[`handbook/${rel}`] = repoFile('docs-only', `docs/${rel}`);
-        const r = inScratchRepository('docs-only', { edits }, ({ warden }) => warden(['check', '--all']));
+        const r = inScratchRepository('docs-only', { edits }, ({ specwarden }) => specwarden(['check', '--all']));
         expect(r.status).toBe(1);
         expect(r.stdout).toContain('❌ doc-paths');
         expect(r.stdout).toContain('❌ doc-hygiene');
@@ -702,12 +704,13 @@ describe('the week after', () => {
         const edits: Record<string, string | null> = { '.claude/agents': null };
         for (const role of ['lead', 'reviewer', 'scout'])
           edits[`.claude/roles/${role}.md`] = repoFile('agentic', `.claude/agents/${role}.md`);
-        const r = inScratchRepository('agentic', { ...setupFor('agentic'), edits }, ({ warden }) =>
-          warden(['check', '--id', 'agent-definitions']),
+        const r = inScratchRepository('agentic', { ...setupFor('agentic'), edits }, ({ specwarden }) =>
+          specwarden(['check', '--id', 'agent-definitions']),
         );
         expect(r.status).toBe(1);
-        expect(r.stdout).toContain('.claude/agents does not exist — this check examined nothing');
-        expect(r.stdout).toContain('Point `agentsDir` at the folder the agent definitions live in.');
+        expect(r.stdout).toContain(
+          'examined 0 agent definition(s) — `.claude/agents` does not exist — point `agentsDir` at the folder the agent definitions live in — below the floor of 1.',
+        );
       },
       SLOW,
     );
@@ -727,7 +730,7 @@ describe('the week after', () => {
               'docs/plans/burst-allowance.md': repoFile('agentic', PLAN),
             },
           },
-          ({ warden }) => warden(['check', '--all']),
+          ({ specwarden }) => specwarden(['check', '--all']),
         );
         expect(r.status).toBe(1);
         expect(r.stdout).toContain('❌ plan-shape');
@@ -765,7 +768,7 @@ export const check = defineCheck({
         const r = inScratchRepository(
           'node-ts',
           { edits: { '.specwarden/checks/hygiene/no-console.check.mjs': HAND } },
-          ({ warden }) => warden(['check', '--all']),
+          ({ specwarden }) => specwarden(['check', '--all']),
         );
         expect(r.status).toBe(1);
         expect(r.stdout).toContain('✓ no-console — 2 files examined, clean');
@@ -785,7 +788,7 @@ export const check = defineCheck({
         const r = inScratchRepository(
           'node-ts',
           { edits: { '.specwarden/checks/hygiene/no-console.check.mjs': withOwnRule } },
-          ({ warden }) => warden(['check', '--all']),
+          ({ specwarden }) => specwarden(['check', '--all']),
         );
         // The same shape every check init wrote here has: its rule on the check, owned by a file.
         expect(r.status).toBe(0);
@@ -808,17 +811,17 @@ export const check = defineCheck({
       '`specwarden new` scaffolds plain JavaScript that loads, and is red until its condition is written',
       () => {
         // It held TypeScript (`as const`) in a .mjs, and the next run died on a SyntaxError.
-        const run = inScratchRepository('node-ts', {}, ({ dir, warden }) => {
-          const scaffold = warden(['new', 'doc-owner', '--family', 'hygiene']);
+        const run = inScratchRepository('node-ts', {}, ({ dir, specwarden }) => {
+          const scaffold = specwarden(['new', 'doc-owner', '--family', 'hygiene']);
           const file = join(dir, '.specwarden', 'checks', 'hygiene', 'doc-owner.check.mjs');
-          return { scaffold, body: readFileSync(file, 'utf8'), check: warden(['check', '--all']) };
+          return { scaffold, body: readFileSync(file, 'utf8'), check: specwarden(['check', '--all']) };
         });
         expect(run.scaffold.status).toBe(0);
         expect(run.body).not.toContain('as const');
         expect(run.check.status).toBe(1);
         expect(run.check.stderr).not.toContain('SyntaxError');
         expect(run.check.stdout).toContain('the condition of doc-owner is not written yet');
-        expect(run.check.stdout).toContain('gate(s) FAILED');
+        expect(run.check.stdout).toContain('check(s) FAILED');
       },
       SLOW,
     );
@@ -832,7 +835,7 @@ export const check = defineCheck({
         const out = inScratchRepository(
           'node-ts',
           {},
-          ({ warden }) => warden(['new', 'doc-owner', '--family', 'hygiene']).stdout,
+          ({ specwarden }) => specwarden(['new', 'doc-owner', '--family', 'hygiene']).stdout,
         );
         expect(out).toContain('wrote .specwarden/checks/hygiene/doc-owner.check.mjs\n');
       },
@@ -843,14 +846,14 @@ export const check = defineCheck({
   it(
     "the template package uninstalled, the tree still runs — the files are the repository's own",
     () => {
-      const r = inScratchRepository('node-ts', {}, ({ dir, warden }) => {
+      const r = inScratchRepository('node-ts', {}, ({ dir, specwarden }) => {
         const link = join(dir, 'node_modules', '@specwarden', 'template-node-ts');
         try {
           unlinkSync(link);
         } catch {
           rmdirSync(link); // a junction, on Windows
         }
-        return { gone: !existsSync(link), run: warden(['check', '--all']) };
+        return { gone: !existsSync(link), run: specwarden(['check', '--all']) };
       });
       expect(r.gone).toBe(true);
       expect(r.run.status).toBe(0);
@@ -859,12 +862,12 @@ export const check = defineCheck({
   );
 
   describe('specwarden migrate', () => {
-    const cfg = () => repoFile('node-ts', '.specwarden/warden.config.mjs');
+    const cfg = () => repoFile('node-ts', '.specwarden/config.mjs');
 
     it(
       'with `version` absent, says the config is current',
       () => {
-        const r = inScratchRepository('node-ts', {}, ({ warden }) => warden(['migrate']));
+        const r = inScratchRepository('node-ts', {}, ({ specwarden }) => specwarden(['migrate']));
         expect(r.status).toBe(0);
         expect(r.stdout).toContain('config is at version 1, the current version — nothing to migrate.');
       },
@@ -878,9 +881,9 @@ export const check = defineCheck({
         const r = inScratchRepository(
           'node-ts',
           {
-            edits: { '.specwarden/warden.config.mjs': planted(cfg(), 'defineConfig({', 'defineConfig({ version: 0,') },
+            edits: { '.specwarden/config.mjs': planted(cfg(), 'defineConfig({', 'defineConfig({ version: 0,') },
           },
-          ({ warden }) => [warden(['migrate']), warden(['check', '--list'])],
+          ({ specwarden }) => [specwarden(['migrate']), specwarden(['check', '--list'])],
         );
         expect(r[0].status).toBe(2);
         expect(r[0].stderr).toContain('config declares version 0, which no engine ever spoke');
@@ -896,9 +899,9 @@ export const check = defineCheck({
         const r = inScratchRepository(
           'node-ts',
           {
-            edits: { '.specwarden/warden.config.mjs': planted(cfg(), 'defineConfig({', 'defineConfig({ version: 2,') },
+            edits: { '.specwarden/config.mjs': planted(cfg(), 'defineConfig({', 'defineConfig({ version: 2,') },
           },
-          ({ warden }) => [warden(['migrate']), warden(['check', '--all'])],
+          ({ specwarden }) => [specwarden(['migrate']), specwarden(['check', '--all'])],
         );
         expect(r[0].status).toBe(2);
         expect(r[0].stderr).toContain('newer than this engine (v1). Upgrade specwarden.');
@@ -928,7 +931,7 @@ describe('the agent surface — what every shipped SKILL.md tells an agent', () 
   it(
     'every `specwarden <command>` and every flag on such a line is one the CLI knows',
     () => {
-      const help = inScratchRepository('node-ts', {}, ({ warden }) => said(warden(['--help'])));
+      const help = inScratchRepository('node-ts', {}, ({ specwarden }) => said(specwarden(['--help'])));
       const flags = readFileSync(join(ROOT, 'core/src/runtime/cli/_shared/parse-args/parse-args.util.ts'), 'utf8');
       const unknown: string[] = [];
       for (const k of Object.keys(SKILLS)) {
@@ -971,17 +974,17 @@ describe('the agent surface — what every shipped SKILL.md tells an agent', () 
     [...skill(k).matchAll(/```js\n([\s\S]*?)```/g)].map((m) => m[1]).find((b) => b.includes(`${factory}(`)) ?? '';
 
   it(
-    'specwarden-agents: its snippet names `agentsDir`, and pasted over the agentic roster it is green',
+    'specwarden-agents: its snippet writes only what differs from the defaults, and pasted over the agentic roster it is green',
     () => {
       // It passed `agents:`, which the factory does not have, and the check crashed on
-      // "The path argument must be of type string".
+      // "The path argument must be of type string". `.claude/agents` is the default folder.
       const body = snippet('agents', 'agentDefinitions');
-      expect(body).toContain("agentsDir: '.claude/agents',");
+      expect(body).toContain("orchestrators: ['lead']");
       expect(body).not.toMatch(/\bagents: /);
       const r = inScratchRepository(
         'agentic',
         { ...setupFor('agentic'), edits: { '.specwarden/checks/agents/agent-definitions.check.mjs': body } },
-        ({ warden }) => warden(['check', '--id', 'agent-definitions']),
+        ({ specwarden }) => specwarden(['check', '--id', 'agent-definitions']),
       );
       expect(r.status).toBe(0);
     },
@@ -993,12 +996,12 @@ describe('the agent surface — what every shipped SKILL.md tells an agent', () 
     () => {
       // It passed `plans:` and `statuses:`, neither of which exists, and the check crashed.
       const body = snippet('plans', 'planShape');
-      expect(body).toContain("plansDir: 'docs/_plans',");
+      expect(body).toContain("plansDir: 'docs/_plans'");
       expect(body).not.toMatch(/\b(plans|statuses): /);
       const r = inScratchRepository(
         'agentic',
         { ...setupFor('agentic'), edits: { '.specwarden/checks/plans/plan-shape.check.mjs': body } },
-        ({ warden }) => warden(['check', '--id', 'plan-shape']),
+        ({ specwarden }) => specwarden(['check', '--id', 'plan-shape']),
       );
       expect(r.status).toBe(0);
     },
@@ -1006,11 +1009,11 @@ describe('the agent surface — what every shipped SKILL.md tells an agent', () 
   );
 
   it(
-    'specwarden-docs: its snippet skips a tree with `skipDirs`, the option docPaths reads — the skipped tree is not read',
+    'specwarden-docs: its snippet leaves a tree out with `except`, the option docPaths reads — the tree is not read',
     () => {
       // It passed `skipped:`, which docPaths dropped without a word, so the tree was still read.
       const body = snippet('docs', 'docPaths');
-      expect(body).toContain("skipDirs: ['docs/_archive/'],");
+      expect(body).toContain("except: ['docs/_archive']");
       expect(body).not.toContain('skipped:');
       const archive = 'docs/_plans-archive/2026-06-tenant-limits.md';
       const r = inScratchRepository(
@@ -1018,11 +1021,11 @@ describe('the agent surface — what every shipped SKILL.md tells an agent', () 
         {
           ...setupFor('agentic'),
           edits: {
-            '.specwarden/checks/docs/doc-paths.check.mjs': planted(body, 'docs/_archive/', 'docs/_plans-archive/'),
+            '.specwarden/checks/docs/doc-paths.check.mjs': planted(body, 'docs/_archive', 'docs/_plans-archive'),
             [archive]: `${repoFile('agentic', archive)}\nIt lived in \`src/limits/window.ts\`.\n`,
           },
         },
-        ({ warden }) => warden(['check', '--id', 'doc-paths']),
+        ({ specwarden }) => specwarden(['check', '--id', 'doc-paths']),
       );
       expect(r.status).toBe(0);
       expect(r.stdout).not.toContain('src/limits/window.ts');
@@ -1030,23 +1033,24 @@ describe('the agent surface — what every shipped SKILL.md tells an agent', () 
     SLOW,
   );
 
-  it('specwarden-ops: its snippet names `arbiterJob`, the option the factory has, and the defaults it may omit', () => {
-    // It named `arbiter:` and omitted four options that were required then.
+  it('specwarden-ops: its snippet names `requiredJob`, the option the factory has, and the defaults it may omit', () => {
+    // It named `arbiter:` and omitted four options that were required then; the option was
+    // `arbiterJob` after that, and is `requiredJob` now — the job branch protection requires.
     const text = skill('ops');
-    expect(snippet('ops', 'gatesHaveCiJobs')).toContain("arbiterJob: 'ci-ok',");
-    expect(text).not.toContain("arbiter: 'ci-ok',");
+    expect(snippet('ops', 'ciCoverage')).toContain("requiredJob: 'ci-ok',");
+    expect(text).not.toMatch(/arbiter(Job)?: 'ci-ok',/);
     expect(text).toMatch(/`ciTier` defaults to `heavy`, `cheapTier` to `fast`, and `runnerPattern`/);
     const dts = readFileSync(join(ROOT, 'modules/ops/dist/index.d.ts'), 'utf8');
-    expect(dts).toContain('readonly arbiterJob: string;');
-    expect(dts).not.toMatch(/readonly arbiter\??:/);
+    expect(dts).toContain('readonly requiredJob: string;');
+    expect(dts).not.toMatch(/readonly arbiter/);
   });
 
   it('specwarden-ops and the example the templates ship give one account of what the verifier must hold', () => {
-    // The skill said envFilesAgree "compares KEYS, never values"; the example said a pair
+    // The skill said envPairing "compares KEYS, never values"; the example said a pair
     // "must hold the same value". Both now say the verifier must hold the key the sender has.
     expect(skill('ops')).not.toContain('compares KEYS, never values');
-    expect(skill('ops')).toContain('must be present and non-empty\nin the verifier');
-    const example = repoFile('ops', '.specwarden/checks/ops/env-files-agree.check.mjs.example');
+    expect(skill('ops')).toMatch(/must be present and non-empty\s+in the\s+verifier/);
+    const example = repoFile('ops', '.specwarden/checks/ops/env-pairing.check.mjs.example');
     expect(example).not.toContain('must hold the same value');
     expect(example).toMatch(/VERIFIES a key another sends \(it must hold\n\/\/ that key too\)/);
   });
@@ -1065,29 +1069,29 @@ describe('the agent surface — what every shipped SKILL.md tells an agent', () 
     () => {
       // Should be: one way named as THE way in both, with the other a footnote.
       expect(skill('nestjs')).toContain('plugins: [');
-      expect(repoFile('nestjs', '.specwarden/checks/backend/nestjs-conventions.check.mjs')).toContain(
+      expect(repoFile('nestjs', '.specwarden/checks/nestjs/nestjs-conventions.check.mjs')).toContain(
         'export const checks = plugin.checks;',
       );
       const cfg = planted(
         planted(
-          repoFile('nestjs', '.specwarden/warden.config.mjs'),
+          repoFile('nestjs', '.specwarden/config.mjs'),
           "import { rules } from './rules.mjs';",
           "import { rules } from './rules.mjs';\nimport { nestjs } from '@specwarden/plugin-nestjs';",
         ),
         '  rules,\n',
-        "  rules,\n  plugins: [nestjs({ modulesRoot: 'src/modules', ormPackage: 'typeorm', allowedFrom: ['**/repositories/**', '**/*.entity.ts'], ratchet: 0 })],\n",
+        "  rules,\n  plugins: [nestjs({ modulesDir: 'src/modules', ormPackage: 'typeorm', except: ['**/repositories/**', '**/*.entity.ts'], ratchet: 0 })],\n",
       );
       const list = inScratchRepository(
         'nestjs',
         {
           edits: {
-            '.specwarden/checks/backend/nestjs-conventions.check.mjs': null,
-            '.specwarden/warden.config.mjs': cfg,
+            '.specwarden/checks/nestjs/nestjs-conventions.check.mjs': null,
+            '.specwarden/config.mjs': cfg,
           },
         },
-        ({ warden }) => warden(['check', '--list']).stdout,
+        ({ specwarden }) => specwarden(['check', '--list']).stdout,
       );
-      expect(list).toContain('nestjs/db-access-through-repositories');
+      expect(list).toContain('nestjs-db-access');
     },
     SLOW,
   );
@@ -1095,7 +1099,7 @@ describe('the agent surface — what every shipped SKILL.md tells an agent', () 
   it('the core skill covers the perimeter, enforcement-resolves, and switching an `.example` on', () => {
     // It mentioned none of them — the three things an agent in a scaffolded repository meets
     // that no check file explains: the hook that just refused it, the red gate after renaming
-    // a perimeter rule, and the red orphan-check after an activation.
+    // a perimeter policy, and the red orphan-check after an activation.
     const text = skill('core');
     for (const heading of ['## The perimeter: what an assistant may not do', '## A check a template left switched off'])
       expect(text).toContain(heading);
@@ -1117,6 +1121,8 @@ describe('the agent surface — what every shipped SKILL.md tells an agent', () 
         ? ref
             .slice(header.length)
             .replace(/https:\/\/github\.com\/specwarden\/specwarden\/blob\/main\/modules\//g, '../')
+            // The engine's own guide links beside itself (`./GLOSSARY.md`), made absolute the same way.
+            .replace(/https:\/\/github\.com\/specwarden\/specwarden\/blob\/main\/core\//g, './')
         : ref;
       if (body !== guide) drift.push(pkg);
     }
@@ -1150,10 +1156,12 @@ describe('the perimeter, wired as the agentic perimeter.mjs says', () => {
   let nested: number | null;
   let settingsWritten: boolean;
   beforeAll(() => {
-    inScratchRepository('agentic', setupFor('agentic'), ({ dir, warden }) => {
-      answers = Object.fromEntries(Object.entries(PAYLOADS).map(([k, v]) => [k, warden(['perimeter'], { input: v })]));
+    inScratchRepository('agentic', setupFor('agentic'), ({ dir, specwarden }) => {
+      answers = Object.fromEntries(
+        Object.entries(PAYLOADS).map(([k, v]) => [k, specwarden(['perimeter'], { input: v })]),
+      );
       // Exactly the command the comment says to put in .claude/settings.json.
-      const hook = join(dir, 'node_modules', 'specwarden', 'bin', 'warden.mjs');
+      const hook = join(dir, 'node_modules', 'specwarden', 'bin', 'specwarden.mjs');
       const env = { ...process.env, CLAUDE_PROJECT_DIR: dir };
       const w = spawnSync(process.execPath, [hook, 'perimeter'], {
         cwd: dir,
@@ -1191,15 +1199,15 @@ describe('the perimeter, wired as the agentic perimeter.mjs says', () => {
     if (code === 0) expect(answers[payload].stderr).toBe('');
   });
 
-  it('a block names the command, the rule id, and why — and tells the agent not to retry it verbatim', () => {
+  it('a block names the command, the policy id, and why — and tells the agent not to retry it verbatim', () => {
     const msg = answers['git push --force'].stderr;
-    expect(msg).toContain('Blocked by the perimeter: git push --force origin main — rule no-force-push.');
+    expect(msg).toContain('Blocked by the perimeter: git push --force origin main — policy no-force-push.');
     expect(msg).toContain('Push a new commit, or ask the owner.');
     expect(msg).toContain('do not retry it verbatim');
   });
 
   it('[friction] the block says "read the owner document" — and neither template rule names one', () => {
-    // Should be: each shipped rule carrying `owner` (commandRule takes one), or the runtime
+    // Should be: each shipped rule carrying `owner` (commandPolicy takes one), or the runtime
     // leaving that sentence out when the rule has no owner.
     expect(answers['git push --force'].stderr).toContain('Read the owner document and take the path it names');
     expect(answers['git push --force'].stderr).not.toContain(', owner ');
@@ -1209,7 +1217,7 @@ describe('the perimeter, wired as the agentic perimeter.mjs says', () => {
     // Should be: scoped to what its id says (a SHARED branch — e.g. a push-tracked one),
     // with a `why` naming what to do instead, as the file's own header demands of every rule.
     const msg = answers['git reset --hard'].stderr;
-    expect(msg).toContain('git reset --hard HEAD~1 — rule no-history-rewrite-of-a-shared-branch.');
+    expect(msg).toContain('git reset --hard HEAD~1 — policy no-history-rewrite-of-a-shared-branch.');
     expect(msg).toContain('discards work that is not yours to discard.\n');
     expect(msg).not.toMatch(/instead|git revert|new branch/i);
   });
@@ -1233,59 +1241,64 @@ describe('the perimeter, wired as the agentic perimeter.mjs says', () => {
       const out = inScratchRepository(
         'agentic',
         { ...setupFor('agentic'), edits: { '.specwarden': null } },
-        ({ warden }) => warden(['init', '--template', 'agentic']).stdout,
+        ({ specwarden }) => specwarden(['init', '--template', 'agentic']).stdout,
       );
       expect(out).toContain('until a hook runs it, .specwarden/perimeter.mjs enforces nothing.');
       expect(out).toContain('in .claude/settings.json, a hooks.PreToolUse command running');
-      expect(out).toContain('node "$CLAUDE_PROJECT_DIR/node_modules/specwarden/bin/warden.mjs" perimeter');
+      expect(out).toContain('node "$CLAUDE_PROJECT_DIR/node_modules/specwarden/bin/specwarden.mjs" perimeter');
       expect(repoFile('agentic', '.specwarden/perimeter.mjs')).toContain('Nothing is enforced until the hook is wired');
     },
     SLOW,
   );
 
   it(
-    'a custom commandRule is enforced the moment it is in perimeter.mjs — no registration',
+    'a custom commandPolicy is enforced the moment it is in perimeter.mjs — no registration',
     () => {
       const custom = planted(
         repoFile('agentic', '.specwarden/perimeter.mjs'),
-        'export const rules = [\n',
-        "export const rules = [\n  commandRule({ id: 'no-rm-rf', owner: 'docs/architecture.md', why: 'delete through git rm so the removal is in the diff.', match: (words) => (words[0] === 'rm' && words.includes('-rf') ? words.join(' ') : null) }),\n",
+        'export const policies = [\n',
+        "export const policies = [\n  commandPolicy({ id: 'no-rm-rf', owner: 'docs/architecture.md', why: 'delete through git rm so the removal is in the diff.', match: (words) => (words[0] === 'rm' && words.includes('-rf') ? words.join(' ') : null) }),\n",
       );
       const r = inScratchRepository(
         'agentic',
         { ...setupFor('agentic'), edits: { '.specwarden/perimeter.mjs': custom } },
-        ({ warden }) => [warden(['perimeter'], { input: bash('rm -rf build') }), warden(['check', '--all'])],
+        ({ specwarden }) => [
+          specwarden(['perimeter'], { input: bash('rm -rf build') }),
+          specwarden(['check', '--all']),
+        ],
       );
       expect(r[0].status).toBe(2);
-      expect(r[0].stderr).toContain('rm -rf build — rule no-rm-rf, owner docs/architecture.md. delete through git rm');
+      expect(r[0].stderr).toContain(
+        'rm -rf build — policy no-rm-rf, owner docs/architecture.md. delete through git rm',
+      );
       // [friction] …and no audit notices it enforces no declared rule. A CHECK in that state
-      // is red on orphan-check; a perimeter rule is not. Should be: the same audit for both.
+      // is red on orphan-check; a perimeter policy is not. Should be: the same audit for both.
       expect(r[1].status).toBe(0);
     },
     SLOW,
   );
 
   it(
-    'a rule that throws is skipped, and the rules after it still block',
+    'a policy that throws is skipped, and the policies after it still block',
     () => {
       const throwing = planted(
         repoFile('agentic', '.specwarden/perimeter.mjs'),
-        'export const rules = [\n',
-        "export const rules = [\n  { id: 'boom', evaluate: () => { throw new Error('boom'); } },\n",
+        'export const policies = [\n',
+        "export const policies = [\n  { id: 'boom', evaluate: () => { throw new Error('boom'); } },\n",
       );
       const r = inScratchRepository(
         'agentic',
         { ...setupFor('agentic'), edits: { '.specwarden/perimeter.mjs': throwing } },
-        ({ warden }) => warden(['perimeter'], { input: bash('git push --force') }),
+        ({ specwarden }) => specwarden(['perimeter'], { input: bash('git push --force') }),
       );
       expect(r.status).toBe(2);
-      expect(r.stderr).toContain('rule no-force-push');
+      expect(r.stderr).toContain('policy no-force-push');
     },
     SLOW,
   );
 
   it(
-    'renaming a perimeter rule without touching rules.mjs turns enforcement-resolves red, naming both',
+    'renaming a perimeter policy without touching rules.mjs turns enforcement-resolves red, naming both',
     () => {
       const renamed = planted(
         repoFile('agentic', '.specwarden/perimeter.mjs'),
@@ -1295,7 +1308,7 @@ describe('the perimeter, wired as the agentic perimeter.mjs says', () => {
       const r = inScratchRepository(
         'agentic',
         { ...setupFor('agentic'), edits: { '.specwarden/perimeter.mjs': renamed } },
-        ({ warden }) => warden(['check', '--all']),
+        ({ specwarden }) => specwarden(['check', '--all']),
       );
       expect(r.status).toBe(1);
       expect(r.stdout).toContain(
@@ -1309,7 +1322,7 @@ describe('the perimeter, wired as the agentic perimeter.mjs says', () => {
 // ─────────────────────────────────────────────────────────────────────────────────────────
 describe('plans, in the agentic repository', () => {
   const plan = () => repoFile('agentic', PLAN);
-  const LOCAL = 'node node_modules/specwarden/bin/warden.mjs check --id doc-paths';
+  const LOCAL = 'node node_modules/specwarden/bin/specwarden.mjs check --id doc-paths';
   const FENCE_1 = '```bash\nnpx specwarden check --id doc-paths\n```';
   const FENCE_2 = '```bash\nnpx specwarden check --id plan-shape\n```';
   /** The plan as `plan archive` accepts it: its harvest listed, and the archive header declared. */
@@ -1328,9 +1341,9 @@ describe('plans, in the agentic repository', () => {
     () => {
       // One acceptance convention now: `plan status` read the fenced command plan-shape
       // accepts as "(no acceptance)", so no plan satisfied both.
-      const r = inScratchRepository('agentic', setupFor('agentic'), ({ warden }) => [
-        warden(['check', '--id', 'plan-shape']),
-        warden(['plan', 'status', PLAN]),
+      const r = inScratchRepository('agentic', setupFor('agentic'), ({ specwarden }) => [
+        specwarden(['check', '--id', 'plan-shape']),
+        specwarden(['plan', 'status', PLAN]),
       ]);
       expect(r[0].status).toBe(0);
       expect(r[1].status).toBe(0);
@@ -1346,7 +1359,7 @@ describe('plans, in the agentic repository', () => {
       const r = inScratchRepository(
         'agentic',
         { ...setupFor('agentic'), edits: { [PLAN]: withAcceptance(`**Acceptance:** ${LOCAL}`) } },
-        ({ warden }) => warden(['plan', 'status', PLAN, '--verify'], { timeoutSec: 200 }),
+        ({ specwarden }) => specwarden(['plan', 'status', PLAN, '--verify'], { timeoutSec: 200 }),
       );
       expect(r.status).toBe(0);
       expect(r.stdout).toContain(`✅ the bucket carries a burst capacity — ${LOCAL}`);
@@ -1361,7 +1374,7 @@ describe('plans, in the agentic repository', () => {
       const r = inScratchRepository(
         'agentic',
         { ...setupFor('agentic'), edits: { [PLAN]: withAcceptance(`**Acceptance:** \`${LOCAL}\``) } },
-        ({ warden }) => warden(['plan', 'status', PLAN, '--verify'], { timeoutSec: 200 }),
+        ({ specwarden }) => specwarden(['plan', 'status', PLAN, '--verify'], { timeoutSec: 200 }),
       );
       expect(r.status).toBe(0);
       expect(r.stdout).toContain(`✅ the bucket carries a burst capacity — ${LOCAL}`);
@@ -1375,8 +1388,8 @@ describe('plans, in the agentic repository', () => {
       // It printed "status draft" and "declares no Status": the engine knew draft|active only.
       expect([...PLAN_STATUSES]).toEqual(['draft', 'active', 'done']);
       const done = planted(plan(), '**Status:** active', '**Status:** done');
-      const r = inScratchRepository('agentic', { ...setupFor('agentic'), edits: { [PLAN]: done } }, ({ warden }) =>
-        warden(['plan', 'status', PLAN]),
+      const r = inScratchRepository('agentic', { ...setupFor('agentic'), edits: { [PLAN]: done } }, ({ specwarden }) =>
+        specwarden(['plan', 'status', PLAN]),
       );
       expect(r.stdout).toContain('(status done, branch feat/burst-allowance)');
       expect(r.stdout).not.toContain('declares no');
@@ -1390,8 +1403,8 @@ describe('plans, in the agentic repository', () => {
       // It called it "a draft yet declares branch" and failed. Done is the state a plan is in
       // while its harvest lands — the verdict is the archive step's, not this check's.
       const done = planted(plan(), '**Status:** active', '**Status:** done');
-      const r = inScratchRepository('agentic', { ...setupFor('agentic'), edits: { [PLAN]: done } }, ({ warden }) =>
-        warden(['check', '--id', 'plan-staleness']),
+      const r = inScratchRepository('agentic', { ...setupFor('agentic'), edits: { [PLAN]: done } }, ({ specwarden }) =>
+        specwarden(['check', '--id', 'plan-staleness']),
       );
       expect(r.status, r.stdout).toBe(0);
       expect(r.stdout).toContain('is done — harvest it, then move it to');
@@ -1406,11 +1419,15 @@ describe('plans, in the agentic repository', () => {
       const r = inScratchRepository(
         'agentic',
         { ...setupFor('agentic'), edits: { 'docs/_plans/bare.md': `${plan()}\n## Harvest\n\nHarvested: yes\n` } },
-        ({ warden }) => [warden(['plan', 'archive', PLAN]), warden(['plan', 'archive', 'docs/_plans/bare.md'])],
+        ({ specwarden }) => [
+          specwarden(['plan', 'archive', PLAN]),
+          specwarden(['plan', 'archive', 'docs/_plans/bare.md']),
+        ],
       );
-      expect(r[0].status).toBe(2);
+      // Not ready is an answer — 1; 2 is kept for a plan that could not be read.
+      expect(r[0].status).toBe(1);
       expect(r[0].stderr).toContain('no Harvest section — archiving requires declaring what moved and where.');
-      expect(r[1].status).toBe(2);
+      expect(r[1].status).toBe(1);
       expect(r[1].stderr).toContain('"harvested: yes" is not accepted');
     },
     SLOW,
@@ -1422,7 +1439,7 @@ describe('plans, in the agentic repository', () => {
       const r = inScratchRepository(
         'agentic',
         { ...setupFor('agentic'), edits: { [PLAN]: archivable() } },
-        ({ warden }) => warden(['plan', 'archive', PLAN]),
+        ({ specwarden }) => specwarden(['plan', 'archive', PLAN]),
       );
       expect(r.status).toBe(0);
       expect(r.stdout).toContain(`Move it: git mv ${PLAN} docs/_plans-archive/`);
@@ -1442,16 +1459,16 @@ describe('plans, in the agentic repository', () => {
       const r = inScratchRepository(
         'agentic',
         { ...setupFor('agentic'), edits: { [PLAN]: harvestOnly } },
-        ({ warden }) => warden(['plan', 'archive', PLAN]),
+        ({ specwarden }) => specwarden(['plan', 'archive', PLAN]),
       );
-      expect(r.status).toBe(2);
+      expect(r.status).toBe(1);
       expect(r.stderr).toContain(
         'the archive header is missing **Started:**, **Finished:**, **Harvested:**, **Left open:**',
       );
       const moved = inScratchRepository(
         'agentic',
         { ...setupFor('agentic'), edits: { [PLAN]: null, 'docs/_plans-archive/burst-allowance.md': archivable() } },
-        ({ warden }) => warden(['check', '--all']),
+        ({ specwarden }) => specwarden(['check', '--all']),
       );
       expect(moved.status).toBe(0);
     },

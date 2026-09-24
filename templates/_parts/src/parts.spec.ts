@@ -1,27 +1,29 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 
+import { removeScratch, scratchTree, specwarden } from '../../../scripts/playgrounds.mjs';
+
 import type { ITemplateContext } from 'specwarden';
 
 import {
-  agentRolesPart,
-  ciCoveragePart,
+  agentDefinitionsPart,
+  ciCoverageExamplePart,
   compose,
   docCountsExamplePart,
   docHygienePart,
   docPathsPart,
   docPlacementExamplePart,
   docSymbolsExamplePart,
-  envFilesExamplePart,
+  envPairingExamplePart,
   perimeterPart,
   planLifecyclePart,
+  proxyUpstreamsExamplePart,
   scriptWrappersPart,
   secretScanPart,
   shellScopePart,
   specSourcePart,
-  upstreamsExamplePart,
 } from './index';
 import type { IPart } from './_shared/part.model';
 
@@ -46,12 +48,12 @@ const everyPart = (c = ctx()): Record<string, IPart> => ({
   'doc-symbols': docSymbolsExamplePart(c),
   'doc-placement': docPlacementExamplePart(c),
   'script-wrappers': scriptWrappersPart(c),
-  'ci-coverage': ciCoveragePart(c),
+  'ci-coverage': ciCoverageExamplePart(c),
   'shell-scope': shellScopePart(c),
-  'env-files': envFilesExamplePart(c),
-  upstreams: upstreamsExamplePart(c),
+  'env-pairing': envPairingExamplePart(c),
+  'proxy-upstreams': proxyUpstreamsExamplePart(c),
   'plan-lifecycle': planLifecyclePart(c),
-  'agent-roles': agentRolesPart(c),
+  'agent-definitions': agentDefinitionsPart(c),
   perimeter: perimeterPart(),
   'spec-source': specSourcePart('openspec'),
 });
@@ -144,8 +146,8 @@ describe('everything a part writes actually loads', () => {
 
   it('the perimeter and the spec source load, and answer the shape the engine expects', async () => {
     const perimeter = await importGenerated('perimeter.mjs', perimeterPart().files[0].body);
-    expect(Array.isArray(perimeter.rules)).toBe(true);
-    expect((perimeter.rules as { id: string }[]).map((r) => r.id)).toEqual([
+    expect(Array.isArray(perimeter.policies)).toBe(true);
+    expect((perimeter.policies as { id: string }[]).map((r) => r.id)).toEqual([
       'no-force-push',
       'no-history-rewrite-of-a-shared-branch',
     ]);
@@ -179,7 +181,7 @@ describe('a rule is carried by the part that needs it', () => {
           ),
       );
       for (const rule of part.rules) {
-        const ids = (rule.enforcement as { checkIds?: readonly string[] }).checkIds ?? [];
+        const ids = (rule.enforcement as { enforcedBy?: readonly string[] }).enforcedBy ?? [];
         for (const id of ids) {
           // The perimeter's enforcers are its own rule ids, evaluated by a hook rather
           // than by a run — the engine reads them from perimeter.mjs itself.
@@ -192,7 +194,14 @@ describe('a rule is carried by the part that needs it', () => {
 
   it('an example declares its rule, naming its own check — init writes it commented out beside the others', () => {
     // Declared nowhere, the rule an example enforces lived nowhere the repository could read.
-    for (const name of ['doc-counts', 'doc-symbols', 'doc-placement', 'env-files', 'upstreams', 'ci-coverage']) {
+    for (const name of [
+      'doc-counts',
+      'doc-symbols',
+      'doc-placement',
+      'env-pairing',
+      'proxy-upstreams',
+      'ci-coverage',
+    ]) {
       const { files, rules } = everyPart()[name];
       const id = files[0].path
         .split('/')
@@ -201,7 +210,7 @@ describe('a rule is carried by the part that needs it', () => {
       expect(
         rules.map((r) => [r.id, r.enforcement]),
         name,
-      ).toEqual([[id, { checkIds: [id] }]]);
+      ).toEqual([[id, { enforcedBy: [id] }]]);
       expect(files[0].body, `${name} does not say how to switch it on`).toContain(
         `rename to ${id}.check.mjs AND uncomment its rule in rules.mjs`,
       );
@@ -216,7 +225,7 @@ describe('a rule is carried by the part that needs it', () => {
       'script-wrappers',
       'shell-scope',
       'plan-lifecycle',
-      'agent-roles',
+      'agent-definitions',
     ]) {
       expect(everyPart()[name].rules, name).toEqual([]);
     }
@@ -235,12 +244,12 @@ describe('a part written blind is a red first run, so each one asks first', () =
   });
 
   it('no CI workflow, no CI-coverage check — it would reconcile against an empty file and pass', () => {
-    expect(ciCoveragePart(ctx({ ci: undefined })).files).toEqual([]);
-    expect(ciCoveragePart(ctx({ ci: 'gitlab' })).files).toEqual([]);
+    expect(ciCoverageExamplePart(ctx({ ci: undefined })).files).toEqual([]);
+    expect(ciCoverageExamplePart(ctx({ ci: 'gitlab' })).files).toEqual([]);
   });
 
   it('no compose file, no env-file check — there would be nothing to reconcile', () => {
-    expect(envFilesExamplePart(ctx({ composeFiles: [] })).files).toEqual([]);
+    expect(envPairingExamplePart(ctx({ composeFiles: [] })).files).toEqual([]);
   });
 
   it('no lint or test script, no wrapper — it would fail for a reason that is not the code', () => {
@@ -264,10 +273,10 @@ describe('what the caller decides, the part reads', () => {
   });
 
   it('reads every document, and skips a tree of history, where the template says so', () => {
-    const body = docPathsPart(ctx(), { docs: '**/*.md', skipDirs: ['docs/_plans-archive/'] }).files[0].body;
+    const body = docPathsPart(ctx(), { docs: '**/*.md', except: ['docs/_plans-archive/'] }).files[0].body;
     expect(body).toContain("docs: '**/*.md'");
-    expect(body).toContain("skipDirs: ['docs/_plans-archive/']");
-    expect(docPathsPart(ctx()).files[0].body).not.toContain('skipDirs:');
+    expect(body).toContain("except: ['docs/_plans-archive/']");
+    expect(docPathsPart(ctx()).files[0].body).not.toContain('except:');
   });
 
   it('uses the tier it was given, and writes none where it is the default', () => {
@@ -291,14 +300,14 @@ describe('what the caller decides, the part reads', () => {
   });
 
   it('takes the directories a house actually uses', () => {
-    expect(agentRolesPart(ctx(), { agentsDir: '.cursor/rules' }).files[0].body).toContain(".cursor/rules'");
+    expect(agentDefinitionsPart(ctx(), { agentsDir: '.cursor/rules' }).files[0].body).toContain(".cursor/rules'");
     expect(planLifecyclePart(ctx(), { plansDir: 'plans', archiveDir: 'plans/done' }).files[0].body).toContain(
       "plansDir: 'plans'",
     );
   });
 
   it('names the compose file that was actually found', () => {
-    expect(envFilesExamplePart(ctx({ composeFiles: ['compose.yaml'] })).files[0].body).toContain(
+    expect(envPairingExamplePart(ctx({ composeFiles: ['compose.yaml'] })).files[0].body).toContain(
       "composeFile: 'compose.yaml'",
     );
   });
@@ -307,23 +316,23 @@ describe('what the caller decides, the part reads', () => {
 describe('an example points at what init found, and says plainly what to replace where it found nothing', () => {
   const load = async (name: string, body: string) => (await importGenerated(name, body)).check;
 
-  it('gate-coverage reads the workflow that was detected', async () => {
-    const found = ciCoveragePart({ ...ctx(), workflows: ['.github/workflows/deploy.yml'] }).files[0].body;
-    expect(found).toContain("workflow: '.github/workflows/deploy.yml'");
+  it('ci-coverage reads the workflow that was detected', async () => {
+    const found = ciCoverageExamplePart({ ...ctx(), workflows: ['.github/workflows/deploy.yml'] }).files[0].body;
+    expect(found).toContain("workflowFile: '.github/workflows/deploy.yml'");
     expect(found).not.toContain('REPLACE: the workflow');
-    const guessed = ciCoveragePart(ctx()).files[0].body;
+    const guessed = ciCoverageExamplePart(ctx()).files[0].body;
     expect(guessed).toContain('REPLACE: the workflow file CI runs.');
-    expect(await load('gate-guessed.check.mjs', guessed)).toBeDefined();
+    expect(await load('ci-guessed.check.mjs', guessed)).toBeDefined();
   });
 
-  it('upstreams-resolve reads the proxy config that was detected, and says when it cannot read it', async () => {
-    const caddy = upstreamsExamplePart({ ...ctx(), proxyConfigs: ['deploy/Caddyfile'] }).files[0].body;
+  it('proxy-upstreams reads the proxy config that was detected, and says when it cannot read it', async () => {
+    const caddy = proxyUpstreamsExamplePart({ ...ctx(), proxyConfigs: ['deploy/Caddyfile'] }).files[0].body;
     expect(caddy).toContain("fileFor: () => 'deploy/Caddyfile'");
     expect(caddy).not.toContain('not nginx');
-    const nginx = upstreamsExamplePart({ ...ctx(), proxyConfigs: ['deploy/nginx/upstreams.conf'] }).files[0].body;
+    const nginx = proxyUpstreamsExamplePart({ ...ctx(), proxyConfigs: ['deploy/nginx/upstreams.conf'] }).files[0].body;
     expect(nginx).toContain("fileFor: () => 'deploy/nginx/upstreams.conf'");
     expect(nginx).toContain("not nginx's: over this file it finds no upstream and fails");
-    const none = upstreamsExamplePart(ctx()).files[0].body;
+    const none = proxyUpstreamsExamplePart(ctx()).files[0].body;
     expect(none).toContain('REPLACE: each mode');
     for (const [n, body] of [
       ['caddy', caddy],
@@ -333,10 +342,10 @@ describe('an example points at what init found, and says plainly what to replace
       expect(await load(`upstreams-${n}.check.mjs`, body)).toBeDefined();
   });
 
-  it('env-files-agree reads the keys from a committed env sample, when there is one', async () => {
-    const sampled = envFilesExamplePart({ ...ctx(), envSamples: ['.env.example'] }).files[0].body;
+  it('env-pairing reads the keys from a committed env sample, when there is one', async () => {
+    const sampled = envPairingExamplePart({ ...ctx(), envSamples: ['.env.example'] }).files[0].body;
     expect(sampled).toContain("read('.env.example')");
-    const none = envFilesExamplePart(ctx()).files[0].body;
+    const none = envPairingExamplePart(ctx()).files[0].body;
     expect(none).toContain('REPLACE: read the keys');
     expect(none).not.toContain('config/env.schema.json');
     expect(await load('env-sampled.check.mjs', sampled)).toBeDefined();
@@ -350,6 +359,35 @@ describe('an example points at what init found, and says plainly what to replace
       expect(body).toContain('REPLACE');
       expect(body).not.toMatch(/(countableNouns|suffixes): \[\]/);
       expect(body).not.toMatch(/inert|nothing to look for/i);
+    }
+  });
+});
+
+describe('the tree init writes with NO template, proved identical to what the parts it is built from write', () => {
+  /**
+   * `core` must not depend on any module, plugin or template — so `init`'s own
+   * hand-written secret-scan and doc-paths bodies cannot be RENDERED by these parts;
+   * they can only be proved textually identical to them, over the real CLI, so a header
+   * or a rule edited in one place is caught the day it drifts from the other.
+   */
+  it('writes the secret-scan and doc-paths bodies byte-identical to secretScanPart and docPathsPart', () => {
+    const dir = scratchTree({
+      'README.md': '# tiny\n',
+      'package.json': JSON.stringify({
+        name: 'tiny',
+        devDependencies: { '@specwarden/security': '1', '@specwarden/docs': '1' },
+      }),
+    });
+    try {
+      const run = specwarden(dir, ['init']);
+      expect(run.status, run.stdout + run.stderr).toBe(0);
+      const written = (rel: string) => readFileSync(join(dir, '.specwarden', rel), 'utf8');
+      // No docs directory in this scratch repository, so `init` falls back to `**/*.md`.
+      const c = ctx({ docs: '**/*.md' });
+      expect(written('checks/security/secret-scan.check.mjs')).toBe(secretScanPart(c).files[0].body);
+      expect(written('checks/docs/doc-paths.check.mjs')).toBe(docPathsPart(c).files[0].body);
+    } finally {
+      removeScratch(dir);
     }
   });
 });

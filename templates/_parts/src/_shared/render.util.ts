@@ -18,7 +18,7 @@ export const exampleRule = (id: string, statement: string) => ({
   id,
   statement,
   owner: '',
-  enforcement: { checkIds: [id] },
+  enforcement: { enforcedBy: [id] },
 });
 
 /** `tier`, written only where it is not the engine's default. */

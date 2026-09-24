@@ -1,6 +1,6 @@
 import type { ICheck, ICheckIdentity, IFinding, IRule } from '../../domain';
 import { computeCoverage } from '../../domain';
-import { buildCheck, verdictFrom } from '../../primitives/_shared';
+import { buildCheck, thresholdOf, verdictFrom } from '../../primitives/_shared';
 import { ruleOwnerFindings } from '../../runtime/rules/rule-audit/rule-audit.util';
 
 export interface IRuleCoverageOptions extends ICheckIdentity {
@@ -18,7 +18,7 @@ export interface IRuleCoverageOptions extends ICheckIdentity {
  * A PRODUCT check: the coverage arithmetic is universal; the rule set is supplied.
  */
 export function ruleCoverage(options: IRuleCoverageOptions): ICheck {
-  return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx) => {
+  return buildCheck({ ...options, zone: 'product' }, ['read'], (ctx, self) => {
     const cov = computeCoverage(options.rules());
     const findings: IFinding[] =
       cov.unenforcedWithoutReason > 0
@@ -26,11 +26,10 @@ export function ruleCoverage(options: IRuleCoverageOptions): ICheck {
             {
               severity: 'error',
               message: `${cov.unenforcedWithoutReason} rule(s) declared but neither enforced nor given a reason (of ${cov.total} total; ${cov.enforced} enforced, ${cov.notMechanizable} not-mechanizable). Enforce it, or state why it cannot be.`,
-              ruleId: options.id,
             },
           ]
         : [];
-    return verdictFrom(findings, ctx.ratchet ?? options.ratchet);
+    return verdictFrom(findings, thresholdOf(ctx, self));
   });
 }
 

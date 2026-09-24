@@ -28,7 +28,7 @@ describe('docPlacement — the contract', () => {
 
     expect(v.ok).toBe(false);
     expect(v.findings[0]).toMatchObject({ file: 'random/place.md' });
-    expect(errorsOf(v)[0]).toContain('move it, or add the row to the contract');
+    expect(errorsOf(v)[0]).toContain('Move it, or add the row that describes its kind to `allowed`.');
   });
 
   it('matches a global contract regex the same way on every file', async () => {
@@ -46,9 +46,25 @@ describe('docPlacement — the contract', () => {
     expect(held.ok).toBe(true);
     // The two offenders are still listed, under a line saying they are tolerated — so
     // the green verdict is not printed above what reads like two failures.
-    expect(held.findings[0].message).toContain('tolerated under the placement ratchet 2');
+    expect(held.findings[0].message).toContain('tolerated under ratchet 2');
     expect(errorsOf(held)).toHaveLength(2);
+    expect(held.measured).toBe(2);
     expect((await run(tree, { ratchet: 1 })).ok).toBe(false);
+  });
+
+  // It read `options.ratchet` alone: the threshold `--tighten` stored never reached it, so a
+  // tightened bar was ignored and a stored one could not be lowered to.
+  it('holds to the STORED threshold the run hands it, over the declared ceiling', async () => {
+    const tree = { 'a/x.md': '', 'b/y.md': '' };
+
+    expect((await runCheck(docPlacement({ ...ID, allowed: ALLOWED }), { tree, threshold: 2 })).ok).toBe(true);
+    expect((await runCheck(docPlacement({ ...ID, allowed: ALLOWED, ratchet: 5 }), { tree, threshold: 1 })).ok).toBe(
+      false,
+    );
+  });
+
+  it('leaves out what `except` names', async () => {
+    expect((await run({ 'AGENTS.md': '', 'vendor/x.md': '' }, { except: ['vendor'] })).ok).toBe(true);
   });
 });
 
@@ -58,6 +74,7 @@ describe('docPlacement — the inbound-link ban', () => {
 
     expect(v.ok).toBe(false);
     expect(errorsOf(v)[0]).toContain('links into docs/_plans/ (`PLAT-9`)');
+    expect(v.findings.find((f) => f.message.includes('PLAT-9'))).toMatchObject({ file: 'AGENTS.md', line: 1 });
   });
 
   it('reports every inbound link on a line, not only the first — a non-global pattern is widened', async () => {
@@ -91,6 +108,13 @@ describe('docPlacement — what it examined', () => {
     const v = await run({ 'src/index.ts': '' }, { docs: 'docs/**/*_MODULE.md' });
 
     expect(v.ok).toBe(false);
-    expect(errorsOf(v)[0]).toContain('no document matched `docs/**/*_MODULE.md`');
+    expect(errorsOf(v)[0]).toContain('examined 0 document(s) — `docs/**/*_MODULE.md` matched nothing to read');
+  });
+
+  it('accepts an empty corpus when told to, and prints the engine’s pass line otherwise', async () => {
+    expect((await run({ 'src/index.ts': '' }, { docs: 'docs/*.md', corpus: { atLeast: 0 } })).ok).toBe(true);
+    expect((await run({ 'AGENTS.md': '' })).findings.map((f) => f.message)).toEqual([
+      '✓ doc-placement — 1 document(s) examined, clean',
+    ]);
   });
 });

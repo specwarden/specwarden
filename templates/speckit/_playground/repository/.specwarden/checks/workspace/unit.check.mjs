@@ -1,4 +1,4 @@
-// `unit` — the test suite this repository already has, run through the harness.
+// `unit` — the test suite this repository already has, run as a check.
 // A suite that accepts `--shard=i/N` can say `shardable: true`; a shard sees only its own slice.
 import { commandCheck } from 'specwarden';
 

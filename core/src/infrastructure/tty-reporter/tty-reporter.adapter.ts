@@ -8,7 +8,7 @@ export interface ITtyReporterOptions {
    *
    * OFF by default and deliberately: a filtered tier skips most of its roster, so
    * forty-nine `⏭` lines would bury the handful that ran. The summary names them
-   * compactly instead, and this is for the moment somebody is asking "why did MY gate
+   * compactly instead, and this is for the moment somebody is asking "why did MY check
    * not run" about a roster rather than about one id.
    */
   readonly showSkipped?: boolean;
@@ -16,8 +16,8 @@ export interface ITtyReporterOptions {
    * How many of the slowest checks to name at the end. 0 turns it off.
    *
    * A tier's time is knowable — every result carries its duration — and was printed
-   * nowhere, so tuning one meant timing gates by hand. Three lines is enough to find
-   * the gate worth sharding and short enough that nobody scrolls past it.
+   * nowhere, so tuning one meant timing checks by hand. Three lines is enough to find
+   * the check worth sharding and short enough that nobody scrolls past it.
    */
   readonly slowest?: number;
 }
@@ -107,16 +107,16 @@ export class TtyReporter implements IReporter {
     this.writeSkipped(skippedResults);
 
     // The summary line must match the run's verdict, not just count the wins: a green
-    // ✅ over a run that failed a gate reads as success at exactly the moment it must
+    // ✅ over a run that failed a check reads as success at exactly the moment it must
     // not. When anything failed, the line is a red ❌ that names both counts.
     if (failed > 0) {
-      this.write(`\n❌ ${failed} gate(s) FAILED, ${passed} passed${suffix} in ${secs}\n`);
+      this.write(`\n❌ ${failed} check(s) FAILED, ${passed} passed${suffix} in ${secs}\n`);
     } else if (active.length === 0 && skippedResults.length > 0) {
-      // Every selected check was skipped. "✅ 0 gate(s) passed" is a green tick over
+      // Every selected check was skipped. "✅ 0 check(s) passed" is a green tick over
       // nothing — the one line this product exists to never print.
       this.write(`\n⏭  nothing ran — ${skippedResults.length} skipped, 0 checked, in ${secs}\n`);
     } else {
-      this.write(`\n✅ ${passed} gate(s) passed${suffix} in ${secs}\n`);
+      this.write(`\n✅ ${passed} check(s) passed${suffix} in ${secs}\n`);
     }
   }
 

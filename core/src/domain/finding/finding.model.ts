@@ -56,7 +56,7 @@ export interface IVerdict {
    * Absent means "count the error findings", which keeps every existing check
    * correct without being touched.
    */
-  readonly ratchet?: { readonly value: number };
+  readonly measured?: number;
   /**
    * The check ran and COULD NOT LOOK: what it examines is not here — env files a checkout
    * never has, a machine a CI runner is not. Its reason, in a sentence. The run reports

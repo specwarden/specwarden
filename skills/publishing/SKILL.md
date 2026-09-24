@@ -11,7 +11,7 @@ A version published without a licence, with a description left over from another
 or with `bin` missing from `files`, can be unpublished exactly once in that version's
 life. For all the rest of the time the consumer sees what shipped.
 
-That is why publish readiness is a gate rather than something noticed at publish time.
+That is why publish readiness is a check rather than something noticed at publish time.
 
 ## 2. A version comes from a changeset
 
@@ -66,7 +66,7 @@ actually ships.
 pnpm release
 ```
 
-It runs `pnpm check`, then the publish-readiness gate with `--releasing`, then publishes.
+It runs `pnpm check`, then the publish-readiness check with `--releasing`, then publishes.
 The order is the point: a manual release cannot skip what CI runs for it.
 
 `--releasing` is what turns on the rules that only matter at that moment — a version

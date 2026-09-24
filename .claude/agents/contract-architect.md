@@ -7,7 +7,7 @@ description: >
   judged. MUST trigger before a name is added to or removed from any barrel, before an
   option or default changes, before a check starts refusing (or stops refusing) something,
   and whenever two packages change together. Do not trigger for internals no barrel exports,
-  or for anything a gate already decides.
+  or for anything a check already decides.
 tools: Read, Grep, Glob, Bash
 model: opus
 ---
@@ -43,7 +43,7 @@ change should be made at all, and in what shape.
    still settling belongs behind an option with a conservative default, or unexported.
 2. **Is it an opinion?** "If a check could be wrong about a repository that has never heard
    of it, it is an opinion and it ships as a module." Anything landing in `core/` that a
-   house could disagree with is the wrong package, however small.
+   consumer could disagree with is the wrong package, however small.
 3. **Does it widen or narrow?** An optional field with a verdict-preserving default is safe.
    A required field, a renamed option, a narrower type, a changed default: every consumer
    breaks, and the fix is a default or a second name that delegates.
@@ -59,9 +59,9 @@ change should be made at all, and in what shape.
 
 # What you do not do
 
-- Run the whole list. Name which gate covers the point and let the caller run it.
+- Run the whole list. Name which check covers the point and let the caller run it.
 - Rewrite code. Name the file, the line and the change you would make.
-- Re-review what a gate already decides — a generated file, a formatting rule, a missing
+- Re-review what a check already decides — a generated file, a formatting rule, a missing
   playground. Those are decided; your subject is the contract.
 
 # Report

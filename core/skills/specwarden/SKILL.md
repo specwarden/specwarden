@@ -1,11 +1,13 @@
 ---
 name: specwarden
-description: Use when adding, changing or debugging a quality gate in a repository that has specwarden — writing a check, deciding which primitive fits, wiring a rule, arming a ratchet, or working out why a gate is green when it should not be.
+description: Use when adding, changing or debugging a check in a repository that has specwarden — writing a check, deciding which primitive fits, wiring a rule, arming a ratchet, or working out why a check is green when it should not be.
 ---
 
 # specwarden
 
-A quality-gate engine. A repository declares its rules; the engine proves which hold.
+A quality-gate engine. A repository declares its rules; specwarden proves which hold.
+Every term below is defined once in `glossary.md`, beside this file — read it when a word
+here is not obvious, and use the glossary's word, never a synonym, in what you write.
 
 ## The failure it exists against
 
@@ -21,7 +23,7 @@ four shapes:
 ## Writing a check
 
 A check is a file at `.specwarden/checks/<family>/<id>.check.mjs` that exports `check`.
-No registration, no import anywhere: **a file under `checks/` IS a gate.** A file there
+No registration, no import anywhere: **a file under `checks/` IS a check.** A file there
 exporting no check is a load error, never a skip.
 
 Reach for the narrowest thing that fits:
@@ -90,17 +92,18 @@ caller moves.
 
 ## Ratchets, for debt that cannot be paid today
 
-`ratchetId` plus an inline `ratchet: <n>` arms the check at the current measurement. It
-fails on a move in the wrong direction and never on the debt that already exists.
+`ratchet: <n>` arms the check at the current measurement — `ratchet: { id, direction, ceiling }`
+when the store's key is not the check's id, or the number is a score. It fails on a move in
+the wrong direction and never on the debt that already exists.
 
 - a **debt** counts down (`direction: 'down'`, the default) — violations;
-- a **floor** counts up (`direction: 'up'`) — a score, a coverage percentage.
+- a **score** counts up (`direction: 'up'`) — a coverage percentage, a mutation score.
 
 When the number is not simply the count of error findings, say so with `measured` — and
 note that stating it also changes what the findings mean: they become failures, and the
 measurement is ratcheted apart from them.
 
-`specwarden check --id <gate> --tighten` records a new measurement. Never edit the file to
+`specwarden check --id <id> --tighten` records a new measurement. Never edit the file to
 make a red run green: that is the bar moving, which is the whole failure.
 
 ## Every check names the rule it enforces
@@ -113,10 +116,10 @@ argue with, relax deliberately, or retire. The rule a new check needs is one of:
 - nothing, for a module's check — it carries the rule it enforces, owned by its package;
   write `rule` to state yours instead;
 - nothing on the check, and a rule in `.specwarden/rules.mjs` whose
-  `enforcement.checkIds` lists the check's id — when several checks share one rule.
+  `enforcement.enforcedBy` lists the check's id — when several checks share one rule.
 
 `enforcement-resolves` walks the other way: every id a rule's `enforcement` names must be
-a registered check or a declared perimeter rule. Rename a check, or a perimeter rule, and
+a registered check or a declared perimeter policy. Rename a check, or a policy, and
 the rule that named the old id goes red — rename both together.
 
 The rule register (`.specwarden/rules.mjs`) is for what cannot live on a check: a rule
@@ -143,17 +146,17 @@ To switch one on:
 
 ## The perimeter: what an assistant may not do
 
-A `perimeter.mjs` beside the config exports `rules` — each a `commandRule({ id, why, match })` — and
+A `perimeter.mjs` beside the config exports `policies` — each a `commandPolicy({ id, why, match })` — and
 the `perimeter` command evaluates one action against them **before** it runs. It is a
-hook, not a gate: nothing enforces it until the assistant's hook calls it. For Claude
+hook, not a check: nothing enforces it until the assistant's hook calls it. For Claude
 Code, the `hooks.PreToolUse` entry of the project's `settings.json` under `.claude/` →
-`node "$CLAUDE_PROJECT_DIR/node_modules/specwarden/bin/warden.mjs" perimeter`.
+`node "$CLAUDE_PROJECT_DIR/node_modules/specwarden/bin/specwarden.mjs" perimeter`.
 
-- A refused action exits 2 with the rule's id, its owner and its `why`. Read the `why`:
+- A refused action exits 2 with the policy's id, its owner and its `why`. Read the `why`:
   it says what to do **instead**. Do that; do not look for a spelling the matcher misses.
-- It **fails open**: a missing file, a malformed payload, a rule that throws — all allow.
+- It **fails open**: a missing file, a malformed payload, a policy that throws — all allow.
   A perimeter that blocks on its own fault halts work wearing the face of a rule.
-- A new rule is enforced the moment it is in the file; no registration. Its `why` names
+- A new policy is enforced the moment it is in the file; no registration. Its `why` names
   the alternative — a refusal without one is an obstacle.
 
 ## Testing a check
@@ -176,15 +179,16 @@ described.
 ```bash
 specwarden check                  # the changed-file filter decides what runs
 specwarden check --tier fast
-specwarden check --id <gate>
+specwarden check <id>             # one check, as --id <id>
 specwarden check --all            # ignore relevance
-specwarden check --fix            # let a fixable gate repair itself
+specwarden check --fix            # let a fixable check repair itself
 specwarden doctor                 # what is declared, without running any of it
 specwarden new <id>               # scaffold a check and its test
 ```
 
-Exit `0` every gate held; `1` a gate failed, and nothing else is ever `1`; `2` the line,
-the config or a check file could not be used — the message names the file. In CI, pass
+Exit `0` every check held; `1` the answer is no — a check failed, doctor found a defect, a
+plan is not ready; `2` the line, the config or a file could not be used — the message names
+the file. In CI, pass
 `--base <ref>` for a pull request: without one a CI run checks everything, and says so.
 `SPECWARDEN_SKIP` is ignored under CI.
 
@@ -192,6 +196,6 @@ the config or a check file could not be used — the message names the file. In 
 
 - write a check that cannot say how much it examined, when the answer is knowable;
 - lower a ratchet or a coverage threshold to turn a run green;
-- add a gate to a CI workflow instead of to `checks/` — two lists drift, and the one that
+- add a check to a CI workflow as a step of its own instead of to `checks/` — two lists drift, and the one that
   runs is not the one that was reviewed;
 - give a check a `fix` where the correct content is a judgement rather than derivable.

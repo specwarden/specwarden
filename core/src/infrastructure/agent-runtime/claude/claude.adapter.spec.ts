@@ -71,31 +71,31 @@ describe('parseClaudeToolCall', () => {
 
 describe('perimeterExitCode', () => {
   /**
-   * Only 2 blocks a PreToolUse call; every other code is a harness error that lets
+   * Only 2 blocks a PreToolUse call; every other code is a hook error that lets
    * the call through. Anything but 0 for an allow would be noise on every tool call.
    */
   it('maps a block to 2 and an allow to 0 — nothing else', () => {
-    expect(perimeterExitCode({ blocked: true, ruleId: 'r', reason: 'x' })).toBe(2);
+    expect(perimeterExitCode({ blocked: true, policyId: 'r', reason: 'x' })).toBe(2);
     expect(perimeterExitCode(ALLOW)).toBe(0);
   });
 });
 
 describe('formatBlock', () => {
   it('shows the reason the rule gave', () => {
-    const text = formatBlock({ blocked: true, ruleId: 'no-force-push', reason: 'force push to dev' });
+    const text = formatBlock({ blocked: true, policyId: 'no-force-push', reason: 'force push to dev' });
 
     expect(text).toContain('🚫 Blocked by the perimeter: force push to dev\n');
     expect(text).not.toContain('no-force-push');
   });
 
   it('falls back to the rule id when no reason was given', () => {
-    expect(formatBlock({ blocked: true, ruleId: 'no-force-push' })).toContain(
+    expect(formatBlock({ blocked: true, policyId: 'no-force-push' })).toContain(
       'Blocked by the perimeter: no-force-push\n',
     );
   });
 
   it('still says SOMETHING when the verdict names neither — a blank block reads as a crash', () => {
-    expect(formatBlock({ blocked: true })).toContain('Blocked by the perimeter: a repository rule\n');
+    expect(formatBlock({ blocked: true })).toContain('Blocked by the perimeter: a repository policy\n');
   });
 
   /** The model retries a denied call it reads as a permission prompt; the text is what stops it. */

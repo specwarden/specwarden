@@ -77,7 +77,7 @@ describe('defineCheck — the corpus floor refusal', () => {
     expect(verdict.ok).toBe(false);
     expect(errorsOf(verdict)).toHaveLength(1);
     expect(errorsOf(verdict)[0]).toMatch(/^examined 1 items, below the declared floor of 5/);
-    expect(verdict.ratchet).toEqual({ value: 2 });
+    expect(verdict.measured).toBe(2);
   });
 
   it('keeps a stated measurement over the error count when it refuses', async () => {
@@ -90,7 +90,7 @@ describe('defineCheck — the corpus floor refusal', () => {
     const verdict = await runCheck(check);
 
     expect(errorsOf(verdict)[0]).toContain('examined 0 modules');
-    expect(verdict.ratchet).toEqual({ value: 40 });
+    expect(verdict.measured).toBe(40);
   });
 });
 

@@ -1,6 +1,6 @@
 // `doc-symbols` — documentation names no class that no longer exists.
-// OFF until `suffixes` are the endings that make a word a symbol HERE — the four below are a
-// guess — and `code` is where they are declared. Outside TypeScript, pass `declaration`.
+// Switched off until `suffixes` are the endings that make a word a symbol HERE — the four
+// below are a guess — and `code` is where they are declared. Outside TypeScript, pass `declaration`.
 // Switch it on: rename to doc-symbols.check.mjs AND uncomment its rule in rules.mjs.
 import { docSymbols } from '@specwarden/docs';
 

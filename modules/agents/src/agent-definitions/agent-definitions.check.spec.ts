@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { CheckOptionsError, type IVerdict, errorsOf, runCheck } from 'specwarden';
 import { agentDefinitions, parseFrontmatter } from './agent-definitions.check';
 
-const ID = { id: 'agent-definitions', title: 'agents declare tools', tier: 'fast' as const };
+const ID = { title: 'agents declare tools' };
 
 const run = (
   tree: Record<string, string>,
@@ -54,7 +54,7 @@ describe('agentDefinitions — the definition', () => {
     const v = await run({ '.claude/agents/scout.md': '# Scout\nreads things' });
 
     expect(errorsOf(v)).toEqual([
-      '.claude/agents/scout.md: no YAML frontmatter — the harness cannot register this agent.',
+      '.claude/agents/scout.md: no YAML frontmatter — an assistant cannot register this agent. Open the file with `---`, its fields, and `---`.',
     ]);
   });
 
@@ -62,15 +62,17 @@ describe('agentDefinitions — the definition', () => {
     const v = await run({ '.claude/agents/scout.md': fm({ name: 'scout', tools: 'Read' }) });
 
     expect(errorsOf(v)).toEqual([
-      '.claude/agents/scout.md: missing or empty `description:`.',
-      '.claude/agents/scout.md: missing or empty `model:`.',
+      '.claude/agents/scout.md: missing or empty `description:` — every definition declares it.',
+      '.claude/agents/scout.md: missing or empty `model:` — every definition declares it.',
     ]);
   });
 
   it('treats an EMPTY field as missing — `tools:` with nothing after it inherits everything', async () => {
     const v = await run({ '.claude/agents/scout.md': fm({ ...SCOUT, tools: '' }) });
 
-    expect(errorsOf(v)).toEqual(['.claude/agents/scout.md: missing or empty `tools:`.']);
+    expect(errorsOf(v)).toEqual(['.claude/agents/scout.md: missing or empty `tools:` — every definition declares it.']);
+    // …on the line that says it.
+    expect(v.findings.find((x) => x.severity === 'error')).toMatchObject({ file: '.claude/agents/scout.md', line: 4 });
   });
 
   it('takes the required fields a house chooses', async () => {
@@ -84,11 +86,11 @@ describe('agentDefinitions — the definition', () => {
     expect(v.ok).toBe(true);
   });
 
-  it('flags a name that does not match the filename — the harness addresses agents by name', async () => {
+  it('flags a name that does not match the filename — an assistant addresses agents by name', async () => {
     const v = await run({ '.claude/agents/scout.md': fm({ ...SCOUT, name: 'explorer' }) });
 
     expect(errorsOf(v)).toEqual([
-      '.claude/agents/scout.md: `name: explorer` does not match the filename (`scout`) — the harness addresses agents by name, so this one is uncallable.',
+      '.claude/agents/scout.md: `name: explorer` does not match the filename (`scout`) — an assistant addresses agents by name, so this one is uncallable. Rename one to match the other.',
     ]);
   });
 
@@ -123,38 +125,71 @@ describe('agentDefinitions — what it examined', () => {
     const v = await run({ 'other/x.md': '' }, { agentsDir: 'nope' });
 
     expect(v.ok).toBe(false);
-    expect(errorsOf(v)).toEqual([
-      'nope does not exist — this check examined nothing, and a check that examined nothing cannot fail. Point `agentsDir` at the folder the agent definitions live in.',
-    ]);
+    expect(errorsOf(v)).toHaveLength(1);
+    expect(errorsOf(v)[0]).toContain(
+      'examined 0 agent definition(s) — `nope` does not exist — point `agentsDir` at the folder the agent definitions live in — below the floor of 1.',
+    );
   });
 
   it('fails a FILE at the agents path, rather than crashing on the listing', async () => {
-    expect(errorsOf(await run({ '.claude/agents': 'not a folder' }))).toEqual([
-      '.claude/agents is a file, not a folder of agent definitions. Point `agentsDir` at the folder.',
-    ]);
+    expect(errorsOf(await run({ '.claude/agents': 'not a folder' }))[0]).toContain(
+      '`.claude/agents` is a file, not a folder of agent definitions — point `agentsDir` at the folder',
+    );
   });
 
   it('reads `.claude/agents` in the fast tier when neither is said', async () => {
-    const check = agentDefinitions({ id: 'agent-definitions', title: 't' });
+    const check = agentDefinitions();
     const tree = { '.claude/agents/lead.md': fm({ name: 'lead', description: 'd', model: 'opus' }) };
 
     expect(check.tier).toBe('fast');
-    expect(errorsOf(await runCheck(check, { tree }))).toEqual(['.claude/agents/lead.md: missing or empty `tools:`.']);
+    expect(check.id).toBe('agent-definitions');
+    expect(errorsOf(await runCheck(check, { tree }))).toEqual([
+      '.claude/agents/lead.md: missing or empty `tools:` — every definition declares it.',
+    ]);
   });
 
   it('refuses the skill’s `agents:` by name when the file loads — it crashed inside a Node path call', () => {
-    const skill = { ...ID, agents: '.claude/agents/*.md', orchestrators: ['lead'] } as never;
+    const skill = { ...ID, id: 'agent-definitions', agents: '.claude/agents/*.md', orchestrators: ['lead'] } as never;
 
     expect(() => agentDefinitions(skill)).toThrow(CheckOptionsError);
     expect(() => agentDefinitions(skill)).toThrow("agentDefinitions 'agent-definitions': `agents` is not an option");
   });
 
-  it('says it read nothing when the folder holds no definition — a blank pass reads as "all sound"', async () => {
+  it('fails a folder that holds no definition — unless the empty folder is declared, in writing', async () => {
+    // It passed with "nothing to verify": a roster emptied by a bad move read as "all sound".
     const v = await run({ '.claude/agents/README.txt': 'roles go here' });
+    expect(v.ok).toBe(false);
+    expect(errorsOf(v)[0]).toContain('`.claude/agents` holds no `.md` agent definition');
 
-    expect(v).toEqual({
-      ok: true,
-      findings: [{ severity: 'info', message: 'no agent definition in .claude/agents, nothing to verify' }],
-    });
+    const declared = await run({ '.claude/agents/README.txt': 'roles go here' }, { corpus: { atLeast: 0 } });
+    expect(declared.ok).toBe(true);
+    expect(declared.findings.map((x) => x.message)).toEqual([
+      '✓ agent-definitions — 0 agent definition(s) examined, clean',
+    ]);
+  });
+
+  it('prints the engine’s pass line over a sound roster', async () => {
+    const v = await run({ '.claude/agents/scout.md': fm(SCOUT) });
+
+    expect(v.findings.map((x) => x.message)).toEqual(['✓ agent-definitions — 1 agent definition(s) examined, clean']);
+  });
+});
+
+describe('agentDefinitions — the engine’s ratchet, and its options', () => {
+  it('honours `ratchet` and the stored threshold — it accepted one and dropped it', async () => {
+    const tree = { '.claude/agents/scout.md': fm({ ...SCOUT, tools: '' }) };
+
+    expect((await run(tree, { ratchet: 1 })).ok).toBe(true);
+    expect((await runCheck(agentDefinitions({ ratchet: 1 }), { tree, threshold: 0 })).ok).toBe(false);
+  });
+
+  it('refuses an empty `required` or `spawnTools`, and `zone`; an empty `orchestrators` forbids delegation', async () => {
+    expect(() => agentDefinitions({ required: [] })).toThrow('`required` is empty');
+    expect(() => agentDefinitions({ spawnTools: [] })).toThrow('`spawnTools` is empty');
+    expect(() => agentDefinitions({ zone: 'consumer' } as never)).toThrow(
+      '`zone` is not an option of agentDefinitions',
+    );
+    const lead = { '.claude/agents/lead.md': fm({ ...SCOUT, name: 'lead', tools: 'Read, Task' }) };
+    expect((await run(lead, { orchestrators: [] })).ok).toBe(false);
   });
 });

@@ -9,15 +9,15 @@ import {
   type IShell,
 } from '../../domain';
 import { platformShell } from '../../infrastructure';
-import { buildCheck, checkOptions, verdictFrom, withExaminedNote } from '../_shared';
+import { buildCheck, checkOptions, thresholdOf, verdictFrom, withExaminedNote } from '../_shared';
 
 export interface IRegenerableOptions extends ICheckDeclaration {
   /** The generated artifact, repository-relative. */
   readonly artifact: string;
   /** A command that PRINTS the regenerated artifact to stdout (it must not write in
    * place — the check compares its output to the committed file without mutating). */
-  readonly by: string;
-  /** How to run `by`. Defaults to `bash -c`, which not every machine has. */
+  readonly cmd: string;
+  /** How to run `cmd`. Defaults to `bash -c`, which not every machine has. */
   readonly shell?: IShell;
   /** Kill the generator after this many seconds. A generator that hangs hangs the
    * whole run, and a run with no output is the worst diagnostic there is. */
@@ -46,7 +46,7 @@ export interface IRegenerableOptions extends ICheckDeclaration {
  * undeclared.
  *
  * It is the FIRST fixable check in this product, and that is worth saying out loud:
- * `--fix`, `IFixable`, the write gate and the re-run afterwards were all built and then
+ * `--fix`, `IFixable`, the `write` capability and the re-run afterwards were all built and then
  * used by nothing for as long as they existed. A repair belongs here before anywhere
  * else because it is the one case with no judgement in it — the generator's output is
  * the correct content by definition, so the fix cannot be wrong in a way the check was
@@ -55,18 +55,18 @@ export interface IRegenerableOptions extends ICheckDeclaration {
 export function regenerable(options: IRegenerableOptions): ICheck {
   checkOptions('regenerable', options, {
     artifact: { kind: 'string', required: true },
-    by: { kind: 'string', required: true },
+    cmd: { kind: 'string', required: true },
     shell: { kind: 'object' },
     fixable: { kind: 'boolean' },
   });
   const shell = options.shell ?? platformShell();
   const generate = (ctx: ICheckContext): IProcessResult =>
-    ctx.proc.run(shell.command, shellArgv(shell, options.by), { timeoutSec: options.timeoutSec });
+    ctx.proc.run(shell.command, shellArgv(shell, options.cmd), { timeoutSec: options.timeoutSec });
 
   const check = buildCheck(options, options.fixable ? ['read', 'exec', 'write'] : ['read', 'exec'], (ctx, self) => {
     // The tolerance a stored ratchet supplies wins over the inline one — the same order
     // every other primitive reads. It was accepted on the identity and never read.
-    const ratchet = ctx.ratchet ?? options.ratchet;
+    const ratchet = thresholdOf(ctx, self);
     const findings: IFinding[] = [];
     const committed = ctx.files.tryRead(options.artifact);
     if (committed === undefined) {
@@ -74,7 +74,6 @@ export function regenerable(options: IRegenerableOptions): ICheck {
         severity: 'error',
         file: options.artifact,
         message: `${options.artifact} does not exist to compare against.`,
-        ruleId: self.id,
       });
       return verdictFrom(findings, ratchet);
     }
@@ -83,8 +82,7 @@ export function regenerable(options: IRegenerableOptions): ICheck {
       findings.push({
         severity: 'error',
         file: options.artifact,
-        message: `the generator \`${options.by}\` failed (exit ${result.status ?? 'signal'}).`,
-        ruleId: self.id,
+        message: `the generator \`${options.cmd}\` failed (exit ${result.status ?? 'signal'}).`,
       });
       return verdictFrom(findings, ratchet);
     }
@@ -93,9 +91,8 @@ export function regenerable(options: IRegenerableOptions): ICheck {
         severity: 'error',
         file: options.artifact,
         message:
-          `${options.artifact} does not match what \`${options.by}\` produces — it is generated; regenerate it rather than editing by hand.` +
+          `${options.artifact} does not match what \`${options.cmd}\` produces — it is generated; regenerate it rather than editing by hand.` +
           (options.fixable ? ' `specwarden check --fix` writes it for you.' : ''),
-        ruleId: self.id,
       });
     }
     return verdictFrom(withExaminedNote(findings, self.id, 1, 'artifact'), ratchet);
@@ -114,7 +111,7 @@ export function regenerable(options: IRegenerableOptions): ICheck {
     const result = generate(ctx);
     if (result.status !== 0) {
       throw new Error(
-        `the generator \`${options.by}\` failed (exit ${result.status ?? 'signal'}); ${options.artifact} was not written.`,
+        `the generator \`${options.cmd}\` failed (exit ${result.status ?? 'signal'}); ${options.artifact} was not written.`,
       );
     }
     if (result.stdout === ctx.files.tryRead(options.artifact))

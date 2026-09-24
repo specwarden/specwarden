@@ -9,7 +9,7 @@ let resolved: IShell | undefined;
  *
  * `resolveShell` owns the decision and is pure; this hands it the real platform, the
  * real environment and the real filesystem, and remembers the answer — the PATH does not
- * change during a run, and a gate list of thirty command checks should not stat the
+ * change during a run, and a roster of thirty command checks should not stat the
  * same `bash.exe` thirty times.
  */
 export function platformShell(): IShell {

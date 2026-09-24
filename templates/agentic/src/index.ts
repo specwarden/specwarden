@@ -6,4 +6,4 @@
  * broken frontmatter loads as no role; and an irreversible action needs a guard that
  * runs BEFORE it, not a paragraph asking nicely.
  */
-export { agentic } from './agentic/agentic.template';
+export { agenticTemplate } from './agentic/agentic.template';

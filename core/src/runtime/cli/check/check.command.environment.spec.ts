@@ -11,7 +11,7 @@ import { aCheck, setup, tracer } from './check.command.spec-helpers';
  */
 
 describe('what counts as CI', () => {
-  // Only `CI=true` counted, so under `CI=1` a skip reached the arbiter and a red gate
+  // Only `CI=true` counted, so under `CI=1` a skip reached CI and a red check
   // exited 0 — and ANY `GITHUB_ACTIONS` counted, `false` included.
   it.each([
     [{ CI: 'true' }, true],
@@ -40,7 +40,7 @@ describe('--jobs and --base, refused by name before anything runs', () => {
     const t = tracer();
     const s = setup([t.make('a')]);
     expect(await s.run({ jobs })).toBe(2);
-    expect(s.err()).toBe(`--jobs must be a positive whole number of checks to run at once; got "${jobs}"\n`);
+    expect(s.err()).toBe(`--jobs must be a positive whole number of checks to run at once; got "${jobs}".\n`);
     expect(t.ran).toEqual([]);
   });
 

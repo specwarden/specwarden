@@ -7,4 +7,4 @@
  * to be false — a check that finds nothing reports green, which looks exactly like
  * clean documentation.
  */
-export { docsOnly } from './docs-only/docs-only.template';
+export { docsOnlyTemplate } from './docs-only/docs-only.template';

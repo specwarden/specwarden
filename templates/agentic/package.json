@@ -2,7 +2,7 @@
   "name": "@specwarden/template-agentic",
   "version": "0.0.0",
   "type": "module",
-  "description": "template: A repository coding agents work in — roles, docs, plans, a perimeter.",
+  "description": "template: A repository coding agents work in — role files, agent-read docs, plan and decision lifecycle, a perimeter.",
   "license": "MIT",
   "repository": {
     "type": "git",

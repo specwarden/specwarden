@@ -1,6 +1,6 @@
 # @specwarden/template-openspec
 
-⚒ **template** — A repository specified with OpenSpec — the spec seam wired.
+⚒ **template** — A repository specified with OpenSpec — the spec source wired, credential scan, doc paths, lint and tests.
 
 The requirement source declared, so `sync-invariants` has both halves on day one.
 
@@ -11,7 +11,7 @@ A starting tree for one kind of repository, so day one is one command rather tha
 ## Install
 
 ```bash
-npm install @specwarden/template-openspec specwarden
+pnpm add -D specwarden @specwarden/template-openspec @specwarden/openspec @specwarden/security @specwarden/docs
 ```
 
 It depends on [`specwarden`](https://github.com/specwarden/specwarden/tree/main/core#readme), [`@specwarden/scaffold-parts`](https://github.com/specwarden/specwarden/tree/main/templates/_parts#readme), [`@specwarden/openspec`](https://github.com/specwarden/specwarden/tree/main/modules/openspec#readme), [`@specwarden/security`](https://github.com/specwarden/specwarden/tree/main/modules/security#readme), [`@specwarden/docs`](https://github.com/specwarden/specwarden/tree/main/modules/docs#readme).

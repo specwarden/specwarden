@@ -1,0 +1,12 @@
+// `ci-coverage` — every heavy check is run by a CI job, and CI waits for it.
+// Switched off because it fails until the workflow runs these checks: add the jobs first. A
+// check with no job never runs anywhere, and no evidence reads exactly like a pass.
+// Switch it on: rename to ci-coverage.check.mjs AND uncomment its rule in rules.mjs.
+import { ciCoverage } from '@specwarden/ops';
+
+export const check = ciCoverage({
+  id: 'ci-coverage',
+  workflowFile: '.github/workflows/deploy.yml',
+  // REPLACE: the job branch protection requires; every job that runs checks must be in its `needs`.
+  requiredJob: 'ci-ok',
+});

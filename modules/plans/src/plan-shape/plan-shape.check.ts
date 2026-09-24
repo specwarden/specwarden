@@ -1,33 +1,39 @@
-import type { ICheck, ICheckContext, IFinding, IVerdict } from 'specwarden';
-import { buildCheck, checkOptions, frameTolerated, testStateless } from 'specwarden';
-import { DEFAULT_PLANS_DIR, type IPlanCheckIdentity } from '../_shared/identity/identity.model';
+import type { ICheck, ICheckContext, ICorpusFloor, IFinding, IModuleCheckDeclaration } from 'specwarden';
+import { buildCheck, checkOptions, lineOf, testStateless, thresholdOf } from 'specwarden';
+import {
+  DEFAULT_PLANS_DIR,
+  PLANS_SHARED_OPTIONS,
+  debtVerdict,
+  isExempt,
+  refusedPlans,
+} from '../_shared/corpus/corpus.util';
 import { nothingInFlight, plansFolder } from '../_shared/plans-folder/plans-folder.util';
 
-export interface IPlanShapeOptions extends IPlanCheckIdentity {
+export interface IPlanShapeOptions extends IModuleCheckDeclaration {
   /** The flat plans directory (repository-relative). Listed directly, so an untracked
    * new plan is checked before it is committed. Default: `docs/_plans`. Absent, the
    * check fails naming it. */
   readonly plansDir?: string;
-  /** The legal plan filename shape. Default: `DEFAULT_PLAN_NAME`, kebab-case. */
-  readonly nameRe?: RegExp;
-  /** Files in the folder that are not plans. Default: its `README.md`. */
-  readonly allowedNonPlans?: readonly string[];
+  /** The legal plan filename shape. Default: `DEFAULT_NAME`, kebab-case. */
+  readonly name?: RegExp;
+  /** Pathspecs of files in the folder that are not plans. The folder's own `README.md` is
+   * never a plan. Default: none. */
+  readonly except?: readonly string[];
+  /** How many plans the folder must hold for a verdict to count. Default: none — a folder
+   * with no plan is a repository with nothing in flight. */
+  readonly corpus?: ICorpusFloor;
   /** Phrases that only appear when a document sizes work. Default: `DEFAULT_SIZING`. */
-  readonly sizingPatterns?: readonly RegExp[];
+  readonly sizing?: readonly RegExp[];
   /** A phase heading, in whatever language the repo writes plans. Default:
    * `DEFAULT_PHASE_HEADING`. */
-  readonly phaseHeadingRe?: RegExp;
+  readonly phaseHeading?: RegExp;
   /** Anything runnable that decides a phase is finished. Default: `DEFAULT_COMMAND`. */
-  readonly commandRe?: RegExp;
+  readonly command?: RegExp;
   /** The check ids a plan's `--id` acceptance may name. A `--id` naming something outside
    * this is a hard failure: the acceptance command exits non-zero for the wrong reason
    * and the implementer hunts in code. Default: the run's own roster, read from the
    * context — the list the engine is actually running, which is the only honest one. */
-  readonly knownGateIds?: readonly string[];
-  /** Ratchet on work-sizing mentions. */
-  readonly sizingRatchet?: number;
-  /** Ratchet on phases with no acceptance command. */
-  readonly unacceptedRatchet?: number;
+  readonly knownCheckIds?: readonly string[];
 }
 
 /**
@@ -36,11 +42,11 @@ export interface IPlanShapeOptions extends IPlanCheckIdentity {
  * Every repository wiring this check wrote the same four regexes, because nobody had
  * one yet; the check waited on an answer every English repository gives identically.
  * They are English by construction — a phase heading and a unit of time are vocabulary —
- * and exported, so a house that plans in another language starts from these rather than
+ * and exported, so a consumer that plans in another language starts from these rather than
  * meeting a check that finds no phase and reports every plan well-shaped.
  */
 /** A kebab-case markdown filename: `refunds.md`, `01-consumer-journey.md`. */
-export const DEFAULT_PLAN_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*\.md$/;
+export const DEFAULT_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*\.md$/;
 /** A number followed by a unit of effort. */
 export const DEFAULT_SIZING: readonly RegExp[] = [/\b\d+\s*(?:hours?|days?|weeks?|story points?)\b/i];
 /** A level-two or level-three heading that opens a phase. */
@@ -91,51 +97,52 @@ function phaseSections(lines: readonly string[], phaseRe: RegExp): IPhaseSection
  * plan nobody deletes); its `--id` acceptance names a real check; it sizes nobody's
  * work (dependency and deployability are the plan's job, hours are the reader's
  * call); and every phase carries an acceptance command (else it has no definition
- * of done). Naming and gate ids are hard failures; sizing and unaccepted phases are
- * ratcheted.
+ * of done).
+ *
+ * THE RATCHET. Naming, a nested folder and an unknown id are hard failures. Sizing and an
+ * unaccepted phase are debt a repository with old plans may carry, and they were two
+ * ratchets — `sizingRatchet` and `unacceptedRatchet` — neither of them the engine's, so the
+ * stored threshold never reached either and `--tighten` could not move them. `ratchet` now
+ * counts both together: each is a plan that does not yet say what done is in the terms a
+ * reader can check.
  *
  * A PRODUCT check: the contract mechanics are universal; the naming shape, the
  * sizing vocabulary, the toolchain and the known check ids are options.
  */
-export function planShape(options: IPlanShapeOptions): ICheck {
+export function planShape(options: IPlanShapeOptions = {}): ICheck {
   checkOptions('planShape', options, {
-    plansDir: { kind: 'string' },
-    nameRe: { kind: 'regexp' },
-    allowedNonPlans: { kind: 'array' },
-    sizingPatterns: { kind: 'array' },
-    phaseHeadingRe: { kind: 'regexp' },
-    commandRe: { kind: 'regexp' },
-    knownGateIds: { kind: 'array' },
-    sizingRatchet: { kind: 'number' },
-    unacceptedRatchet: { kind: 'number' },
+    ...PLANS_SHARED_OPTIONS,
+    plansDir: { kind: 'string', nonEmpty: true },
+    name: { kind: 'regexp' },
+    sizing: { kind: 'array' },
+    phaseHeading: { kind: 'regexp' },
+    command: { kind: 'regexp' },
+    knownCheckIds: { kind: 'array' },
   });
   const plansDir = options.plansDir ?? DEFAULT_PLANS_DIR;
-  const nameRe = options.nameRe ?? DEFAULT_PLAN_NAME;
-  const sizingPatterns = options.sizingPatterns ?? DEFAULT_SIZING;
-  const phaseHeadingRe = options.phaseHeadingRe ?? DEFAULT_PHASE_HEADING;
-  const commandRe = options.commandRe ?? DEFAULT_COMMAND;
-  const allowedNonPlans = new Set(options.allowedNonPlans ?? ['README.md']);
-  const sizingRatchet = options.sizingRatchet ?? 0;
-  const unacceptedRatchet = options.unacceptedRatchet ?? 0;
+  const name = options.name ?? DEFAULT_NAME;
+  const sizing = options.sizing ?? DEFAULT_SIZING;
+  const phaseHeading = options.phaseHeading ?? DEFAULT_PHASE_HEADING;
+  const command = options.command ?? DEFAULT_COMMAND;
+  const except = options.except ?? [];
 
   return buildCheck(
     {
       ...options,
+      id: options.id ?? 'plan-shape',
       rule: options.rule ?? {
         statement: 'a plan is named by convention, sizes nobody’s work, and gives every phase an acceptance command',
         owner: '@specwarden/plans',
         implied: true,
       },
-      tier: options.tier ?? 'fast',
       zone: 'product',
     },
     ['read'],
-    (ctx: ICheckContext): IVerdict => {
-      const folder = plansFolder(ctx.files, plansDir, options.id);
+    (ctx, self) => {
+      const folder = plansFolder(ctx.files, plansDir, self.id);
       if ('refused' in folder) return { ok: false, findings: [folder.refused] };
       const hard: IFinding[] = [];
-      const sizing: IFinding[] = [];
-      const unaccepted: IFinding[] = [];
+      const soft: IFinding[] = [];
       const plans: string[] = [];
 
       for (const entry of folder.listed) {
@@ -144,22 +151,23 @@ export function planShape(options: IPlanShapeOptions): ICheck {
           hard.push({
             severity: 'error',
             file: rel,
-            message: `${rel}/ — plans are FLAT; a folder here means plans stopped being deleted.`,
-            ruleId: options.id,
+            message: `${rel}/ — plans are FLAT; a folder here means plans stopped being deleted. Move what it holds out of ${plansDir}.`,
           });
           continue;
         }
-        if (!entry.endsWith('.md') || allowedNonPlans.has(entry)) continue;
-        if (!testStateless(nameRe, entry)) {
+        if (!entry.endsWith('.md') || entry === 'README.md' || isExempt(ctx.vcs, except, rel)) continue;
+        if (!testStateless(name, entry)) {
           hard.push({
             severity: 'error',
             file: rel,
-            message: `${rel} — name must match ${nameRe}.`,
-            ruleId: options.id,
+            message: `${rel} — its name must match ${name}. Rename the plan.`,
           });
         }
         plans.push(entry);
       }
+
+      const short = refusedPlans(self.id, plans.length, plansDir, options.corpus);
+      if (short) return short;
 
       for (const entry of plans) {
         const rel = `${plansDir}/${entry}`;
@@ -167,55 +175,54 @@ export function planShape(options: IPlanShapeOptions): ICheck {
         const lines = text.split('\n');
 
         for (let index = 0; index < lines.length; index++) {
-          if (sizingPatterns.some((p) => testStateless(p, lines[index]))) {
-            sizing.push({
+          if (sizing.some((p) => testStateless(p, lines[index]))) {
+            soft.push({
               severity: 'error',
               file: rel,
               line: index + 1,
-              message: `${rel}:${index + 1} sizes work — a plan states dependency and deployability, not hours.`,
-              ruleId: options.id,
+              message: `${rel}:${index + 1} sizes work — a plan states dependency and deployability, not hours. Say what the phase depends on instead.`,
             });
           }
         }
 
-        // A plan may only name a gate that already exists: there is no escape hatch for a
+        // A plan may only name a check that already exists: there is no escape hatch for a
         // plan that INTRODUCES one, and an unknown id is a hard error rather than a tolerated
-        // finding. So a plan whose phase delivers a new gate cannot state its acceptance as
-        // `--id <that gate>`; it routes through the script path instead until the gate lands.
-        // Deliberate, and the cost is real — weigh it before adding a declaration mechanism.
+        // finding. So a plan whose phase delivers a new check cannot state its acceptance as
+        // `--id <that check>`; it routes through the script path instead until the check
+        // lands. Deliberate, and the cost is real — weigh it before adding a declaration
+        // mechanism.
         for (const m of text.matchAll(/--id\s+([a-z0-9-]+)/g)) {
-          if (!knownIds(ctx, options.knownGateIds).has(m[1]))
+          if (!knownIds(ctx, options.knownCheckIds).has(m[1])) {
+            const line = lineOf(text, m.index as number);
             hard.push({
               severity: 'error',
               file: rel,
-              message: `${rel} names gate '--id ${m[1]}', which is not a known check.`,
-              ruleId: options.id,
+              line,
+              message: `${rel}:${line} names '--id ${m[1]}', which is not a check this run knows. Name a check the roster has, or state the acceptance as the command that runs it until it lands.`,
             });
+          }
         }
 
-        for (const section of phaseSections(lines, phaseHeadingRe)) {
-          if (!section.body.some((line) => testStateless(commandRe, line))) {
-            unaccepted.push({
+        for (const section of phaseSections(lines, phaseHeading)) {
+          if (!section.body.some((line) => testStateless(command, line))) {
+            soft.push({
               severity: 'error',
               file: rel,
               line: section.line,
-              message: `${rel}:${section.line} ${section.title.slice(0, 100)} — a phase with no acceptance command has no definition of done.`,
-              ruleId: options.id,
+              message: `${rel}:${section.line} ${section.title.slice(0, 100)} — a phase with no acceptance command has no definition of done. End it with the command that proves it.`,
             });
           }
         }
       }
 
-      const findings = [...hard, ...sizing, ...unaccepted];
-      const ok = hard.length === 0 && sizing.length <= sizingRatchet && unaccepted.length <= unacceptedRatchet;
-      // hard findings never pass, so a passing verdict's error lines are all tolerated
-      // by the sizing / unaccepted ratchets — frame them so the ✅ is not printed above
-      // a wall of `error` lines.
-      const verdict = frameTolerated(ok, findings, 'the sizing / unaccepted-phase ratchets');
       // A folder holding no plan yet is a valid state — nothing is in flight — but a blank
       // pass reads as "every plan is well-shaped", so it says it looked at none.
-      if (plans.length > 0) return verdict;
-      return { ...verdict, findings: [...verdict.findings, nothingInFlight(plansDir)] };
+      const notes = plans.length === 0 ? [nothingInFlight(plansDir)] : [];
+      return debtVerdict({ hard, soft, notes }, thresholdOf(ctx, self), {
+        id: self.id,
+        examined: plans.length,
+        unit: 'plan',
+      });
     },
   );
 }

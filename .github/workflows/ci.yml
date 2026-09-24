@@ -1,6 +1,6 @@
-# The merge arbiter.
+# The required checks: what must pass before a change merges.
 #
-# The jobs below run the SAME gates a contributor runs locally, through the same engine,
+# The jobs below run the SAME checks a contributor runs locally, through the same engine,
 # against the same list — because two lists drift, and the one that runs is then not the
 # one that was reviewed.
 #
@@ -34,7 +34,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # `--all` on purpose: the relevance filter is for a working copy with a diff, and CI
       # is the place that must not depend on one being readable.
-      - run: node core/bin/warden.mjs check --tier fast --all
+      - run: node core/bin/specwarden.mjs check --tier fast --all
 
   heavy:
     name: heavy tier
@@ -47,7 +47,7 @@ jobs:
           node-version-file: package.json
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: node core/bin/warden.mjs check --tier heavy --all
+      - run: node core/bin/specwarden.mjs check --tier heavy --all
 
   mutation:
     name: mutation score

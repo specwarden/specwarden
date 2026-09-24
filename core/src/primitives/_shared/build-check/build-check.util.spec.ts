@@ -31,16 +31,17 @@ describe('buildCheck — the defaults a check may omit', () => {
   });
 
   it('defaults the ratchet id to the check id when a `ratchet` is declared — it recorded nothing without one', () => {
-    expect(buildCheck({ id: 'x', ratchet: 5 }, [], pass).ratchet).toEqual({
+    expect(buildCheck({ id: 'x', ratchet: 5 }, [], pass).ratchet).toEqual({ id: 'x', ceiling: 5 });
+    expect(buildCheck({ id: 'x', ratchet: { id: 'y' } }, [], pass).ratchet).toEqual({ id: 'y' });
+    expect(buildCheck({ id: 'x', ratchet: { direction: 'up', ceiling: 70 } }, [], pass).ratchet).toEqual({
       id: 'x',
-      direction: undefined,
-      ceiling: 5,
+      direction: 'up',
+      ceiling: 70,
     });
-    expect(buildCheck({ id: 'x', ratchetId: 'y' }, [], pass).ratchet).toMatchObject({ id: 'y' });
     expect(buildCheck({ id: 'x' }, [], pass).ratchet).toBeUndefined();
   });
 
-  it('carries an unusable placeholder when no id is given, for discovery or the registry to settle', () => {
+  it('carries an unusable placeholder when no id is given, for discovery or the roster to settle', () => {
     const check = buildCheck({}, [], pass);
     expect([check.id, check.title]).toEqual([UNNAMED_CHECK_ID, UNNAMED_CHECK_ID]);
     // Not in the id grammar, so no author writes it by accident.
@@ -80,7 +81,7 @@ describe('nameFromFile — only what the check left out', () => {
     expect(nameFromFile(buildCheck({ id: 'a' }, [], pass), { owner: 'f.mjs' }).rule).toBeUndefined();
   });
 
-  it('with no id offered, an unnamed check stays unnamed — the registry refuses it', () => {
+  it('with no id offered, an unnamed check stays unnamed — the roster refuses it', () => {
     expect(nameFromFile(buildCheck({}, [], pass), { owner: 'f.mjs' }).id).toBe(UNNAMED_CHECK_ID);
   });
 });
@@ -89,5 +90,40 @@ describe('normaliseRule', () => {
   it('passes an object or nothing through', () => {
     expect(normaliseRule(undefined)).toBeUndefined();
     expect(normaliseRule('s')).toEqual({ statement: 's' });
+  });
+});
+
+/**
+ * Every finding names the rule it proves — stamped here, once, for every factory.
+ *
+ * Bodies typed it per finding: `ruleId: options.id`, which is `undefined` for a check named
+ * by its file, or `self.id`, which is not the rule when the check names one under another id.
+ */
+describe('buildCheck — a finding is attributed to the rule the check enforces', () => {
+  const found = (): IVerdict => ({
+    ok: false,
+    findings: [
+      { severity: 'error', message: 'a' },
+      { severity: 'info', message: 'b', ruleId: 'something-else' },
+    ],
+  });
+
+  it('stamps the rule the check names, over whatever the body wrote', async () => {
+    const check = buildCheck({ id: 'x', rule: { id: 'the-rule', statement: 's' } }, [], found);
+    const verdict = await check.run(testContext());
+    expect(verdict.findings.map((f) => f.ruleId)).toEqual(['the-rule', 'the-rule']);
+  });
+
+  it('stamps the check itself when its rule has no id of its own, or it names none', async () => {
+    expect((await buildCheck({ id: 'x', rule: 's' }, [], found).run(testContext())).findings[0].ruleId).toBe('x');
+    expect((await buildCheck({ id: 'x' }, [], found).run(testContext())).findings[1].ruleId).toBe('x');
+  });
+
+  it('stamps the id the FILE gave it, read at run time, and does so for an async body too', async () => {
+    const check = nameFromFile(
+      buildCheck({}, [], async () => found()),
+      { id: 'from-file', owner: 'f.mjs' },
+    );
+    expect((await check.run(testContext())).findings.map((f) => f.ruleId)).toEqual(['from-file', 'from-file']);
   });
 });

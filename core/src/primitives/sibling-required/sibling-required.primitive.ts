@@ -1,6 +1,7 @@
 import type { ICheck, ICheckDeclaration, IFinding } from '../../domain';
 import {
   type ICorpusFloor,
+  type TPathspecs,
   belowCorpusFloor,
   buildCheck,
   checkOptions,
@@ -8,6 +9,7 @@ import {
   emptyCorpusReason,
   joinDir,
   stem,
+  thresholdOf,
   trackedCorpus,
   verdictFrom,
   withExaminedNote,
@@ -15,23 +17,22 @@ import {
 
 export interface ISiblingRequiredOptions extends ICheckDeclaration {
   /**
-   * Pathspec of the TRACKED files that must have a sibling.
+   * The TRACKED files that must have a sibling: a pathspec, or several whose matches are
+   * joined.
    *
-   * It was called `when` and had to be renamed: `when` on every other check means
-   * "which CHANGES make this relevant", and here it meant "which FILES this rule is
-   * about". Two meanings on one word, in a type that inherits the other one — and the
-   * collision is what surfaced the real defect behind it, that no factory was carrying
-   * the relevance predicate at all.
+   * It was called `when`, and then `subjects`: `when` on every other check means "which
+   * CHANGES make this relevant", and here it meant "which FILES this rule is about" — and
+   * every other primitive names its corpus `files`.
    */
-  readonly subjects: string;
+  readonly files: TPathspecs;
   /** The sibling, as a template relative to the file's directory. `{name}` is the
    * file's stem (basename minus its final extension). */
   readonly require: string;
-  /** Pathspecs among the subjects that need no sibling — the tests themselves, when the
+  /** Pathspecs among `files` that need no sibling — the tests themselves, when the
    * subjects are every source file of a folder. */
   readonly except?: readonly string[];
-  /** How many subjects must exist for a verdict to count. Defaults to one: a rule over
-   * no subject requires nothing, and it passed in silence. */
+  /** How many files must exist for a verdict to count. Defaults to one: a rule over
+   * no file requires nothing, and it passed in silence. */
   readonly corpus?: ICorpusFloor;
 }
 
@@ -41,18 +42,18 @@ export interface ISiblingRequiredOptions extends ICheckDeclaration {
  */
 export function siblingRequired(options: ISiblingRequiredOptions): ICheck {
   checkOptions('siblingRequired', options, {
-    subjects: { kind: 'string', required: true },
+    files: { kind: ['string', 'array'], required: true, nonEmpty: true },
     require: { kind: 'string', required: true },
     except: { kind: 'array' },
     corpus: { kind: 'object' },
   });
   return buildCheck(options, ['read'], (ctx, self) => {
-    const corpus = trackedCorpus(ctx.vcs, options.subjects, options.except);
+    const corpus = trackedCorpus(ctx.vcs, options.files, options.except);
     const short = belowCorpusFloor(
       self.id,
       corpus.files.length,
       options.corpus,
-      emptyCorpusReason(options.subjects, corpus, 'require a sibling of'),
+      emptyCorpusReason(options.files, corpus, 'require a sibling of'),
     );
     if (short) return short;
 
@@ -64,10 +65,9 @@ export function siblingRequired(options: ISiblingRequiredOptions): ICheck {
           severity: 'error',
           file,
           message: `${file} requires a sibling ${sibling}, which is missing.`,
-          ruleId: self.id,
         });
       }
     }
-    return verdictFrom(withExaminedNote(findings, self.id, corpus.files.length), ctx.ratchet ?? options.ratchet);
+    return verdictFrom(withExaminedNote(findings, self.id, corpus.files.length), thresholdOf(ctx, self));
   });
 }

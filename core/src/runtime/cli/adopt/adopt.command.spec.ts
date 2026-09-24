@@ -87,10 +87,10 @@ describe('adopt on a repository with a shape', () => {
   });
 
   it('points at the checks folder, never at the config — which before init does not exist', () => {
-    // "copy the ones you confirm into .specwarden/warden.config.mjs": a check is a file
+    // "copy the ones you confirm into .specwarden/config.mjs": a check is a file
     // under checks/, and adopt runs before init has written any config at all.
     const r = run({});
-    expect(r.out).not.toContain('warden.config.mjs');
+    expect(r.out).not.toContain('config.mjs');
     expect(r.out).toContain('specwarden init');
     expect(r.out).toContain('checks folder');
   });

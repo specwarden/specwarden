@@ -2,7 +2,7 @@
   "name": "@specwarden/template-docs-only",
   "version": "0.0.0",
   "type": "module",
-  "description": "template: A repository whose product IS documentation.",
+  "description": "template: A repository whose product is documentation — paths, hygiene, counts, placement.",
   "license": "MIT",
   "repository": {
     "type": "git",

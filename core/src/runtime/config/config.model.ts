@@ -1,6 +1,6 @@
 import type { ICheck, IPlugin, IReporter, IRule, ISpecSource, TCapability, TOwnershipMap } from '../../domain';
 import type { IEngineAdapters } from '../container';
-import type { IHarnessOptions } from '../consumer-tree/harness-checks/harness-checks.factory';
+import type { ISelfCheckOptions } from '../consumer-tree/self-checks/self-checks.factory';
 
 /**
  * A shared build input: a bare path prefix, or a prefix that carries the reason its
@@ -10,11 +10,11 @@ import type { IHarnessOptions } from '../consumer-tree/harness-checks/harness-ch
 export type TSharedBuildInput = string | { readonly prefix: string; readonly why?: string };
 
 /**
- * What a consumer's `.specwarden/warden.config.mjs` exports (as its default). The
+ * What a consumer's `.specwarden/config.mjs` exports (as its default). The
  * consumer zone owns this file — it names the checks, which is where repository
  * knowledge belongs. The product only defines the shape and loads it.
  */
-export interface IWardenConfig {
+export interface ISpecwardenConfig {
   /** The config-schema major this file was written against. Omitted means the
    * current version; a value newer than the engine speaks is refused. */
   readonly version?: number;
@@ -31,11 +31,11 @@ export interface IWardenConfig {
   /** The folder under the consumer directory that holds check files. Default `checks`. */
   readonly checksDir?: string;
   /**
-   * The harness's checks on ITSELF — rule ownership, rule coverage, orphans,
-   * enforcer resolution, ratchet direction — built from convention unless tuned here.
-   * `false` removes them all, which a repository should have to say out loud.
+   * The self-checks — the engine auditing the declarations: rule ownership, rule coverage,
+   * orphans, enforcer resolution, ratchet direction — built from convention unless tuned
+   * here. `false` removes them all, which a repository should have to say out loud.
    */
-  readonly harness?: IHarnessOptions | false;
+  readonly selfChecks?: ISelfCheckOptions | false;
   /** Plugins whose declarations (checks, doc kinds) are merged into the run. A
    * plugin declares WHAT to check; it never supplies a port adapter. */
   readonly plugins?: readonly IPlugin[];
@@ -44,7 +44,7 @@ export interface IWardenConfig {
   readonly specSource?: ISpecSource;
   /** How `sync-invariants` finds the invariants already deposited in the corpus:
    * the docs to scan and the pattern whose first group is an invariant id (its
-   * shape is a fact about the host's documentation convention). */
+   * shape is a fact about the consumer's documentation convention). */
   readonly invariants?: { readonly docs: string; readonly idPattern: RegExp };
   /**
    * Path prefixes that make EVERY check relevant when any is in the changed set — a
@@ -88,8 +88,8 @@ export interface IWardenConfig {
   /**
    * The tier names this repository uses, when the built-in three do not fit.
    *
-   * `fast`/`heavy`/`nightly` are one repository's schedule that happened to ship with
-   * the engine. A house running `pre-commit` / `pr` / `release` declares them here and
+   * `fast`/`heavy`/`nightly` are one repository's tiers that happened to ship with
+   * the engine. A consumer running `pre-commit` / `pr` / `release` declares them here and
    * the CLI accepts exactly those, so a typo'd `--tier prr` is still refused by name
    * rather than silently selecting nothing — which is the whole reason the list is
    * validated at all.
@@ -99,13 +99,13 @@ export interface IWardenConfig {
    * How many checks may run at once, when `--jobs` is not given. Default 1.
    *
    * Worth raising when a tier's time is spent OUTSIDE this process — test suites,
-   * compilers, shell scripts — which is the usual case for a mature gate list. The
+   * compilers, shell scripts — which is the usual case for a mature check list. The
    * engine's own checks measure in fractions of a second and gain nothing.
    *
    * Ignored by `--fix` and `--tighten`: both write, and a concurrent writer is a
    * corruption nobody would trace back to a flag.
    */
-  readonly concurrency?: number;
+  readonly jobs?: number;
 
   /**
    * Replace any port with your own implementation.
@@ -142,6 +142,6 @@ export interface IWardenConfig {
 
 /** Identity helper for the config file, present for the editor types alone — the
  * same role `defineConfig` plays in the tools this borrows the pattern from. */
-export function defineConfig(config: IWardenConfig): IWardenConfig {
+export function defineConfig(config: ISpecwardenConfig): ISpecwardenConfig {
   return config;
 }

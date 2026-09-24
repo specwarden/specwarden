@@ -1,5 +1,14 @@
-import { type ICheck, type IFinding, type IVerdict, buildCheck, checkOptions, computeLifecycle } from 'specwarden';
-import { DEFAULT_ARCHIVE_DIR, DEFAULT_PLANS_DIR, type IPlanCheckIdentity } from '../_shared/identity/identity.model';
+import type { ICheck, ICorpusFloor, IFinding, IModuleCheckDeclaration, IVerdict, TPathspecs } from 'specwarden';
+import { buildCheck, checkOptions, computeLifecycle, lineOf, thresholdOf } from 'specwarden';
+import {
+  DEFAULT_ARCHIVE_DIR,
+  DEFAULT_PLANS_DIR,
+  PLANS_SHARED_OPTIONS,
+  corpusOf,
+  debtVerdict,
+  isExempt,
+  refusedPlans,
+} from '../_shared/corpus/corpus.util';
 import { nothingInFlight, plansFolder } from '../_shared/plans-folder/plans-folder.util';
 
 /**
@@ -26,7 +35,7 @@ import { nothingInFlight, plansFolder } from '../_shared/plans-folder/plans-fold
  * it fully.
  *
  * WHAT IS CONFIGURATION: where plans live, where the archive is, which words a status uses,
- * and which header fields an archive entry must carry. All of that is a host's convention,
+ * and which header fields an archive entry must carry. All of that is a consumer's convention,
  * and every one of them carries a default — the folders the scaffolds write, and the
  * DEFAULT_* convention below — because a consumer with no convention yet cannot answer
  * them, and a check waiting on an answer nobody has is a check that never runs.
@@ -37,13 +46,22 @@ export interface IArchiveHeaderField {
   readonly pattern: RegExp;
 }
 
-export interface IPlanStalenessOptions extends IPlanCheckIdentity {
+export interface IPlanStalenessOptions extends IModuleCheckDeclaration {
   /** The flat plans folder. Default: `docs/_plans`. Absent, the check fails naming it. */
   readonly plansDir?: string;
   /** Where a harvested plan goes — outside `plansDir`. Default: `docs/_plans-archive`. An
    * archive that does not exist yet is a repository that has finished nothing, not a
    * failure. */
   readonly archiveDir?: string;
+  /** git pathspec(s) of the documents read for a citation of the archive. Default: every
+   * tracked markdown file, `**\/*.md`. */
+  readonly docs?: TPathspecs;
+  /** Pathspecs left out: a plan that is not judged, a document that may cite the archive.
+   * Both folders' `README.md` own the archive contract and may always name it. */
+  readonly except?: readonly string[];
+  /** How many plans the folder must hold for a verdict to count. Default: none — a folder
+   * with no plan is a repository with nothing in flight. */
+  readonly corpus?: ICorpusFloor;
   /** Matches a branch declaration, capturing the branch name in the LAST group. */
   readonly branchDeclaration?: RegExp;
   /** Matches a status declaration, capturing the status in the LAST group. */
@@ -54,11 +72,6 @@ export interface IPlanStalenessOptions extends IPlanCheckIdentity {
   readonly doneStatuses?: readonly string[];
   /** The fields an archived plan's header must carry. */
   readonly archiveHeader?: readonly IArchiveHeaderField[];
-  /** Files exempt from the "nothing links to the archive" rule — the document that owns
-   * the archive contract has to name it. */
-  readonly mayCiteArchive?: readonly string[];
-  /** How many plans may omit a status before this fails. Only ever lowered. */
-  readonly undeclaredStatusRatchet?: number;
 }
 
 /**
@@ -75,7 +88,7 @@ export interface IPlanStalenessOptions extends IPlanCheckIdentity {
  *     **Status:** active
  *     **Branch:** feature/thing
  *
- * Every one is overridable, and a house with its own convention passes its own regexes.
+ * Every one is overridable, and a consumer with its own convention passes its own regexes.
  * What is NOT overridable is that the declarations exist: a plan that does not say
  * whether it is under way cannot be told from one that shipped in March.
  */
@@ -124,23 +137,32 @@ function resolveRelative(fromFile: string, rel: string): string {
 /** Changing a markdown file is what can make a plan stale, or cite the archive. */
 const markdownChanged = (changed: readonly string[]): boolean => changed.some((f) => f.endsWith('.md'));
 
-export function planStaleness(options: IPlanStalenessOptions): ICheck {
+/**
+ * THE RATCHET counts plans that declare no status — debt a repository with old plans may
+ * carry while it adds the header. It was `undeclaredStatusRatchet`, read off the options
+ * alone: the stored threshold never reached it, and a passing run reported the count only
+ * as a note, so `--tighten` read zero error lines and stored a bar of 0 over the plans the
+ * check had been tolerating. Every other defect here is one edit to repair, and never
+ * tolerated.
+ */
+export function planStaleness(options: IPlanStalenessOptions = {}): ICheck {
   checkOptions('planStaleness', options, {
-    plansDir: { kind: 'string' },
-    archiveDir: { kind: 'string' },
+    ...PLANS_SHARED_OPTIONS,
+    plansDir: { kind: 'string', nonEmpty: true },
+    archiveDir: { kind: 'string', nonEmpty: true },
+    docs: { kind: ['string', 'array'], nonEmpty: true },
     branchDeclaration: { kind: 'regexp' },
     statusDeclaration: { kind: 'regexp' },
-    activeStatuses: { kind: 'array' },
-    doneStatuses: { kind: 'array' },
+    activeStatuses: { kind: 'array', nonEmpty: true },
+    doneStatuses: { kind: 'array', nonEmpty: true },
     archiveHeader: { kind: 'array' },
-    mayCiteArchive: { kind: 'array' },
-    undeclaredStatusRatchet: { kind: 'number' },
   });
   const plansDir = options.plansDir ?? DEFAULT_PLANS_DIR;
   const archiveDir = options.archiveDir ?? DEFAULT_ARCHIVE_DIR;
-  const ratchet = options.undeclaredStatusRatchet ?? 0;
+  const docs = options.docs ?? '**/*.md';
+  const except = options.except ?? [];
   // Resolved once, here, so every use below reads one name rather than repeating a
-  // fallback — and a house convention passed in wins over the default silently, which
+  // fallback — and a consumer's convention passed in wins over the default silently, which
   // is the only place a default should ever be invisible.
   const branchDeclaration = stateless(options.branchDeclaration ?? DEFAULT_BRANCH_DECLARATION);
   const statusDeclaration = stateless(options.statusDeclaration ?? DEFAULT_STATUS_DECLARATION);
@@ -150,74 +172,107 @@ export function planStaleness(options: IPlanStalenessOptions): ICheck {
     ...field,
     pattern: stateless(field.pattern),
   }));
-  const mayCiteArchive = options.mayCiteArchive ?? [`${plansDir}/README.md`, `${archiveDir}/README.md`];
+  // The documents that own the archive contract have to name it.
+  const contract = [`${plansDir}/README.md`, `${archiveDir}/README.md`];
   const archiveLink = new RegExp(`${archiveDir.replace(/[/\\]/g, '[/\\\\]')}\\/([\\w.-]+)\\.md`, 'g');
 
   return buildCheck(
     {
       ...options,
+      id: options.id ?? 'plan-staleness',
       rule: options.rule ?? {
         statement: 'a plan is harvested before it goes stale, and nothing cites the archive',
         owner: '@specwarden/plans',
         implied: true,
       },
-      tier: options.tier ?? 'fast',
       zone: 'product',
     },
     ['read'],
-    (ctx): IVerdict => {
-      const folder = plansFolder(ctx.files, plansDir, options.id);
+    (ctx, self): IVerdict => {
+      const folder = plansFolder(ctx.files, plansDir, self.id);
       if ('refused' in folder) return { ok: false, findings: [folder.refused] };
 
-      const failures: string[] = [];
-      const notes: string[] = [];
+      const hard: IFinding[] = [];
+      const undeclared: IFinding[] = [];
+      const notes: IFinding[] = [];
 
       const names = ctx.vcs.branchNames();
       const branches = names ? new Set(names) : null;
 
-      const plansIn = (listing: readonly string[]): string[] =>
-        listing.filter((f) => f.endsWith('.md') && f !== 'README.md').sort();
-      const plans = plansIn(folder.listed);
+      const plansIn = (dir: string, listing: readonly string[]): string[] =>
+        listing
+          .filter((f) => f.endsWith('.md') && f !== 'README.md' && !isExempt(ctx.vcs, except, `${dir}/${f}`))
+          .sort();
+      const plans = plansIn(plansDir, folder.listed);
       const archived =
-        ctx.files.exists(archiveDir) && ctx.files.isDirectory(archiveDir) ? plansIn(ctx.files.list(archiveDir)) : [];
+        ctx.files.exists(archiveDir) && ctx.files.isDirectory(archiveDir)
+          ? plansIn(archiveDir, ctx.files.list(archiveDir))
+          : [];
 
-      let undeclared = 0;
+      const short = refusedPlans(self.id, plans.length, plansDir, options.corpus);
+      if (short) return short;
 
       for (const file of plans) {
         const rel = `${plansDir}/${file}`;
         const source = ctx.files.read(rel);
-        const status = lastGroup(statusDeclaration.exec(source))?.toLowerCase();
-        const declaredBranch = lastGroup(branchDeclaration.exec(source));
+        const statusMatch = statusDeclaration.exec(source);
+        const branchMatch = branchDeclaration.exec(source);
+        const status = lastGroup(statusMatch)?.toLowerCase();
+        const declaredBranch = lastGroup(branchMatch);
+        // Read only where the declaration it names was found.
+        const at = (match: RegExpExecArray | null): number => lineOf(source, match!.index);
 
         if (status === undefined) {
-          undeclared += 1;
-          notes.push(`${rel}: no status declaration — cannot tell a draft from work under way`);
+          undeclared.push({
+            severity: 'error',
+            file: rel,
+            message: `${rel} declares no status, so a draft cannot be told from work under way. Declare whether it is a draft, active or done.`,
+          });
           continue;
         }
 
         // Finished work is its own state. It was read as a draft, so a plan marked done with
         // the branch its work happened on failed as "a draft that declares a branch".
         if (doneStatuses.includes(status)) {
-          notes.push(`${rel}: is done — harvest it, then move it to ${archiveDir}/ or delete it`);
+          notes.push({
+            severity: 'info',
+            file: rel,
+            line: at(statusMatch),
+            message: `${rel} is done — harvest it, then move it to ${archiveDir}/ or delete it.`,
+          });
           continue;
         }
         const isActive = activeStatuses.includes(status);
         if (!isActive) {
           if (declaredBranch !== undefined) {
-            failures.push(
-              `${rel}: is a draft yet declares branch \`${declaredBranch}\`. Work with a branch has ` +
+            hard.push({
+              severity: 'error',
+              file: rel,
+              line: at(branchMatch),
+              message:
+                `${rel} is a draft yet declares branch \`${declaredBranch}\`. Work with a branch has ` +
                 'started — say so — or the branch is a placeholder, and a plan must not name one: ' +
                 'it arms a hard failure for the day it is cleaned up.',
-            );
+            });
           }
           continue;
         }
         if (declaredBranch === undefined) {
-          failures.push(`${rel}: is active and declares no branch. An active plan names where its work happens.`);
+          hard.push({
+            severity: 'error',
+            file: rel,
+            line: at(statusMatch),
+            message: `${rel} is active and declares no branch. An active plan names where its work happens.`,
+          });
           continue;
         }
         if (branches === null) {
-          notes.push(`${rel}: branch \`${declaredBranch}\` — SKIPPED, this checkout has no branch refs to read`);
+          notes.push({
+            severity: 'info',
+            file: rel,
+            line: at(branchMatch),
+            message: `${rel}: branch \`${declaredBranch}\` — SKIPPED, this checkout has no branch refs to read.`,
+          });
           continue;
         }
 
@@ -229,15 +284,15 @@ export function planStaleness(options: IPlanStalenessOptions): ICheck {
           inArchive: false,
         });
         if (lifecycle === 'spent') {
-          failures.push(
-            `${rel}: declares branch \`${declaredBranch}\`, which no longer exists here or on the ` +
+          hard.push({
+            severity: 'error',
+            file: rel,
+            line: at(branchMatch),
+            message:
+              `${rel} declares branch \`${declaredBranch}\`, which no longer exists here or on the ` +
               `remote. The work merged — harvest the plan and move it to ${archiveDir}/.`,
-          );
+          });
         }
-      }
-
-      if (undeclared > ratchet) {
-        failures.push(`${undeclared} plan(s) declare no status; the ratchet is ${ratchet}.`);
       }
 
       for (const file of archived) {
@@ -245,54 +300,59 @@ export function planStaleness(options: IPlanStalenessOptions): ICheck {
         const source = ctx.files.read(rel);
         const missing = archiveHeader.filter((h) => !h.pattern.test(source)).map((h) => h.label);
         if (missing.length > 0) {
-          failures.push(
-            `${rel}: archive header is missing ${missing.join(', ')}. Without it the archive is a ` +
+          hard.push({
+            severity: 'error',
+            file: rel,
+            message:
+              `${rel}: archive header is missing ${missing.join(', ')}. Without it the archive is a ` +
               'slower delete — the reader cannot tell how far to trust the document, so they trust it fully.',
-          );
+          });
         }
       }
 
       // Two spellings of one citation: the archive's repository path written out, and a
       // relative link that lands in it. Only the first was read, so `./_archive/done.md`,
       // written beside the archive, cited it in plain sight.
-      for (const file of ctx.vcs.trackedFiles('**/*.md')) {
-        if (file.startsWith(`${archiveDir}/`)) continue;
-        if (mayCiteArchive.includes(file)) continue;
+      const citing = corpusOf(ctx.vcs, docs, except);
+      // Nothing read cannot cite the archive: with archived plans to cite, a `docs` that
+      // matched nothing is this half of the check examining nothing.
+      if (archived.length > 0 && citing.files.length === 0) {
+        hard.push({
+          severity: 'error',
+          message: `\`docs\` matched no document, so nothing was read for a citation of ${archiveDir}/. Point \`docs\` at the repository’s documentation.`,
+        });
+      }
+      for (const file of citing.files) {
+        if (file.startsWith(`${archiveDir}/`) || contract.includes(file)) continue;
         const source = ctx.files.tryRead(file);
         if (source === undefined) continue;
-        const cited = new Set<string>();
-        for (const match of source.matchAll(archiveLink)) cited.add(match[1] as string);
+        const cited = new Map<string, number>();
+        const cite = (name: string, index: number | undefined): void => {
+          if (name !== 'README' && !cited.has(name)) cited.set(name, lineOf(source, index as number));
+        };
+        for (const match of source.matchAll(archiveLink)) cite(match[1] as string, match.index);
         for (const match of source.matchAll(RELATIVE_LINK)) {
           const target = /^(.*)\/([\w.-]+)\.md$/.exec(resolveRelative(file, match[1] as string));
-          if (target?.[1] === archiveDir) cited.add(target[2] as string);
+          if (target?.[1] === archiveDir) cite(target[2] as string, match.index);
         }
-        cited.delete('README');
-        for (const name of cited) {
-          failures.push(
-            `${file} links to ${archiveDir}/${name}.md — an archived plan describes the ` +
+        for (const [name, line] of cited) {
+          hard.push({
+            severity: 'error',
+            file,
+            line,
+            message:
+              `${file}:${line} links to ${archiveDir}/${name}.md — an archived plan describes the ` +
               'past in the present tense; cite the document that owns the fact instead.',
-          );
+          });
         }
       }
 
-      const findings: IFinding[] = [
-        ...failures.map((message) => ({ severity: 'error' as const, message, ruleId: options.id })),
-        ...notes.map((message) => ({ severity: 'info' as const, message, ruleId: options.id })),
-      ];
-
-      if (failures.length === 0) {
-        findings.push(
-          plans.length === 0
-            ? nothingInFlight(plansDir)
-            : {
-                severity: 'info',
-                message: `✓ plan staleness — ${undeclared} plan(s) without a status (ratchet ${ratchet}), archive clean`,
-                ruleId: options.id,
-              },
-        );
-      }
-
-      return { ok: failures.length === 0, findings };
+      if (plans.length === 0) notes.push(nothingInFlight(plansDir));
+      return debtVerdict({ hard, soft: undeclared, notes }, thresholdOf(ctx, self), {
+        id: self.id,
+        examined: plans.length,
+        unit: 'plan',
+      });
     },
     options.when === undefined ? markdownChanged : undefined,
   );

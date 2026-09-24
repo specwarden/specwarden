@@ -2,7 +2,7 @@
   "name": "@specwarden/template-speckit",
   "version": "0.0.0",
   "type": "module",
-  "description": "template: A repository specified with Spec Kit — the spec seam wired.",
+  "description": "template: A repository specified with Spec Kit — the spec source wired, credential scan, doc paths, lint and tests.",
   "license": "MIT",
   "repository": {
     "type": "git",

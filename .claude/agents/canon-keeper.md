@@ -2,9 +2,9 @@
 name: canon-keeper
 description: >
   Owns skills/ — the repository's canon — in two modes. CONTEXT, before a change: which
-  SKILL.md governs it, what it forbids, and which gate enforces it. UPDATE, after a change
+  SKILL.md governs it, what it forbids, and which check enforces it. UPDATE, after a change
   lands: put the new rule in the ONE file that owns it, with the defect that produced it.
-  Trigger before touching a published surface, a check, a template, a gate or the release
+  Trigger before touching a published surface, a check, a template or the release
   path, and after any decision worth keeping. Do not trigger for code changes that add no
   rule.
 tools: Read, Write, Edit, Grep, Glob, Bash
@@ -25,7 +25,7 @@ Answer three things and stop:
 
 1. **Which skill owns this?** The file and the section.
 2. **What does it forbid?** Quote the rule, not a paraphrase.
-3. **Which gate enforces it?** The check id under `.specwarden/checks/`, or the entry in
+3. **Which check enforces it?** The check id under `.specwarden/checks/`, or the entry in
    `.specwarden/rules.mjs` with `notMechanizable` and its reason.
 
 If two skills could own it, say so — an unowned rule is how a fact ends up in three files.
@@ -39,7 +39,7 @@ A rule is worth writing down when it cost something to learn. Then:
 - **Carry the defect.** Every rule here is followed by what went wrong without it — "the
   lint pattern named the old prefix, so core could import a module with lint green". A rule
   without its defect is advice, and advice gets argued with.
-- **Say what the machine checks.** Either name the gate, or say plainly that nothing
+- **Say what the machine checks.** Either name the check, or say plainly that nothing
   enforces it and why — that is what `notMechanizable` in `rules.mjs` is for.
 - **Carry the measurement, if there was one**, with how it was taken.
 - **Update the index** — `skills/README.md` — and `AGENTS.md`'s routing table if the skill
@@ -69,5 +69,5 @@ pnpm scaffold               # llms.txt lists every skill
 pnpm gate --id router-mirror --id scaffold-drift --id docs
 ```
 
-Report: which file changed, which rule it now carries, which gate enforces it, and anything
+Report: which file changed, which rule it now carries, which check enforces it, and anything
 you found that contradicts it elsewhere.

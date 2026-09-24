@@ -14,7 +14,7 @@
  * lower is better. It was also, for a while, the only thing a ratchet could be —
  * which is why two real measurements ended up OUTSIDE the mechanism entirely,
  * reading and validating their own JSON by hand: a coverage score and a
- * mutation score are both floors, and a floor that "only turns down" is a floor
+ * mutation score both only rise, and a score whose ratchet "only turns down" is a bar
  * that erases itself the first time anything tightens it.
  *
  * So the direction is DECLARED, and the store, the tighten path and the at-rest
@@ -23,6 +23,33 @@
  * move the way that would hide a regression.
  */
 export type TRatchetDirection = 'down' | 'up';
+
+/**
+ * A ratchet as a check declares it: `ratchet: 3`, or the object when it needs more than
+ * a ceiling — its own store id, or a score that may only rise.
+ *
+ * ONE INPUT. It used to be three fields beside each other on every factory — the ceiling,
+ * a store id and a direction, each a key of its own — and a check could set the direction without the id or
+ * the id without a ceiling, each combination read by a different piece of the engine.
+ */
+export interface IRatchetDeclaration {
+  /** The store's key for the threshold. Defaults to the check's id. */
+  readonly id?: string;
+  /** `down` (the default): a debt count that may only fall. `up`: a score that may only rise. */
+  readonly direction?: TRatchetDirection;
+  /** The worst value the check tolerates, declared inline: the count it was armed at, or
+   * the lowest score it accepts. Used when no stored threshold overrides it. */
+  readonly ceiling?: number;
+}
+
+/** What a check's `ratchet` may be written as — a bare ceiling, or the declaration. */
+export type TRatchetInput = number | IRatchetDeclaration;
+
+/** The declaration a `ratchet` input stands for, or `undefined` when there is none. */
+export function ratchetDeclaration(input: TRatchetInput | undefined): IRatchetDeclaration | undefined {
+  if (input === undefined) return undefined;
+  return typeof input === 'number' ? { ceiling: input } : input;
+}
 
 export interface IRatchet {
   /** Stable identifier, unique per check (the debt is one file per check —

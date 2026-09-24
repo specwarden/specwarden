@@ -56,7 +56,7 @@ describe('sync-invariants over the Spec Kit tree the template wired', () => {
   );
 
   it('reads every requirement of every feature — two FR-001s stay two', () => {
-    const run = inScratchRepository('speckit', {}, ({ warden }) => warden(['sync-invariants']));
+    const run = inScratchRepository('speckit', {}, ({ specwarden }) => specwarden(['sync-invariants']));
 
     expect(run.status).toBe(0);
     expect(run.stdout).toContain(`speckit: ${requirements.length} requirement(s), 0 invariant(s) found`);
@@ -65,7 +65,9 @@ describe('sync-invariants over the Spec Kit tree the template wired', () => {
   }, 60_000);
 
   it('says it found nothing — not "in sync" — when there is no specs directory', () => {
-    const run = inScratchRepository('speckit', { edits: { specs: null } }, ({ warden }) => warden(['sync-invariants']));
+    const run = inScratchRepository('speckit', { edits: { specs: null } }, ({ specwarden }) =>
+      specwarden(['sync-invariants']),
+    );
 
     expect(run.stdout).toContain('found nothing');
     expect(run.stdout).not.toContain('in sync');

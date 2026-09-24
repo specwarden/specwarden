@@ -10,7 +10,6 @@ import { UNNAMED_CHECK_ID, nameFromFile } from '../../../primitives/_shared';
  */
 interface ICheckModule {
   readonly check?: unknown;
-  readonly gateCheck?: unknown;
   readonly checks?: unknown;
   readonly default?: unknown;
 }
@@ -36,12 +35,12 @@ const MISNAMED = ['ts', 'js', 'cjs', 'mts', 'cts'];
  *
  * THE CONVENTION. `<dir>/**\/*.check.mjs`, each exporting `check`, `checks`, or a
  * default. Files elsewhere (`_shared/`, tests, data) are simply not checks and are
- * not read. Sorted by path, so registry order is the tree's order and two runs of
+ * not read. Sorted by path, so roster order is the tree's order and two runs of
  * the same tree list the same thing.
  *
  * WHY A CONVENTION AT ALL. Before this, wiring a check meant three edits in two
  * files: import it in the config, add it to a map keyed by id, and keep that map in
- * the same order as a registry that ALSO named the check. Twenty-five checks, so
+ * the same order as a roster that ALSO named the check. Twenty-five checks, so
  * seventy-five lines that said nothing a folder listing did not — and one forgotten
  * import was a check that existed, had a test, and never ran. A folder is the map.
  *
@@ -126,7 +125,7 @@ function named(rel: string, found: readonly ICheck[]): readonly ICheck[] {
 
 function exported(rel: string, mod: ICheckModule): readonly ICheck[] {
   const candidates: unknown[] = [];
-  candidates.push(mod.check, mod.gateCheck);
+  candidates.push(mod.check);
   if (Array.isArray(mod.checks)) candidates.push(...(mod.checks as unknown[]));
   if (Array.isArray(mod.default)) candidates.push(...(mod.default as unknown[]));
   else candidates.push(mod.default);
@@ -142,7 +141,7 @@ function looksLikeCheck(v: unknown): v is Record<string, unknown> {
 /**
  * A check a factory built, or a refusal that says what to do instead.
  *
- * A hand-written object literal carries no contract version, and the registry then
+ * A hand-written object literal carries no contract version, and the roster then
  * failed on "check-contract vundefined" with a stack pointing into the engine — the one
  * failure the version exists to make legible, made illegible.
  */

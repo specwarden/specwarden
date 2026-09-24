@@ -3,14 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { agentDefinitions } from '@specwarden/agents';
 import { docHygiene, docPaths, docSymbols } from '@specwarden/docs';
 import { openspec } from '@specwarden/openspec';
-import { shellLocalScope } from '@specwarden/ops';
+import { shellScope } from '@specwarden/ops';
 import { decisionLogShape, planStaleness } from '@specwarden/plans';
 import { nestjs } from '@specwarden/plugin-nestjs';
 import { secretScan } from '@specwarden/security';
 import { speckit } from '@specwarden/speckit';
 import {
   CHECK_CONTRACT_VERSION,
-  CheckRegistry,
+  CheckRoster,
   CheckRunner,
   type ICheck,
   type ICheckResult,
@@ -27,7 +27,7 @@ import { BRANCHES, BROKEN, CAUGHT_IN_BROKEN, CLEAN, EVERY_CHECK_ID } from './rep
  * EVERY package this workspace publishes, in ONE config, over ONE repository.
  *
  * A consumer does not install one of these. They install the engine, three or four
- * modules and maybe a plugin, and write a single `warden.config.mjs` that names all of
+ * modules and maybe a plugin, and write a single `config.mjs` that names all of
  * them — and the failures that shape has are not the failures a per-package suite can
  * see: two packages minting the same check id, a plugin whose checks never reach the
  * registry, a module left in no tier, a capability one package needs and the repository
@@ -63,11 +63,11 @@ const config = defineConfig({
       tier: 'fast',
       docs: 'docs/_plans/*.md',
     }),
-    shellLocalScope({
+    shellScope({
       id: 'shell-local-scope',
       title: 'local only inside a function',
       tier: 'fast',
-      pathspecs: ['scripts/*.sh'],
+      scripts: ['scripts/*.sh'],
       when: () => true,
     }),
     agentDefinitions({
@@ -78,12 +78,12 @@ const config = defineConfig({
     }),
     secretScan({ id: 'secret-scan', title: 'no credential in the tree', tier: 'fast' }),
   ],
-  plugins: [nestjs({ modulesRoot: 'src/modules', ormPackage: 'drizzle-orm' })],
+  plugins: [nestjs({ modulesDir: 'src/modules', ormPackage: 'drizzle-orm' })],
   specSource: openspec(),
-  // The harness's checks on itself read a consumer tree that does not exist here; this
+  // The self-checks read a consumer tree that does not exist here; this
   // playground is about the PACKAGES composing, and `false` says that out loud rather
   // than leaving them to fail for a reason that is not the subject.
-  harness: false,
+  selfChecks: false,
 });
 
 /** Everything the config contributes, in the order the registry receives it. */
@@ -96,7 +96,7 @@ const declared = (): readonly ICheck[] => [
 ];
 
 function run(tree: Record<string, string>) {
-  const registry = new CheckRegistry();
+  const registry = new CheckRoster();
   registry.registerAll(declared());
 
   const results: ICheckResult[] = [];
@@ -150,7 +150,7 @@ describe('the whole workspace, in one config', () => {
   });
 
   it('a plugin’s checks reach the registry alongside the inline ones', () => {
-    expect(declared().map((c) => c.id)).toContain('nestjs/db-access-through-repositories');
+    expect(declared().map((c) => c.id)).toContain('nestjs-db-access');
   });
 
   it('every declared check speaks the contract version this engine registers', () => {

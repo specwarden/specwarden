@@ -11,7 +11,15 @@ import {
   SEVERITIES,
   satisfiesRatchet,
 } from '../../domain';
-import { type TWhen, buildCheck, checkOptions, frameTolerated, resolveWhen } from '../_shared';
+import {
+  type ICorpusFloor,
+  type TWhen,
+  buildCheck,
+  checkOptions,
+  frameTolerated,
+  resolveWhen,
+  thresholdOf,
+} from '../_shared';
 
 /**
  * The way to write a check that is not one of the declarative primitives.
@@ -29,7 +37,7 @@ import { type TWhen, buildCheck, checkOptions, frameTolerated, resolveWhen } fro
  *   - the same closing branch: findings means fail, no findings means a hand-written
  *     `✓ …` info line, because a verdict with no findings prints as a blank pass that
  *     reads as "did not run";
- *   - and, in the ratcheted ones, a comparison against `ctx.ratchet` plus a private
+ *   - and, in the ratcheted ones, a comparison against the stored threshold plus a private
  *     channel to the ratchet store that the engine never read.
  *
  * So this owns all four. A body returns FINDINGS — the thing only it can know — and
@@ -73,9 +81,9 @@ export interface ICheckOutcome {
    *     many of them, which is how a rule is armed against a tree that cannot satisfy
    *     it today. This is right for every check emitting one finding per violation.
    *   - present — the findings are FAILURES and the measurement is ratcheted apart
-   *     from them. A check with both (coverage floors that must hold, plus a debt
+   *     from them. A check with both (coverage minimums that must hold, plus a debt
    *     total that may only fall) cannot say that any other way, and collapsing the
-   *     two would let a floor breach pass because the debt happened to be under its
+   *     two would let a breached minimum pass because the debt happened to be under its
    *     ceiling.
    */
   readonly measured?: number;
@@ -89,13 +97,11 @@ export interface ICheckOutcome {
 
 export interface IDefineCheckOptions extends ICheckDeclaration {
   /** Which tier this runs in. Optional, defaulting to the cheapest — a check with no
-   * stated schedule should run OFTEN rather than rarely. */
+   * stated tier should run OFTEN rather than rarely. */
   readonly tier?: TTier;
   /** What the check may touch. Defaults to `read` — the only thing the overwhelming
    * majority of checks do, and the safest thing to have to opt OUT of. */
   readonly capabilities?: readonly TCapability[];
-  /** The rule a finding is attributed to, when it is not the check's own id. */
-  readonly ruleId?: string;
   /** When this check matters — a predicate, or the declarative form. Absent means
    * always. */
   readonly when?: TWhen;
@@ -111,7 +117,7 @@ export interface IDefineCheckOptions extends ICheckDeclaration {
    * markdown has more than one), and stating it converts the entire family from
    * invisible to loud.
    */
-  readonly corpus?: { readonly atLeast: number; readonly why?: string };
+  readonly corpus?: ICorpusFloor;
   /**
    * Repair the findings, under `specwarden check --fix`. Declaring it adds the `write`
    * capability, because a check that repairs writes and a repository is entitled to
@@ -148,34 +154,30 @@ const normalise = (outcome: unknown): ICheckOutcome | string => {
 const SEVERITY = new Set<string>(SEVERITIES);
 
 /**
- * Every finding carries the rule it proves, and a severity the verdict can count.
- *
- * The rule is stamped here rather than typed out per finding, which is where it was
- * forgotten or spelled differently. A severity that is missing — or not one of the three
+Every finding carries a severity the verdict can count — and the rule it proves, which
+ * `buildCheck` stamps on every factory's findings alike. A severity that is missing — or not one of the three
  * — is read as `error`: a finding with none was printed and ignored by the verdict, so a
  * body reporting a defect was green beside it.
  */
-const attribute = (findings: readonly IFinding[], ruleId: string): IFinding[] =>
+const withSeverity = (findings: readonly IFinding[]): IFinding[] =>
   findings.map((f) => {
     const severity: TSeverity = SEVERITY.has(f.severity) ? f.severity : 'error';
-    return { ...f, severity, ruleId: f.ruleId ?? ruleId };
+    return { ...f, severity };
   });
 
-const failure = (ruleId: string, message: string, measured: number): IVerdict => ({
+const failure = (message: string, measured: number): IVerdict => ({
   ok: false,
-  findings: [{ severity: 'error', ruleId, message }],
-  ratchet: { value: measured },
+  findings: [{ severity: 'error', message }],
+  measured,
 });
 
 export function defineCheck(options: IDefineCheckOptions): ICheck {
   checkOptions('defineCheck', options, {
     run: { kind: 'function', required: true },
     capabilities: { kind: 'array' },
-    ruleId: { kind: 'string' },
     corpus: { kind: 'object' },
     fix: { kind: 'function' },
   });
-  const direction = options.ratchetDirection ?? 'down';
   // A repair writes, so it declares `write` — added rather than demanded, because
   // forgetting it would hand the fix a writer that throws and turn a working repair
   // into a capability error nobody would read as one.
@@ -187,11 +189,10 @@ export function defineCheck(options: IDefineCheckOptions): ICheck {
     options,
     capabilities,
     async (ctx: ICheckContext, self: ICheck): Promise<IVerdict> => {
-      const ruleId = options.ruleId ?? self.id;
       const outcome = normalise(await options.run(ctx));
-      if (typeof outcome === 'string') return failure(ruleId, `${self.id}: ${outcome}`, 0);
+      if (typeof outcome === 'string') return failure(`${self.id}: ${outcome}`, 0);
       const unit = outcome.unit ?? 'items';
-      const findings = attribute(outcome.findings ?? [], ruleId);
+      const findings = withSeverity(outcome.findings ?? []);
       const errorCount = findings.filter((f) => f.severity === 'error').length;
 
       // A body that says it could not look is taken at its word — unless it also found a
@@ -210,16 +211,14 @@ export function defineCheck(options: IDefineCheckOptions): ICheck {
         // to hold it to.
         if (outcome.examined === undefined) {
           return failure(
-            ruleId,
-            `${self.id} declares \`corpus: { atLeast: ${options.corpus.atLeast} }\`, and its body reported no \`examined\` ` +
+            `${self.id} declares \`corpus: { atLeast: ${options.corpus.atLeast ?? 1} }\`, and its body reported no \`examined\` ` +
               'count, so the floor has nothing to hold. Return `{ findings, examined }` — how many units this run looked at.',
             outcome.measured ?? errorCount,
           );
         }
-        if (outcome.examined < options.corpus.atLeast) {
+        if (outcome.examined < (options.corpus.atLeast ?? 1)) {
           return failure(
-            ruleId,
-            `examined ${outcome.examined} ${unit}, below the declared floor of ${options.corpus.atLeast}. ` +
+            `examined ${outcome.examined} ${unit}, below the declared floor of ${options.corpus.atLeast ?? 1}. ` +
               (options.corpus.why ??
                 'A check that examined nothing cannot fail, so it reports success — this is that state, caught. ' +
                   'Something upstream matched nothing: a path that moved, a pattern that stopped matching, a filter that selects no subject.'),
@@ -229,10 +228,10 @@ export function defineCheck(options: IDefineCheckOptions): ICheck {
       }
 
       const measured = outcome.measured ?? errorCount;
-      const threshold = ctx.ratchet ?? options.ratchet ?? 0;
+      const { threshold, direction } = thresholdOf(ctx, self);
       // A body that states its own measurement has said the findings are not the debt,
       // so an error finding fails regardless of where the measurement sits. See
-      // `measured` for why collapsing these two would let a floor breach ride under a
+      // `measured` for why collapsing these two would let a breached minimum ride under a
       // debt ceiling that happened to hold.
       const ok =
         satisfiesRatchet(measured, threshold, direction) && (outcome.measured === undefined || errorCount === 0);
@@ -255,7 +254,7 @@ export function defineCheck(options: IDefineCheckOptions): ICheck {
           : [];
 
       const framed = frameTolerated(ok, [...clean, ...notes, ...findings], `ratchet ${threshold}`);
-      return { ...framed, ratchet: { value: measured } };
+      return { ...framed, measured };
     },
     resolveWhen(options.when),
   );

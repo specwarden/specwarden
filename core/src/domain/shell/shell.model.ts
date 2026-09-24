@@ -2,7 +2,7 @@
  * How a command line becomes a process.
  *
  * `bash -c` is the common case and a poor assumption to hardcode: a Windows checkout
- * without Git Bash has no bash at all, some containers ship only `sh`, and a house may
+ * without Git Bash has no bash at all, some containers ship only `sh`, and a consumer may
  * standardise on `pwsh`. The engine had three separate `proc.run('bash', ['-c', …])`
  * call sites, which is three places to fix and three chances to fix only two.
  *
@@ -46,12 +46,12 @@ export function shellFlag(command: string): readonly string[] {
  * `bash.exe` in `System32` is WSL's launcher, so on a machine with WSL installed a command
  * check runs inside Linux — where the Windows `node`, `pnpm` and the checkout's own tools
  * do not exist — and fails for a reason that has nothing to do with the repository. From
- * Git Bash the same run passes, because that PATH puts Git's bash first. A gate that
- * answers differently from PowerShell and from Git Bash is not a gate.
+ * Git Bash the same run passes, because that PATH puts Git's bash first. A check that
+ * answers differently from PowerShell and from Git Bash is not a check.
  *
  * So, on Windows, in order:
  *
- * 1. `SPECWARDEN_SHELL` — the executable a house chose, its flag derived from its name
+ * 1. `SPECWARDEN_SHELL` — the executable a consumer chose, its flag derived from its name
  *    (`-Command` for pwsh and powershell, `/c` for cmd, `-c` for everything else);
  * 2. Git for Windows' own bash, found beside the `git` on the PATH (`…\Git\cmd`,
  *    `…\Git\bin` or `…\Git\usr\bin` → `…\Git\bin\bash.exe`) or in the usual install

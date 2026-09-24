@@ -126,7 +126,7 @@ const tsconfig = () =>
        * export is caught before somebody installs it.
        */
       /**
-       * A template's playground carries a REPOSITORY — the stranger's tree `init` is run
+       * A template's playground carries a REPOSITORY — the consumer's tree `init` is run
        * in — and that tree is a fixture, not a consumer of this package: its sources
        * import an ORM nobody here installs, on purpose, because that is what the nestjs
        * plugin exists to catch.
@@ -188,7 +188,7 @@ export function vitestConfig(pkg) {
     ' */',
     'export default defineConfig({',
     '  test: {',
-    "    // `_playground/*.spec.ts` and not `**`: a template's playground holds a stranger's",
+    "    // `_playground/*.spec.ts` and not `**`: a template's playground holds a consumer's",
     "    // repository, and nothing in it is this package's test.",
     "    include: ['src/**/*.spec.ts', '_playground/*.spec.ts'],",
     "    environment: 'node',",
@@ -196,7 +196,7 @@ export function vitestConfig(pkg) {
     "      provider: 'v8',",
     "      include: ['src/**/*.ts'],",
     '      // A spec and its helpers are the instrument, not the subject: counted, they',
-    '      // report themselves as covered and lift the number that gates real code.',
+    '      // report themselves as covered and lift the number that judges real code.',
     "      exclude: ['src/**/*.spec.ts', 'src/**/*.spec-helpers.ts'],",
     "      reporter: ['text-summary', 'json-summary'],",
     `      thresholds: ${thresholds},`,
@@ -273,10 +273,36 @@ export default defineConfig({
 
 // ── README.md ───────────────────────────────────────────────────────────────────────
 
+/**
+ * A template's install command names the MODULES its generated files import — what a
+ * consumer must declare for the tree to survive its first run — never
+ * `@specwarden/scaffold-parts`, which `npm`/`pnpm` already brings in as the template's
+ * own dependency. Naming it too used to read as something to install ON PURPOSE, when
+ * nobody ever does: it is a build-time dependency of the template, never of what `init`
+ * writes.
+ */
+const templateInstallModules = (pkg) =>
+  pkgDeps(pkg).filter((d) => d !== '@specwarden/scaffold-parts' && d !== 'specwarden');
+
 function readme(pkg) {
   const kind = KINDS[pkg.kind];
   const name = pkgName(pkg);
   const deps = pkgDeps(pkg);
+
+  const install =
+    pkg.kind === 'template'
+      ? `\`\`\`bash
+pnpm add -D specwarden ${name}${templateInstallModules(pkg).length ? ` ${templateInstallModules(pkg).join(' ')}` : ''}
+\`\`\`
+`
+      : pkg.kind === 'scaffold'
+        ? `A build-time dependency of the templates listed in this repository's README — declared
+automatically when you install one of them. Nothing installs it on its own.
+`
+        : `\`\`\`bash
+npm install ${name}${pkg.kind === 'core' ? '' : ' specwarden'}
+\`\`\`
+`;
 
   return `# ${name}
 
@@ -290,16 +316,13 @@ ${kind.rule}
 
 ## Install
 
-\`\`\`bash
-npm install ${name}${pkg.kind === 'core' ? '' : ' specwarden'}
-\`\`\`
-${
-  deps.length
-    ? `
+${install}${
+    deps.length
+      ? `
 It depends on ${deps.map((d) => `[\`${d}\`](${ORIGIN.repository}/tree/main/${pkgDir(byName(d))}#readme)`).join(', ')}.
 `
-    : ''
-}
+      : ''
+  }
 ## Documentation
 
 - [What specwarden is](${ORIGIN.repository}#readme) — the failure it exists against

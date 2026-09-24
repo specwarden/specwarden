@@ -94,7 +94,7 @@ export const checks = [
       if (root === undefined) {
         error(
           ROOT_SPEC,
-          `no workspace playground. ${ROOT_SPEC} is where the packages are proved to compose — one config naming all of them, over one repository. A per-package suite cannot see two packages minting the same check id, or a plugin whose checks never reach the registry.`,
+          `no workspace playground. ${ROOT_SPEC} is where the packages are proved to compose — one config naming all of them, over one repository. A per-package suite cannot see two packages minting the same check id, or a plugin whose checks never reach the roster.`,
         );
       } else {
         const unnamed = owing.filter((p) => !root.includes(`'${pkgName(p)}'`));

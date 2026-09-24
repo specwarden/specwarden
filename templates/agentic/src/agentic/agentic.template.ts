@@ -1,5 +1,11 @@
 import type { IRule, ITemplate, ITemplateContext, ITemplateFile } from 'specwarden';
-import { agentRolesPart, compose, docPathsPart, perimeterPart, planLifecyclePart } from '@specwarden/scaffold-parts';
+import {
+  agentDefinitionsPart,
+  compose,
+  docPathsPart,
+  perimeterPart,
+  planLifecyclePart,
+} from '@specwarden/scaffold-parts';
 
 /**
  * A starting tree for a repository that CODING AGENTS work in.
@@ -24,20 +30,20 @@ import { agentRolesPart, compose, docPathsPart, perimeterPart, planLifecyclePart
  */
 const assembled = (ctx: ITemplateContext) =>
   compose(
-    agentRolesPart(ctx),
+    agentDefinitionsPart(ctx),
     docPathsPart(ctx, {
       header: 'An agent follows a dead path, finds nothing, and INVENTS the rest — confidently, in a diff.',
       docs: '**/*.md',
-      skipDirs: ['docs/_plans-archive/'],
+      except: ['docs/_plans-archive/'],
     }),
     planLifecyclePart(ctx),
     perimeterPart(),
   );
 
-export const agentic: ITemplate = {
+export const agenticTemplate: ITemplate = {
   name: 'agentic',
   describe:
-    'a repository coding agents work in — role files, agent-read docs, plan and decision lifecycle, a perimeter',
+    'A repository coding agents work in — role files, agent-read docs, plan and decision lifecycle, a perimeter.',
   requires: ['@specwarden/agents', '@specwarden/plans', '@specwarden/docs'],
 
   files: (ctx: ITemplateContext): readonly ITemplateFile[] => assembled(ctx).files,

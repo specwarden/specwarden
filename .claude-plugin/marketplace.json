@@ -12,7 +12,7 @@
     {
       "name": "specwarden",
       "source": "./core",
-      "description": "specwarden — A repository declares its rules; the warden proves which hold."
+      "description": "specwarden — A repository declares its rules; specwarden proves which hold."
     },
     {
       "name": "specwarden-docs",

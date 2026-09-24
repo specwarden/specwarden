@@ -13,7 +13,7 @@ const ARCHIVE_OK = [
 ].join('\n');
 
 const runWith = (tree: Record<string, string>, branches: readonly string[]): Promise<IVerdict> =>
-  runCheck(planStaleness({ id: 'plan-staleness', title: 't' }), {
+  runCheck(planStaleness(), {
     tree: { 'docs/_plans/README.md': 'The contract.', ...tree },
     branches,
   });
@@ -29,7 +29,7 @@ describe('planStaleness — a relative link into the archive', () => {
     ]);
 
     expect(errorsOf(verdict)).toEqual([
-      'docs/GUIDE.md links to docs/_plans-archive/done.md — an archived plan describes the past in the present tense; cite the document that owns the fact instead.',
+      'docs/GUIDE.md:1 links to docs/_plans-archive/done.md — an archived plan describes the past in the present tense; cite the document that owns the fact instead.',
     ]);
   });
 

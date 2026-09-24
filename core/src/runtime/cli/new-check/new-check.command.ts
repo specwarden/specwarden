@@ -1,5 +1,5 @@
 import type { IFileSource, IFileWriter } from '../../../domain';
-import type { ICliIo } from '../_shared/cli-io/cli-io.model';
+import { type ICliIo, refusal } from '../_shared/cli-io/cli-io.model';
 
 /**
  * `specwarden new <id>` — the first check somebody writes, already in the right shape.
@@ -43,7 +43,7 @@ import { defineCheck, readTracked } from 'specwarden';
 
 /**
  * What makes a document wrong — THE CONDITION, and the one thing only you can write.
- * Until it is written this check FAILS: a scaffold that passed would be a gate nobody
+ * Until it is written this check FAILS: a scaffold that passed would be a check nobody
  * finished, reporting green.
  */
 const isWrong = undefined; // for example: (doc) => doc.text.includes('TODO')
@@ -99,7 +99,7 @@ function test(id: string): string {
   return `/**
  * What \`${id}\` must and must not report.
  *
- * Run: node --test <this file>, or through the repository's own unit gate.
+ * Run: node --test <this file>, or through the repository's own unit check.
  *
  * The cases worth writing are the ones a mutation would survive: the boundary (one
  * short of the threshold, exactly at it), and the SHAPE that reports success without
@@ -148,13 +148,15 @@ export function newCheck(
   options: { consumerDir: string; checksDir?: string; family?: string } = { consumerDir: '.specwarden' },
 ): number {
   if (id === undefined || id === '') {
-    io.err('usage: specwarden new <check-id> [--family <folder>]\n');
+    io.err(refusal('usage: specwarden new <check-id> [--family <folder>]'));
     return 2;
   }
   if (!VALID_ID.test(id)) {
     io.err(
-      `'${id}' is not a usable check id. An id is a path segment and the runner's address for a ` +
-        'check: lower-case words joined by hyphens.\n',
+      refusal(
+        `'${id}' is not a usable check id. An id is a path segment and the runner's address for a ` +
+          'check: lower-case words joined by hyphens',
+      ),
     );
     return 2;
   }
@@ -167,8 +169,10 @@ export function newCheck(
 
   const existing = [checkPath, testPath].filter((path) => files.exists(path));
   if (existing.length > 0) {
-    io.err(`${existing.join(', ')} already exists — nothing was written.\n`);
-    return 1;
+    // The line could not be used — exit 2 — rather than a check that failed: 1 is the
+    // answer "no", and nothing was asked here that could be answered.
+    io.err(refusal(`${existing.join(', ')} already exists — nothing was written`));
+    return 2;
   }
 
   writer.write(checkPath, body(id, checkPath));

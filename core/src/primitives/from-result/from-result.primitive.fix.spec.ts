@@ -53,11 +53,11 @@ describe('fromResult — the ratchet', () => {
     expect(verdict.ok).toBe(true);
     expect(verdict.findings[0].message).toContain('tolerated under ratchet 2');
     expect(errorsOf(verdict)).toEqual(['a', 'b']);
-    expect(verdict.ratchet).toEqual({ value: 2 });
+    expect(verdict.measured).toBe(2);
   });
 
   it('fails when a stored ratchet is tighter than the inline one', async () => {
-    expect((await runCheck(twoProblems(), { ratchet: 1 })).ok).toBe(false);
+    expect((await runCheck(twoProblems(), { threshold: 1 })).ok).toBe(false);
   });
 
   it('is strict with no ratchet at all: one problem fails', async () => {
@@ -77,7 +77,7 @@ describe('fromResult — a result that names neither field', () => {
 
     expect(verdict.ok).toBe(true);
     expect(verdict.findings.map((f) => f.message)).toEqual(['✓ x — clean']);
-    expect(verdict.ratchet).toEqual({ value: 0 });
+    expect(verdict.measured).toBe(0);
   });
 
   it('prefers `errors` when a result carries both names', async () => {

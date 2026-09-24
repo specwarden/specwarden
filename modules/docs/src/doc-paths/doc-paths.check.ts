@@ -1,16 +1,17 @@
-import type { ICheck, IFinding } from 'specwarden';
-import { buildCheck, checkOptions, lineOf, verdictFrom } from 'specwarden';
-import { DEFAULT_DOCS, nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
-import type { IDocCheckIdentity } from '../_shared/identity/identity.model';
+import type { ICheck, ICorpusFloor, IFinding, IModuleCheckDeclaration, TPathspecs } from 'specwarden';
+import { buildCheck, checkOptions, lineOf, thresholdOf, verdictFrom, withExaminedNote } from 'specwarden';
+import { DEFAULT_DOCS, DOCS_CORPUS_OPTIONS, corpusOf, refusedCorpus } from '../_shared/corpus/corpus.util';
 
-export interface IDocPathsOptions extends IDocCheckIdentity {
-  /** git pathspec selecting the documentation corpus. Tracked files only, as
+export interface IDocPathsOptions extends IModuleCheckDeclaration {
+  /** git pathspec(s) selecting the documentation corpus. Tracked files only, as
    * `git ls-files` lists them — a filesystem glob would pull in node_modules and
    * generated trees. Default: `**\/*.md`, every tracked document. */
-  readonly docs?: string;
-  /** Directory prefixes whose documents are skipped — snapshots and archives that
-   * quote dead paths as their subject, and generated trees verified elsewhere. */
-  readonly skipDirs?: readonly string[];
+  readonly docs?: TPathspecs;
+  /** Pathspecs of documents left unread — snapshots and archives that quote dead paths as
+   * their subject, and generated trees verified elsewhere. */
+  readonly except?: readonly string[];
+  /** How many documents a run must read for its verdict to count. Default: one. */
+  readonly corpus?: ICorpusFloor;
   /** Paths deliberately absent (a worked example, a plan that says "this was
    * deleted"). Named, so the set stays auditable. */
   readonly illustrative?: readonly string[];
@@ -24,7 +25,6 @@ export interface IDocPathsOptions extends IDocCheckIdentity {
    * or more segments) is treated the same way: it names a file in an installed
    * package, not in this tree. */
   readonly externalPrefixes?: readonly string[];
-  readonly ratchet?: number;
 }
 
 /** A scoped-package specifier — `@scope/pkg/rest` — names a file inside an
@@ -52,42 +52,40 @@ function ancestors(dir: string): string[] {
  * roots, so a legitimately relative path is not called a defect.
  *
  * A PRODUCT check: the scan, the ancestor walk and the ratchet are universal; the
- * roots, the skipped trees, the illustrative set and the sibling checkouts are
+ * roots, the exempt trees, the illustrative set and the sibling checkouts are
  * facts about one repository and arrive as options.
  */
-export function docPaths(options: IDocPathsOptions): ICheck {
+export function docPaths(options: IDocPathsOptions = {}): ICheck {
   checkOptions('docPaths', options, {
-    docs: { kind: 'string' },
-    skipDirs: { kind: 'array' },
+    ...DOCS_CORPUS_OPTIONS,
     illustrative: { kind: 'array' },
     prefixes: { kind: 'array' },
     externalPrefixes: { kind: 'array' },
   });
   const docs = options.docs ?? DEFAULT_DOCS;
   const illustrative = new Set(options.illustrative ?? []);
-  const skipDirs = options.skipDirs ?? [];
   const roots = options.prefixes ?? [];
   const externals = options.externalPrefixes ?? [];
 
   return buildCheck(
     {
       ...options,
+      id: options.id ?? 'doc-paths',
       rule: options.rule ?? {
         statement: 'a path the documentation names exists',
         owner: '@specwarden/docs',
         implied: true,
       },
-      tier: options.tier ?? 'fast',
       zone: 'product',
     },
     ['read'],
-    (ctx) => {
+    (ctx, self) => {
+      const corpus = corpusOf(ctx.vcs, docs, options.except);
+      const short = refusedCorpus(self.id, docs, corpus, options.corpus);
+      if (short) return short;
+
       const findings: IFinding[] = [];
-      // What is SCANNED, after the skipped trees: a skip list that swallowed the whole corpus
-      // leaves this check as unable to fail as a pathspec that matched nothing.
-      const corpus = ctx.vcs.trackedFiles(docs).filter((file) => !skipDirs.some((d) => file.startsWith(d)));
-      if (corpus.length === 0) return nothingExamined(options.id, docs);
-      for (const file of corpus) {
+      for (const file of corpus.files) {
         const content = ctx.files.read(file);
         const dir = file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '';
         const ws = file.split('/')[0];
@@ -106,13 +104,12 @@ export function docPaths(options: IDocPathsOptions): ICheck {
               severity: 'error',
               file,
               line: lineOf(content, m.index ?? 0),
-              message: `${file} names \`${ref}\`, which does not resolve. Often the file gained its own folder and the path did not follow.`,
-              ruleId: options.id,
+              message: `${file} names \`${ref}\`, which does not resolve. Point it at where the file is now — often it gained its own folder and the path did not follow.`,
             });
           }
         }
       }
-      return verdictFrom(findings, ctx.ratchet ?? options.ratchet);
+      return verdictFrom(withExaminedNote(findings, self.id, corpus.files.length, 'document'), thresholdOf(ctx, self));
     },
   );
 }

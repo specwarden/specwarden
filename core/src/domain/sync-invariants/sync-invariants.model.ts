@@ -55,7 +55,7 @@ export function planInvariantSync(
 
 /** Extract the invariant ids a document declares, by a caller-supplied id pattern
  * (its first capture group is the id). WHICH shape a module doc marks invariants in
- * is a fact about the host's documentation convention, so the pattern is supplied,
+ * is a fact about the consumer's documentation convention, so the pattern is supplied,
  * never assumed. */
 export function invariantsInDocument(location: string, text: string, idPattern: RegExp): readonly IExistingInvariant[] {
   const re = new RegExp(idPattern.source, idPattern.flags.includes('g') ? idPattern.flags : `${idPattern.flags}g`);

@@ -8,7 +8,7 @@
  */
 export { discoverChecks, CheckDiscoveryError } from './discover-checks/discover-checks.util';
 export type { IDiscoveredChecks } from './discover-checks/discover-checks.util';
-export { harnessChecks, HARNESS_CHECK_IDS } from './harness-checks/harness-checks.factory';
-export type { IHarnessOptions, IHarnessInputs } from './harness-checks/harness-checks.factory';
+export { selfChecks, SELF_CHECK_IDS } from './self-checks/self-checks.factory';
+export type { ISelfCheckOptions, ISelfCheckInputs } from './self-checks/self-checks.factory';
 export { loadConsumerTree } from './load-consumer-tree/load-consumer-tree.util';
 export type { ILoadedTree } from './load-consumer-tree/load-consumer-tree.util';

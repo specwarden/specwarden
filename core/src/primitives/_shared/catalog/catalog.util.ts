@@ -21,7 +21,7 @@
  * check quieter, and a quieter check is indistinguishable from a passing one. The
  * reason is not decoration: it is carried into the verdict as an info finding, so a
  * run says out loud what it is no longer looking for. This is the same bargain the
- * rule registry already strikes — an unenforced rule is allowed, an unenforced rule
+ * rule register already strikes — an unenforced rule is allowed, an unenforced rule
  * with no stated reason is not.
  *
  * `replace` states the same thing more loudly by saying nothing at all, so it is

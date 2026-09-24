@@ -5,7 +5,8 @@ import { ARCHIVE_HEADER_FIELDS, archiveReadiness, shellArgv } from '../../../dom
 import type { IProcessResult, IProcessRunner, IShell } from '../../../domain';
 import { ChildProcessRunner, NodeFileSource, platformShell } from '../../../infrastructure';
 import { parsePlan } from '../../planner/plan-parser/plan-parser.util';
-import type { ICliIo } from '../_shared/cli-io/cli-io.model';
+import { type ICliIo, refusal } from '../_shared/cli-io/cli-io.model';
+import { flagProblems, parseArgs } from '../_shared/parse-args/parse-args.util';
 
 /**
  * `specwarden plan status <file> [--verify]`. Without `--verify` it lists the
@@ -21,23 +22,37 @@ export async function planStatus(
   io: ICliIo,
   proc: IProcessRunner = new ChildProcessRunner(),
 ): Promise<number> {
-  const sub = argv[1];
-  if (sub !== 'status' && sub !== 'archive') {
-    io.err('usage: specwarden plan <status|archive> <file> [--verify]\n');
+  // The line read by the one grammar every command shares. `plan` read argv for itself and
+  // looked for `--verify` by string, so `--verfy` ran a plain status and exited 0 — a
+  // verification asked for and never made.
+  const args = parseArgs(argv);
+  const problems = [...args.problems, ...flagProblems(args)];
+  const [sub, file, ...extra] = args.positionals;
+  if (problems.length > 0) {
+    io.err(refusal(problems.join('; ')));
     return 2;
   }
-  const file = argv.slice(2).find((a) => !a.startsWith('--'));
-  if (!file) {
-    io.err(`usage: specwarden plan ${sub} <file>${sub === 'status' ? ' [--verify]' : ''}\n`);
+  if (sub !== 'status' && sub !== 'archive') {
+    io.err(refusal('usage: specwarden plan <status|archive> <file> [--verify]'));
+    return 2;
+  }
+  if (!file || extra.length > 0) {
+    io.err(refusal(`usage: specwarden plan ${sub} <file>${sub === 'status' ? ' [--verify]' : ''} — one plan file`));
+    return 2;
+  }
+  if (sub === 'archive' && args.verify) {
+    io.err(
+      refusal('--verify is a flag of plan status, not of plan archive — archive already resolves every destination'),
+    );
     return 2;
   }
   const abs = resolve(cwd, file);
   if (!existsSync(abs)) {
-    io.err(`no such plan: ${file}\n`);
+    io.err(refusal(`no such plan: ${file}`));
     return 2;
   }
 
-  // `plan archive` is the harvest GATE: it refuses (exit 2) until the plan declares
+  // `plan archive` is the harvest's check: it answers no (exit 1) until the plan declares
   // what moved and where, every destination resolves, and the archive header is there
   // (`**Started:**`, `**Finished:**`, `**Branch:**`, `**Harvested:**`, `**Left open:**`).
   // It never moves the file itself — the operator does that with `git mv` once this
@@ -52,13 +67,15 @@ export async function planStatus(
       );
       return 0;
     }
+    // Not ready is an ANSWER — the plan was read, and the answer is no — so exit 1, the code
+    // a failed check uses; 2 is kept for a plan that could not be read at all.
     io.err(`❌ ${file} is not ready to archive:\n`);
-    for (const reason of readiness.reasons) io.err(`   • ${reason}\n`);
-    return 2;
+    for (const reason of readiness.reasons) io.err(`   • ${refusal(reason)}`);
+    return 1;
   }
 
   const { plan, findings, declared } = parsePlan(readFileSync(abs, 'utf8'));
-  const verify = argv.includes('--verify');
+  const verify = args.verify;
 
   // The DECLARED status — an undeclared one printed as "draft", beside the finding that
   // said there was none.

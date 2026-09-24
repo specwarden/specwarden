@@ -9,8 +9,8 @@ import { planted, provePlayground } from '../../../scripts/playground-proof.mjs'
  * deploy and backup scripts, runbooks, a deploy workflow.
  *
  * Each of those is a detection the template makes, and the empty repository this replaced
- * made none of them. With no tracked shell there was no `shell-local-scope`; with no
- * compose file and no workflow, the env-file and gate-coverage examples were never
+ * made none of them. With no tracked shell there was no `shell-scope`; with no
+ * compose file and no workflow, the env-pairing and ci-coverage examples were never
  * written. Three of the template's six parts had never appeared in any tree.
  *
  * The three examples stay off here, as they do for a consumer — each needs a fact only
@@ -32,7 +32,7 @@ provePlayground(
       },
       says: 'scripts/backup.sh',
     },
-    'shell-local-scope': {
+    'shell-scope': {
       // Bash refuses `local` outside a function at RUN time — so this is a backup that
       // fails at three in the morning, not a lint nobody reads.
       why: '`local` in the main body of a script, outside any function',

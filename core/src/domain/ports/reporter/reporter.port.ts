@@ -1,7 +1,7 @@
 import type { ICheckMeta, ICheckResult } from '../../check/check.model';
 
 /**
- * The output port. The engine's ONE writer to a host's console — checks return
+ * The output port. The engine's ONE writer to the console — checks return
  * verdicts, the reporter renders them, and it decides nothing about pass/fail.
  * Two adapters implement it: a TTY reporter for a human and a JSON reporter for a
  * machine, the same run readable both ways.

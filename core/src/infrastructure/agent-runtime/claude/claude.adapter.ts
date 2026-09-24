@@ -31,7 +31,7 @@ export function parseClaudeToolCall(payload: unknown): IActionIntent | null {
 
 /**
  * The `PreToolUse` return-code contract: ONLY exit 2 blocks the call; every other
- * code is a non-blocking harness error. Combined with the engine's fail-open, this
+ * code is a non-blocking hook error. Combined with the engine's fail-open, this
  * guarantees a crash allows rather than blocks.
  */
 export function perimeterExitCode(verdict: IPerimeterVerdict): 0 | 2 {
@@ -41,7 +41,7 @@ export function perimeterExitCode(verdict: IPerimeterVerdict): 0 | 2 {
 /** The message shown to the model in place of a blocked call. */
 export function formatBlock(verdict: IPerimeterVerdict): string {
   return (
-    `\n🚫 Blocked by the perimeter: ${verdict.reason ?? verdict.ruleId ?? 'a repository rule'}\n\n` +
+    `\n🚫 Blocked by the perimeter: ${verdict.reason ?? verdict.policyId ?? 'a repository policy'}\n\n` +
     '   This is a repository rule, not a permission prompt — do not retry it verbatim and do\n' +
     '   not look for a wrapper around it. Read the owner document and take the path it names,\n' +
     '   or ask the operator to run the command themselves.\n'
@@ -51,7 +51,7 @@ export function formatBlock(verdict: IPerimeterVerdict): string {
 /**
  * The three functions above, as the `IAgentRuntime` port.
  *
- * Exported as a VALUE rather than a class so a house that wants Claude's behaviour
+ * Exported as a VALUE rather than a class so a consumer that wants Claude's behaviour
  * with one thing changed can spread it — `{ ...claudeAgentRuntime, formatBlock: mine }`
  * — instead of subclassing or copying all three.
  */

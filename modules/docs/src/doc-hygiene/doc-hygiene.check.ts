@@ -1,18 +1,17 @@
-import type { ICheck, ICheckContext, IFinding, IVerdict } from 'specwarden';
-import { buildCheck, checkOptions, frameTolerated } from 'specwarden';
-import type { IDocCheckIdentity } from '../_shared/identity/identity.model';
-import { DEFAULT_DOCS, nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
+import type { ICheck, ICorpusFloor, IFinding, IModuleCheckDeclaration, TPathspecs } from 'specwarden';
+import { buildCheck, checkOptions, thresholdOf } from 'specwarden';
+import { DEFAULT_DOCS, DOCS_CORPUS_OPTIONS, corpusOf, debtVerdict, refusedCorpus } from '../_shared/corpus/corpus.util';
 
-export interface IDocHygieneOptions extends IDocCheckIdentity {
-  /** git pathspec for the markdown corpus. Default: `**\/*.md`. */
-  readonly docs?: string;
-  /** Sources RENDERED into another tracked document — counting both counts the
-   * same prose twice (the router overlay is assembled into CLAUDE.md). */
-  readonly renderedSources?: readonly string[];
-  /** A table row longer than this is a paragraph wearing a table's clothes. */
+export interface IDocHygieneOptions extends IModuleCheckDeclaration {
+  /** git pathspec(s) for the markdown corpus. Default: `**\/*.md`. */
+  readonly docs?: TPathspecs;
+  /** Pathspecs of documents left out — a source RENDERED into another tracked document
+   * (a router overlay assembled into CLAUDE.md), whose prose would otherwise be read twice. */
+  readonly except?: readonly string[];
+  /** How many documents a run must read for its verdict to count. Default: one. */
+  readonly corpus?: ICorpusFloor;
+  /** A table row longer than this is a paragraph wearing a table's clothes. Default: 300. */
   readonly fatCellLimit?: number;
-  /** The fat-cell budget — a repo-wide ratchet, never a per-cell verdict. */
-  readonly ratchet?: number;
 }
 
 const HEADING_RE = /^#{1,6}\s/;
@@ -48,42 +47,40 @@ function sectionsMovedIn(headings: readonly string[]): Set<string> {
  * not aim at a section that is now a "MOVED" stub, and the paragraph-sized table
  * cells stay under a repo-wide budget — the volume at which an agent stopped
  * scanning and invented an answer. The first two are hard failures; the third is
- * ratcheted.
+ * ratcheted: each over-long row is one finding, and `ratchet` is how many are tolerated.
  *
  * A PRODUCT check: link resolution, the moved-stub sweep and the cell budget are
- * universal; the corpus, the rendered sources and the budget are options.
+ * universal; the corpus, its exemptions and the budget are options.
  */
-export function docHygiene(options: IDocHygieneOptions): ICheck {
+export function docHygiene(options: IDocHygieneOptions = {}): ICheck {
   checkOptions('docHygiene', options, {
-    docs: { kind: 'string' },
-    renderedSources: { kind: 'array' },
+    ...DOCS_CORPUS_OPTIONS,
     fatCellLimit: { kind: 'number' },
   });
   const docs = options.docs ?? DEFAULT_DOCS;
   const limit = options.fatCellLimit ?? 300;
-  const ratchet = options.ratchet ?? 0;
-  const rendered = new Set(options.renderedSources ?? []);
 
   return buildCheck(
     {
       ...options,
+      id: options.id ?? 'doc-hygiene',
       rule: options.rule ?? {
         statement: 'documentation links resolve, point at no moved section, and keep table cells readable',
         owner: '@specwarden/docs',
         implied: true,
       },
-      tier: options.tier ?? 'fast',
       zone: 'product',
     },
     ['read'],
-    (ctx: ICheckContext): IVerdict => {
-      const files = ctx.vcs.trackedFiles(docs).filter((f) => !rendered.has(f));
-      // Zero documents is a failure, not a clean run: otherwise a `docs` pathspec that
+    (ctx, self) => {
+      const corpus = corpusOf(ctx.vcs, docs, options.except);
+      // Too few documents is a failure, not a clean run: otherwise a `docs` pathspec that
       // stopped matching reports every link resolving over a corpus of nothing.
-      if (files.length === 0) return nothingExamined(options.id, docs);
+      const short = refusedCorpus(self.id, docs, corpus, options.corpus);
+      if (short) return short;
       const text = new Map<string, string>();
       const headings = new Map<string, string[]>();
-      for (const f of files) {
+      for (const f of corpus.files) {
         const src = ctx.files.tryRead(f);
         if (src === undefined) continue;
         text.set(f, src);
@@ -98,8 +95,7 @@ export function docHygiene(options: IDocHygieneOptions): ICheck {
 
       const broken: IFinding[] = [];
       const moved: IFinding[] = [];
-      let fatCells = 0;
-      const fatByFile = new Map<string, number>();
+      const fat: IFinding[] = [];
 
       for (const [f, src] of text) {
         const lines = src.split('\n');
@@ -113,8 +109,12 @@ export function docHygiene(options: IDocHygieneOptions): ICheck {
           if (inFence) continue;
 
           if (/^\s*\|/.test(line) && line.length > limit) {
-            fatCells++;
-            fatByFile.set(f, (fatByFile.get(f) ?? 0) + 1);
+            fat.push({
+              severity: 'error',
+              file: f,
+              line: i + 1,
+              message: `${f}:${i + 1} is a table row of ${line.length} characters, over the ${limit} a row stays readable at. Move the prose out of the table.`,
+            });
           }
 
           // A link inside a code span is an EXAMPLE of a link — `[done](./_plans-archive/done.md)`
@@ -127,8 +127,7 @@ export function docHygiene(options: IDocHygieneOptions): ICheck {
                 severity: 'error',
                 file: f,
                 line: i + 1,
-                message: `${f}:${i + 1} links to \`${m[1]}\`, which does not exist.`,
-                ruleId: options.id,
+                message: `${f}:${i + 1} links to \`${m[1]}\`, which does not exist. Point the link at where the file is now.`,
               });
           }
 
@@ -141,34 +140,21 @@ export function docHygiene(options: IDocHygieneOptions): ICheck {
                 severity: 'error',
                 file: f,
                 line: i + 1,
-                message: `${f}:${i + 1} points at ${named} §${m[2]}, a MOVED stub — point at the document that now owns the content.`,
-                ruleId: options.id,
+                message: `${f}:${i + 1} points at ${named} §${m[2]}, a MOVED stub. Point at the document that now owns the content.`,
               });
             }
           }
         }
       }
 
-      const findings: IFinding[] = [...broken, ...moved];
-      if (fatCells > ratchet) {
-        const worst = [...fatByFile.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5)
-          .map(([f, n]) => `${n} ${f}`)
-          .join(', ');
-        findings.push({
-          severity: 'error',
-          message: `${fatCells} table rows over ${limit} chars; the ratchet is ${ratchet}. Fix the longest tables (${worst}).`,
-          ruleId: options.id,
-        });
-      }
-      // broken/moved links never pass; a passing verdict's only error is the fat-cell
-      // count tolerated by the ratchet — frame it so the ✅ is not printed above it.
-      return frameTolerated(
-        broken.length === 0 && moved.length === 0 && fatCells <= ratchet,
-        findings,
-        `the fat-cell ratchet ${ratchet}`,
-      );
+      // Broken and moved links never pass; the ratchet counts over-long rows only. They
+      // were counted and never reported, so `--tighten` read no error line off a passing
+      // run and stored a bar of 0 over the rows it had been tolerating.
+      return debtVerdict({ hard: [...broken, ...moved], soft: fat }, thresholdOf(ctx, self), {
+        id: self.id,
+        examined: text.size,
+        unit: 'document',
+      });
     },
   );
 }

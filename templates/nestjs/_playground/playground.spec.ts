@@ -27,7 +27,7 @@ const leakedKey = `AKIA${'Z4MB7QK2XW9PLR5T'}`;
 provePlayground(
   'nestjs',
   {
-    'nestjs/db-access-through-repositories': {
+    'nestjs-db-access': {
       why: 'a service that builds its own query instead of asking the repository',
       edits: { [SERVICE]: `import { DataSource } from 'typeorm';\n${read(SERVICE)}` },
       says: SERVICE,

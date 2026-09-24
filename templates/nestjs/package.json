@@ -2,7 +2,7 @@
   "name": "@specwarden/template-nestjs",
   "version": "0.0.0",
   "type": "module",
-  "description": "template: A NestJS backend — the plugin wired, plus what a backend needs.",
+  "description": "template: A NestJS backend — module conventions via the plugin, credential scan, env pairing, migration guard.",
   "license": "MIT",
   "repository": {
     "type": "git",

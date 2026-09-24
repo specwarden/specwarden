@@ -1,8 +1,8 @@
 # specwarden
 
-◆ **core** — A repository declares its rules; the warden proves which hold.
+◆ **core** — A repository declares its rules; specwarden proves which hold.
 
-Ports, primitives, the runner and the CLI, plus the only checks that verify the harness itself: zones, ratchets and the rule register.
+Ports, primitives, the runner and the CLI, plus the self-checks, which audit the declarations: zones, ratchets and the rule register.
 
 ## What a core is
 

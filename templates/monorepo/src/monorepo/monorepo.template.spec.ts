@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { type ICheck, type ITemplateContext, runCheck } from 'specwarden';
 
-import { monorepo } from './monorepo.template';
+import { monorepoTemplate } from './monorepo.template';
 
 const ctx = (over: Partial<ITemplateContext> = {}): ITemplateContext => ({
   docs: 'docs/**/*.md',
@@ -17,8 +17,8 @@ const ctx = (over: Partial<ITemplateContext> = {}): ITemplateContext => ({
   ...over,
 });
 
-const paths = (c = ctx()) => monorepo.files(c).map((f) => f.path);
-const live = (c = ctx()) => monorepo.files(c).filter((f) => f.path.endsWith('.check.mjs'));
+const paths = (c = ctx()) => monorepoTemplate.files(c).map((f) => f.path);
+const live = (c = ctx()) => monorepoTemplate.files(c).filter((f) => f.path.endsWith('.check.mjs'));
 
 /**
  * THE TEST THAT MATTERS. A template emits strings, and a typechecker never reads them —
@@ -62,11 +62,11 @@ describe('every example loads the day somebody renames it', () => {
    * error on the first line anybody would reach.
    */
   it('each one, renamed to `.check.mjs`, imports and constructs a check', async () => {
-    const examples = monorepo.files(ctx({ ci: 'github' })).filter((f) => f.path.endsWith('.check.mjs.example'));
+    const examples = monorepoTemplate.files(ctx({ ci: 'github' })).filter((f) => f.path.endsWith('.check.mjs.example'));
     expect(examples.map((f) => f.path)).toEqual([
       'checks/workspace/build-order.check.mjs.example',
       'checks/workspace/dependency-pins.check.mjs.example',
-      'checks/harness/gate-coverage.check.mjs.example',
+      'checks/ops/ci-coverage.check.mjs.example',
     ]);
 
     for (const file of examples) {
@@ -80,7 +80,7 @@ describe('every example loads the day somebody renames it', () => {
   it('the dependency-pins example says it is inert until a policy is declared, rather than passing green', async () => {
     // Its policy lists ship empty. Renamed as-is it checks nothing, and a check that
     // checks nothing must say so instead of printing a clean pass.
-    const file = monorepo.files(ctx()).find((f) => f.path.includes('dependency-pins'));
+    const file = monorepoTemplate.files(ctx()).find((f) => f.path.includes('dependency-pins'));
     const abs = join(scratch, 'pins-inert.check.mjs');
     writeFileSync(abs, file?.body ?? '');
     const { check } = (await import(pathToFileURL(abs).href)) as { check: ICheck };
@@ -95,7 +95,7 @@ describe('every example loads the day somebody renames it', () => {
   it('the dependency-pins example, once its policy is filled in, fails a caret on a frozen package', async () => {
     // What "rename it and it enforces" has to mean: the filled-in file goes RED on the
     // exact defect it names, and green once the tree is fixed.
-    const file = monorepo.files(ctx()).find((f) => f.path.includes('dependency-pins'));
+    const file = monorepoTemplate.files(ctx()).find((f) => f.path.includes('dependency-pins'));
     const body = (file?.body ?? '').replace('const FROZEN = [];', "const FROZEN = ['react'];");
     expect(body).toContain("const FROZEN = ['react'];");
     const abs = join(scratch, 'pins-filled.check.mjs');
@@ -123,13 +123,14 @@ describe('what a monorepo needs that a single package does not', () => {
   });
 
   it('uses the package manager it detected', () => {
-    const body = monorepo.files(ctx({ packageManager: 'yarn' })).find((f) => f.path.includes('lockfile'))?.body ?? '';
+    const body =
+      monorepoTemplate.files(ctx({ packageManager: 'yarn' })).find((f) => f.path.includes('lockfile'))?.body ?? '';
     expect(body).toContain('yarn install --frozen-lockfile');
   });
 
   it('falls back to pnpm when the package manager could not be told — the template is for a pnpm workspace', () => {
     const body =
-      monorepo.files(ctx({ packageManager: undefined })).find((f) => f.path.includes('lockfile'))?.body ?? '';
+      monorepoTemplate.files(ctx({ packageManager: undefined })).find((f) => f.path.includes('lockfile'))?.body ?? '';
     expect(body).toContain("cmd: 'pnpm install --frozen-lockfile'");
   });
 
@@ -149,7 +150,7 @@ describe('the two checks it cannot configure honestly ship as examples', () => {
   });
 
   it('each example says what to fill in and what happens if it is left half-done', () => {
-    for (const f of monorepo.files(ctx()).filter((f) => f.path.endsWith('.example'))) {
+    for (const f of monorepoTemplate.files(ctx()).filter((f) => f.path.endsWith('.example'))) {
       const id = f.path
         .split('/')
         .pop()
@@ -162,7 +163,8 @@ describe('the two checks it cannot configure honestly ship as examples', () => {
   });
 
   it('build-order looks where the workspace globs point, not at a folder it assumed', () => {
-    const body = (c: ITemplateContext) => monorepo.files(c).find((f) => f.path.includes('build-order'))?.body ?? '';
+    const body = (c: ITemplateContext) =>
+      monorepoTemplate.files(c).find((f) => f.path.includes('build-order'))?.body ?? '';
     expect(body(ctx({ workspaces: ['libs/*'] }))).toContain("packagesDir: 'libs'");
     expect(body(ctx({ workspaces: [] }))).toContain("packagesDir: 'packages'");
     expect(body(ctx({ workspaces: ['*'] }))).toContain("packagesDir: 'packages'");
@@ -176,10 +178,10 @@ describe('every rule lives where it can be read', () => {
   });
 
   it("the register holds each example's rule, for init to write commented out, and nothing else", () => {
-    expect(monorepo.rules(ctx({ ci: 'github' })).map((r) => r.id)).toEqual([
+    expect(monorepoTemplate.rules(ctx({ ci: 'github' })).map((r) => r.id)).toEqual([
       'build-order',
       'dependency-pins',
-      'gate-coverage',
+      'ci-coverage',
     ]);
   });
 });
@@ -190,20 +192,20 @@ describe('what it takes from the repository rather than assuming', () => {
     expect(paths(ctx({ scripts: [] })).some((p) => p.includes('workspace/lint'))).toBe(false);
   });
 
-  it('adds the CI-coverage gate where a workflow was detected', () => {
-    // A workspace is where a gate list grows fastest, and a gate nobody runs is the
+  it('adds the CI-coverage check where a workflow was detected', () => {
+    // A workspace is where a check list grows fastest, and a check nobody runs is the
     // failure that looks exactly like a pass — no red anywhere, simply no evidence.
-    expect(paths(ctx({ ci: 'github' }))).toContain('checks/harness/gate-coverage.check.mjs.example');
+    expect(paths(ctx({ ci: 'github' }))).toContain('checks/ops/ci-coverage.check.mjs.example');
   });
 
   it('and omits it where there is none, rather than reconciling against an empty file', () => {
-    expect(paths(ctx({ ci: undefined })).some((p) => p.includes('gate-coverage'))).toBe(false);
+    expect(paths(ctx({ ci: undefined })).some((p) => p.includes('ci-coverage'))).toBe(false);
   });
 
   it('keeps every rule resolvable as the tree grows and shrinks with the repository', () => {
     for (const c of [ctx(), ctx({ ci: 'github', scripts: ['lint', 'test'] }), ctx({ scripts: ['test'] })]) {
       const written = new Set(
-        monorepo
+        monorepoTemplate
           .files(c)
           .filter((f) => /\.check\.mjs(\.example)?$/.test(f.path))
           .map((f) =>
@@ -213,8 +215,8 @@ describe('what it takes from the repository rather than assuming', () => {
               ?.replace(/\.check\.mjs(\.example)?$/, ''),
           ),
       );
-      for (const rule of monorepo.rules(c)) {
-        for (const id of (rule.enforcement as { checkIds: readonly string[] }).checkIds) {
+      for (const rule of monorepoTemplate.rules(c)) {
+        for (const id of (rule.enforcement as { enforcedBy: readonly string[] }).enforcedBy) {
           expect(written.has(id), `rule ${rule.id} names ${id}, which this tree does not write`).toBe(true);
         }
       }

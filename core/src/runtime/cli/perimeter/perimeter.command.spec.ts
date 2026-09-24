@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import type { IAgentRuntime, IPerimeterRule } from '../../../domain';
-import { commandRule } from '../../perimeter';
+import type { IAgentRuntime, IPerimeterPolicy } from '../../../domain';
+import { commandPolicy } from '../../perimeter';
 import { evaluatePayload } from './perimeter.command';
 
 /**
- * The perimeter's rules are about what an action DOES; the runtime is about which
+ * The perimeter's policies are about what an action DOES; the runtime is about which
  * assistant is asking and how it is answered. These prove the two are separable —
  * the same rule set, judged for a tool whose payload shape and exit-code contract
  * are nothing like Claude's.
  */
 
-const RULES: readonly IPerimeterRule[] = [
-  commandRule({
+const RULES: readonly IPerimeterPolicy[] = [
+  commandPolicy({
     id: 'no-force-push',
     why: 'a force-push rewrites a branch other people have',
     match: (words) =>
@@ -29,7 +29,7 @@ const otherAssistant: IAgentRuntime = {
     return p?.action === 'shell' && typeof p.shell === 'string' ? { tool: 'shell', command: p.shell, args: {} } : null;
   },
   exitCode: (v) => (v.blocked ? 1 : 0),
-  formatBlock: (v) => `DENIED: ${v.reason ?? v.ruleId}`,
+  formatBlock: (v) => `DENIED: ${v.reason ?? v.policyId}`,
 };
 
 describe('the perimeter defaults to Claude Code', () => {
@@ -39,7 +39,7 @@ describe('the perimeter defaults to Claude Code', () => {
     expect(r.message).toContain('Blocked by the perimeter');
   });
 
-  it('allows anything the rules do not name', () => {
+  it('allows anything the policies do not name', () => {
     expect(evaluatePayload({ tool_name: 'Bash', tool_input: { command: 'git status' } }, RULES).code).toBe(0);
   });
 });

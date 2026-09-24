@@ -20,7 +20,7 @@ import { ROOT, linkPackages, removeScratch, scratchTree } from '../../scripts/pl
  */
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
-const WARDEN = join(ROOT, 'core', 'bin', 'warden.mjs');
+const ENGINE = join(ROOT, 'core', 'bin', 'specwarden.mjs');
 const INSTALLED = [['specwarden', join(HERE, '..', 'node_modules', 'specwarden')] as const];
 const read = (...rel: string[]): string => readFileSync(join(ROOT, ...rel), 'utf8');
 const GUIDE = read('core', 'GUIDE.md');
@@ -30,7 +30,7 @@ type TEnv = Record<string, string>;
 type TRun = { status: number | null; stdout: string; stderr: string };
 type TFinding = { severity: string; message: string; file?: string; line?: number; ruleId?: string };
 type TRow = { id: string; tier: string; advisory: boolean; skipped: string | null; ok: boolean; findings: TFinding[] };
-type TDoc = { totalMs: number; results: TRow[] };
+type TDoc = { version?: number; totalMs: number; results: TRow[] };
 
 /**
  * The CLI as a shell spawns it, with every ambient variable that could pre-decide a run
@@ -40,7 +40,7 @@ function cli(dir: string, args: readonly string[], env: TEnv = {}): TRun {
   const base: Record<string, string | undefined> = { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' };
   for (const name of ['CI', 'GITHUB_ACTIONS', 'SPECWARDEN_ALL', 'SPECWARDEN_SKIP', 'SPECWARDEN_BASE'])
     delete base[name];
-  const r = spawnSync(process.execPath, [WARDEN, ...args], { cwd: dir, encoding: 'utf8', env: { ...base, ...env } });
+  const r = spawnSync(process.execPath, [ENGINE, ...args], { cwd: dir, encoding: 'utf8', env: { ...base, ...env } });
   return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
 }
 
@@ -86,14 +86,14 @@ const TREE: TEnv = {
   'src/b.ts': 'export const b = 2;\n',
   'docs/guide.md': '# guide\n',
   'migrations/001.sql': 'select 1;\n',
-  '.specwarden/warden.config.mjs': `import { defineConfig } from 'specwarden';
-export default defineConfig({ harness: false, tiers: ['fast', 'heavy', 'nightly', 'smoke'], fullRunTriggers: { files: 4 },
+  '.specwarden/config.mjs': `import { defineConfig } from 'specwarden';
+export default defineConfig({ selfChecks: false, tiers: ['fast', 'heavy', 'nightly', 'smoke'], fullRunTriggers: { files: 4 },
   sharedBuildInputs: [{ prefix: 'pnpm-lock.yaml', why: 'the dependency graph may have moved' }] });
 `,
   '.specwarden/checks/no-todo.check.mjs': src(
     'forbidPattern',
-    `id: 'no-todo', title: 'no TODO left in sources', tier: 'fast', in: 'src/**/*.ts', pattern: /TODO/,
-  ratchetId: 'no-todo', ratchet: 3, when: (changed) => changed.some((f) => f.startsWith('src/'))`,
+    `id: 'no-todo', title: 'no TODO left in sources', tier: 'fast', files: 'src/**/*.ts', pattern: /TODO/,
+  ratchet: 3, when: (changed) => changed.some((f) => f.startsWith('src/'))`,
   ),
   '.specwarden/checks/readme-present.check.mjs': src(
     'defineCheck',
@@ -123,7 +123,7 @@ const ROSTER = ['db-migrate', 'no-todo', 'node-says-hi', 'readme-present', 'styl
 const FAST = ['no-todo', 'node-says-hi', 'readme-present'];
 const USAGE = 'usage: specwarden <command>';
 const FULL = 'ℹ full run — no relevance filter: ';
-const NO_CONFIG = 'no .specwarden/warden.config.mjs found from';
+const NO_CONFIG = 'no .specwarden/config.mjs found from';
 const THROWS = src('defineCheck', `id: 'throws', title: 't', tier: 'fast', run: () => { throw new Error('kaboom'); }`);
 const EXEC = src('defineCheck', `id: 'needs-exec', title: 'x', tier: 'fast', run: (c) => [c.proc.run('node', [])][1]`);
 
@@ -240,9 +240,11 @@ describe('1. help and usage', () => {
       expect(usage, name).toContain(name);
       expect(GUIDE, name).toContain(name);
     }
-    expect(usage).toMatch(/0 every gate held[\s\S]*1 a gate failed[\s\S]*2 the line/);
+    expect(usage).toMatch(
+      /0 every check held[\s\S]*1 the answer is no: a check failed, doctor found a defect, a plan is not ready[\s\S]*2 the line/,
+    );
     expect(GUIDE).toContain('### Exit codes');
-    expect(READMES).toMatch(/Exit `0` every gate held/);
+    expect(READMES).toMatch(/Exit `0` every check held, `1` the answer is no/);
   });
 
   it('`spw` is declared beside `specwarden` as the same binary, and the README says so', () => {
@@ -265,20 +267,20 @@ describe('2. relevance — a commit touching src/a.ts', () => {
 
   // prettier-ignore
   probes([
-    ['the terminal names the skipped ids, not why', { on: at, args: ['check'], status: 0, out: ['skipped: db-migrate, readme-present', '3 gate(s) passed (2 skipped)'], not: ['not-relevant'] }],
+    ['the terminal names the skipped ids, not why', { on: at, args: ['check'], status: 0, out: ['skipped: db-migrate, readme-present', '3 check(s) passed (2 skipped)'], not: ['not-relevant'] }],
     ['--show-skipped says why, one line each', { on: at, args: ['check', '--show-skipped'], status: 0, out: ['⏭  db-migrate — skipped (not-relevant)', '⏭  readme-present — skipped (not-relevant)'] }],
     ['--relevance --id answers skip, exit 0', { on: at, args: ['check', '--relevance', '--id', 'readme-present'], status: 0, out: ['skip\n'] }],
     ['--relevance --id answers run, exit 0', { on: at, args: ['check', '--relevance', '--id', 'no-todo'], status: 0, out: ['run\n'] }],
-    ['--relevance with no id: 2', { on: at, args: ['check', '--relevance'], status: 2, err: ['--relevance requires exactly one --id'] }],
+    ['--relevance with no id: 2', { on: at, args: ['check', '--relevance'], status: 2, err: ['--relevance answers for exactly one check — name one id.'] }],
     ['--relevance with two ids: 2', { on: at, args: ['check', '--relevance', '--id', 'no-todo', '--id', 'readme-present'], status: 2 }],
     ['--relevance with an unknown id: 2', { on: at, args: ['check', '--relevance', '--id', 'nope'], status: 2, err: ["unknown check id 'nope'"] }],
     // A typo'd ref ran everything, exit 0, blaming "the range" — indistinguishable from a shallow clone.
     ['--base no-such-ref is refused, exit 2, naming it', { on: at, args: ['check', '--base', 'no-such-ref'], status: 2, err: ['--base no-such-ref does not resolve to a commit here'], silent: true }],
     ['--if-relevant makes a named id obey the filter', { on: at, args: ['check', '--if-relevant', '--id', 'readme-present'], status: 0, out: ['skipped: readme-present', '⏭  nothing ran — 1 skipped, 0 checked'], not: ['✅'] }],
-    ["a shared build input drops the filter with the config's reason", { on: () => pushedThen({ 'pnpm-lock.yaml': 'x: 1\n' }), args: ['check'], status: 0, out: [`${FULL}pnpm-lock.yaml — the dependency graph may have moved`, '✅ 5 gate(s) passed'] }],
-    ['a diff at fullRunTriggers.files drops it and says how wide', { on: () => pushedThen({ 'x/1': '1', 'x/2': '2', 'x/3': '3', 'x/4': '4' }), args: ['check'], status: 0, out: [`${FULL}4 files changed (trigger: 4)`, '✅ 5 gate(s) passed'] }],
+    ["a shared build input drops the filter with the config's reason", { on: () => pushedThen({ 'pnpm-lock.yaml': 'x: 1\n' }), args: ['check'], status: 0, out: [`${FULL}pnpm-lock.yaml — the dependency graph may have moved`, '✅ 5 check(s) passed'] }],
+    ['a diff at fullRunTriggers.files drops it and says how wide', { on: () => pushedThen({ 'x/1': '1', 'x/2': '2', 'x/3': '3', 'x/4': '4' }), args: ['check'], status: 0, out: [`${FULL}4 files changed (trigger: 4)`, '✅ 5 check(s) passed'] }],
     ['no remote: the range cannot be read, the fail-safe runs everything', { args: ['check'], status: 0, out: [`${FULL}the changed-file range could not be read — running everything is the fail-safe`] }],
-    ['SPECWARDEN_ALL=1 drops the filter and says it was asked for', { on: at, args: ['check'], env: { SPECWARDEN_ALL: '1' }, status: 0, out: [`${FULL}requested explicitly (--all / SPECWARDEN_ALL)`, '✅ 5 gate(s) passed'] }],
+    ['SPECWARDEN_ALL=1 drops the filter and says it was asked for', { on: at, args: ['check'], env: { SPECWARDEN_ALL: '1' }, status: 0, out: [`${FULL}requested explicitly (--all / SPECWARDEN_ALL)`, '✅ 5 check(s) passed'] }],
   ]);
 
   it('runs what the change reaches — the predicate, the declarative when, the always-on — and skips the rest', () => {
@@ -301,7 +303,7 @@ describe('2. relevance — a commit touching src/a.ts', () => {
     const doc = json(diff, ['check'], { SPECWARDEN_BASE: 'no-such-ref' }) as unknown as { fullRunReason?: string };
     expect(ran(doc as never)).toEqual(ROSTER);
     expect(doc.fullRunReason).toMatch(/could not be read/);
-    expect(Object.keys(json(diff, ['check'])).sort()).toEqual(['results', 'totalMs']);
+    expect(Object.keys(json(diff, ['check'])).sort()).toEqual(['results', 'totalMs', 'version']);
   });
 });
 
@@ -315,25 +317,27 @@ describe('3. reporters', () => {
     '::error title=no-todo,file=src/a.ts,line=5::forbidden pattern in src/a.ts: TODO',
     '::error title=readme-present,file=README.md,line=1::README.md is missing',
     '::endgroup::',
-    '::notice title=specwarden::2 gate(s) failed: no-todo, readme-present',
+    '::notice title=specwarden::2 check(s) failed: no-todo, readme-present',
   ];
 
   // prettier-ignore
   probes([
-    ['--reporter tty wins over --json', { args: ['check', '--all', '--json', '--reporter', 'tty'], status: 0, out: ['▶ db-migrate —', '✅ 5 gate(s) passed'] }],
+    // `--json` IS `--reporter json`: the two disagreeing rendered a terminal while the rest of
+    // the run kept quiet for a machine, so the line is refused rather than half-honoured.
+    ['--json beside --reporter tty is refused, exit 2', { args: ['check', '--all', '--json', '--reporter', 'tty'], status: 2, err: ['--json is --reporter json, and --reporter tty says otherwise.'], silent: true }],
     ['--reporter bogus is refused naming the three, exit 2', { args: ['check', '--all', '--reporter', 'bogus'], status: 2, err: ['unknown reporter "bogus" — expected one of: tty, json, github'] }],
     ['github: an ::error per finding with file and line, a group per check, a summary notice', { on: () => broken, args: ['check', '--all', '--reporter', 'github'], status: 1, out: annotations }],
     ['github: a finding with no location (a run that throws) has no file/line', { on: withFile('.specwarden/checks/t.check.mjs', THROWS), args: ['check', '--all', '--id', 'throws', '--reporter', 'github'], status: 1, out: ['::error title=throws::kaboom'] }],
     // It was annotated ::error and counted as passed: an error on a green job reads as a failed gate.
-    ['github: a failed advisory check is annotated ::warning and counted as warned', { on: () => broken, args: ['check', '--all', '--id', 'style-advice', '--reporter', 'github'], status: 0, out: ['::warning title=style-advice,file=src/ugly.ts::src/ugly.ts is ugly', '::notice title=specwarden::0 gate(s) passed (1 warned)'], not: ['::error'] }],
-    // The terminal said "4 gate(s) passed" for five, the github notice 5: one count now, in both.
-    ['the terminal counts a passing advisory check: five checks held, five passed', { args: ['check', '--all'], status: 0, out: ['✅ style-advice —', '✅ 5 gate(s) passed in'] }],
-    ['…and the github notice for the same run says the same', { args: ['check', '--all', '--reporter', 'github'], status: 0, out: ['::notice title=specwarden::5 gate(s) passed in'] }],
+    ['github: a failed advisory check is annotated ::warning and counted as warned', { on: () => broken, args: ['check', '--all', '--id', 'style-advice', '--reporter', 'github'], status: 0, out: ['::warning title=style-advice,file=src/ugly.ts::src/ugly.ts is ugly', '::notice title=specwarden::0 check(s) passed (1 warned)'], not: ['::error'] }],
+    // The terminal said "4 check(s) passed" for five, the github notice 5: one count now, in both.
+    ['the terminal counts a passing advisory check: five checks held, five passed', { args: ['check', '--all'], status: 0, out: ['✅ style-advice —', '✅ 5 check(s) passed in'] }],
+    ['…and the github notice for the same run says the same', { args: ['check', '--all', '--reporter', 'github'], status: 0, out: ['::notice title=specwarden::5 check(s) passed in'] }],
     ['GITHUB_ACTIONS=true selects the github reporter without a flag', { args: ['check', '--all'], env: { GITHUB_ACTIONS: 'true' }, status: 0, out: ['::group::'] }],
     ['--reporter tty overrides GITHUB_ACTIONS', { args: ['check', '--all', '--reporter', 'tty'], env: { GITHUB_ACTIONS: 'true' }, status: 0, out: ['▶ db-migrate'], not: ['::group::'] }],
     // Two ℹ discovery notes went to stderr on every non-JSON run, green or not. They answer doctor and --list.
-    ['a run prints no discovery notes', { args: ['check', '--all', '--id', 'readme-present'], status: 0, not: ['ℹ discovered', 'ℹ harness self-checks'] }],
-    ['…doctor and --list do', { args: ['check', '--list'], status: 0, err: ['ℹ discovered 5 check(s) in 5 file(s) under .specwarden/checks/', 'ℹ harness self-checks disabled entirely (config.harness = false)'] }],
+    ['a run prints no discovery notes', { args: ['check', '--all', '--id', 'readme-present'], status: 0, not: ['ℹ discovered', 'ℹ self-checks'] }],
+    ['…doctor and --list do', { args: ['check', '--list'], status: 0, err: ['ℹ discovered 5 check(s) in 5 file(s) under .specwarden/checks/', 'ℹ self-checks disabled entirely (config.selfChecks = false)'] }],
     ['no environment value is printed — not a failed base ref, not a secret', { args: ['check', '--all'], env: { SPECWARDEN_BASE: secret, SPW_JOURNEY_SECRET: secret }, status: 0, not: [secret] }],
     ['no environment value is printed under --json either', { args: ['check', '--json'], env: { SPECWARDEN_BASE: secret }, status: 0, not: [secret] }],
   ]);
@@ -343,7 +347,8 @@ describe('3. reporters', () => {
     expect(r).toMatchObject({ status: 0, stderr: '' });
     const doc = parse(r);
     // `--all` is a full run, and the document says why — as the terminal does.
-    expect(Object.keys(doc).sort()).toEqual(['fullRunReason', 'results', 'totalMs']);
+    expect(Object.keys(doc).sort()).toEqual(['fullRunReason', 'results', 'totalMs', 'version']);
+    expect(doc.version).toBe(1);
     const keys = ['advisory', 'durationMs', 'findings', 'id', 'ok', 'skipped', 'tier'];
     for (const row of doc.results) expect(Object.keys(row).sort()).toEqual(keys);
     expect(ids(doc)).toEqual(ROSTER);
@@ -351,17 +356,21 @@ describe('3. reporters', () => {
     expect(todo).toMatchObject({ file: 'src/a.ts', line: 1, ruleId: 'no-todo' });
   });
 
-  it('--reporter json on a full run is ONE document on stdout; the full-run line goes to stderr', () => {
-    // The line was appended after the document, so the output was not JSON.
+  it('--reporter json on a full run is ONE document on stdout, the reason inside it — --json is the same line', () => {
+    // The line was appended after the document, so the output was not JSON. The reason is the
+    // document's `fullRunReason`; stderr stays for what could not be used.
     const r = cli(green, ['check', '--all', '--reporter', 'json']);
     expect(ids(parse(r))).toEqual(ROSTER);
-    expect(r.stderr).toContain(`${FULL}requested explicitly (--all / SPECWARDEN_ALL)`);
-    expect(ids(json(green, ['check', '--all', '--reporter', 'json']))).toEqual(ROSTER);
+    expect(r.stderr).toBe('');
+    expect((parse(r) as unknown as { fullRunReason: string }).fullRunReason).toBe(
+      'requested explicitly (--all / SPECWARDEN_ALL)',
+    );
+    expect(ids(json(green, ['check', '--all']))).toEqual(ids(parse(r)));
   });
 
   const ansi = '\u001b[';
   const forced = (args: string[]): string =>
-    spawnSync(process.execPath, [WARDEN, 'check', '--all', ...args], {
+    spawnSync(process.execPath, [ENGINE, 'check', '--all', ...args], {
       cwd: green,
       encoding: 'utf8',
       env: { ...process.env, CI: undefined, GITHUB_ACTIONS: undefined, FORCE_COLOR: '1', NO_COLOR: undefined },
@@ -387,29 +396,29 @@ describe('3. reporters', () => {
 // ─── 4. exit codes ───────────────────────────────────────────────────────────────────
 
 describe('4. exit codes', () => {
-  const config = (text: string): (() => string) => withFile('.specwarden/warden.config.mjs', text);
+  const config = (text: string): (() => string) => withFile('.specwarden/config.mjs', text);
   const checkFile = (name: string, text: string): (() => string) => withFile(`.specwarden/checks/${name}`, text);
   const boom = "throw new Error('boom at import');\n";
 
   // prettier-ignore
   probes([
     ['0: every gate held', { args: ['check', '--all'], status: 0 }],
-    ['1: a gate failed', { on: () => broken, args: ['check', '--all'], status: 1, out: ['❌ 2 gate(s) FAILED'] }],
+    ['1: a gate failed', { on: () => broken, args: ['check', '--all'], status: 1, out: ['❌ 2 check(s) FAILED'] }],
     ['2: an unknown tier, naming the declared ones', { args: ['check', '--all', '--tier', 'nope'], status: 2, err: ['unknown tier "nope" — expected one of: fast, heavy, nightly, smoke'] }],
     ['2: no config found (check)', { on: bare, args: ['check', '--all'], status: 2, err: [NO_CONFIG, 'nothing to run.'] }],
     ['2: no config found (doctor)', { on: bare, args: ['doctor'], status: 2, err: [NO_CONFIG] }],
     ['2: no config found (--list)', { on: bare, args: ['check', '--list'], status: 2, err: [NO_CONFIG] }],
     ['2: a config with no default export', { on: config('export const x = 1;\n'), args: ['check', '--all'], status: 2, err: ['must default-export a config object (see defineConfig)'] }],
     // Each was exit 1 and a node stack — and 1 means "a gate failed". Now caught at the import.
-    ['2, the file and one sentence: a config that does not parse', { on: config('export default {\n'), args: ['check', '--all'], status: 2, err: ['.specwarden/warden.config.mjs failed to load: SyntaxError: '], not: ['    at '], silent: true }],
-    ['2, the file and one sentence: a config importing a missing package', { on: config("import 'not-installed-anywhere';\nexport default {};\n"), args: ['check', '--all'], status: 2, err: ['.specwarden/warden.config.mjs failed to load: ', 'not-installed-anywhere'], not: ['    at '], silent: true }],
+    ['2, the file and one sentence: a config that does not parse', { on: config('export default {\n'), args: ['check', '--all'], status: 2, err: ['.specwarden/config.mjs failed to load: SyntaxError: '], not: ['    at '], silent: true }],
+    ['2, the file and one sentence: a config importing a missing package', { on: config("import 'not-installed-anywhere';\nexport default {};\n"), args: ['check', '--all'], status: 2, err: ['.specwarden/config.mjs failed to load: ', 'not-installed-anywhere'], not: ['    at '], silent: true }],
     ['2, the file and one sentence: a check file that throws on import (check)', { on: checkFile('boom.check.mjs', boom), args: ['check', '--all'], status: 2, err: ['.specwarden/checks/boom.check.mjs failed to load: boom at import'], not: ['    at '], silent: true }],
     ['2, the file and one sentence: a check file that throws on import (doctor)', { on: checkFile('boom.check.mjs', boom), args: ['doctor'], status: 2, err: ['.specwarden/checks/boom.check.mjs failed to load: boom at import'], not: ['    at '] }],
     ['2: a *.check.mjs that exports no check, with the fix spelled out', { on: checkFile('helper.check.mjs', 'export const helper = 1;\n'), args: ['check', '--all'], status: 2, err: ['helper.check.mjs exports no check', 'rename it if it is a helper'] }],
     ['2: two files exporting one id', { on: checkFile('no-todo-2.check.mjs', TREE['.specwarden/checks/no-todo.check.mjs']), args: ['check', '--all'], status: 2, err: ["check id 'no-todo' is exported by both"] }],
-    ['1, not a crash: a check whose run throws — its finding, and the run goes on', { on: checkFile('t.check.mjs', THROWS), args: ['check', '--all', '--id', 'throws', '--id', 'readme-present'], status: 1, out: ['kaboom', '❌ throws FAILED after', '❌ 1 gate(s) FAILED, 1 passed'], not: ['    at '] }],
+    ['1, not a crash: a check whose run throws — its finding, and the run goes on', { on: checkFile('t.check.mjs', THROWS), args: ['check', '--all', '--id', 'throws', '--id', 'readme-present'], status: 1, out: ['kaboom', '❌ throws FAILED after', '❌ 1 check(s) FAILED, 1 passed'], not: ['    at '] }],
     ['1: a check using a capability it did not declare, in a sentence', { on: checkFile('x.check.mjs', EXEC), args: ['check', '--all', '--id', 'needs-exec'], status: 1, out: ["check 'needs-exec' used a 'exec' capability it did not declare (called run)"] }],
-    ['0: only an advisory check failed — it WARNS', { on: () => broken, args: ['check', '--all', '--id', 'style-advice'], status: 0, out: ['⚠️  style-advice WARNS after', '✅ 0 gate(s) passed (1 warned)'] }],
+    ['0: only an advisory check failed — it WARNS', { on: () => broken, args: ['check', '--all', '--id', 'style-advice'], status: 0, out: ['⚠️  style-advice WARNS after', '✅ 0 check(s) passed (1 warned)'] }],
     ['0: --if-relevant left nothing to run', { on: () => pushedThen({ 'src/a.ts': 'export const a = 11;\n' }), args: ['check', '--if-relevant', '--id', 'db-migrate', '--id', 'readme-present'], status: 0, out: ['⏭  nothing ran — 2 skipped, 0 checked'], not: ['✅'] }],
   ]);
 
@@ -427,7 +436,7 @@ describe('5. selection', () => {
   // prettier-ignore
   probes([
     ['an unknown --id exits 2 with nothing on stdout', { args: ['check', '--all', '--id', 'nope'], status: 2, err: ["unknown check id 'nope'"], silent: true }],
-    // It was a green run over nothing — "✅ 0 gate(s) passed" — the product's founding failure.
+    // It was a green run over nothing — "✅ 0 check(s) passed" — the product's founding failure.
     ['a run over a tier with no check in it is refused, exit 2', { args: ['check', '--all', '--tier', 'smoke'], status: 2, err: ["tier 'smoke' holds no check — a run over it would pass having run nothing"], silent: true }],
     ['--list with an unknown id exits 2', { args: ['check', '--list', '--id', 'nope'], status: 2, err: ['unknown check id(s): nope'] }],
     ['--list over an empty tier prints nothing, exit 0', { args: ['check', '--list', '--tier', 'smoke'], status: 0, silent: true }],
@@ -467,9 +476,13 @@ describe('5. selection', () => {
   it('--list --json prints the roster as JSON; a flag the listing does not use is not validated', () => {
     // It printed the tab-separated list. The second half is a decision: a query is not
     // refused over a shard or a reporter it never uses.
-    const roster = JSON.parse(cli(green, ['check', '--list', '--json']).stdout) as { id: string }[];
-    expect(roster.map((row) => row.id)).toEqual(ROSTER);
-    expect(Object.keys(roster[0]).sort()).toEqual(['advisory', 'exclusive', 'id', 'tier', 'title']);
+    const listing = JSON.parse(cli(green, ['check', '--list', '--json']).stdout) as {
+      version: number;
+      checks: { id: string }[];
+    };
+    expect(listing.version).toBe(1);
+    expect(listing.checks.map((row) => row.id)).toEqual(ROSTER);
+    expect(Object.keys(listing.checks[0]).sort()).toEqual(['advisory', 'exclusive', 'id', 'tier', 'title']);
     const lax = cli(green, ['check', '--list', '--shard', '3/2', '--reporter', 'bogus']);
     expect([lax.status, firstColumn(lax.stdout)]).toEqual([0, ROSTER]);
   });
@@ -491,7 +504,7 @@ export const checks = [timed('t-alpha'), timed('t-beta'), timed('t-solo', { excl
     const dir = withFile('.specwarden/checks/timed.check.mjs', stamp)();
     const log = join(dir, '.timing.log');
     const r = cli(dir, ['check', '--all', '--tier', 'nightly', '--jobs', '4'], { JOURNEY_LOG: log });
-    expect(r.stdout).toContain('✅ 4 gate(s) passed');
+    expect(r.stdout).toContain('✅ 4 check(s) passed');
     const spans = lines(readFileSync(log, 'utf8')).map((l) => JSON.parse(l) as { id: string; s: number; e: number });
     expect(spans.map((x) => x.id).sort()).toEqual(['t-alpha', 't-beta', 't-gamma', 't-solo']);
     const solo = spans.find((x) => x.id === 't-solo') as { s: number; e: number };
@@ -507,7 +520,7 @@ export const checks = [timed('t-alpha'), timed('t-beta'), timed('t-solo', { excl
       expect([r.status, r.stdout, r.stderr]).toEqual([
         2,
         '',
-        `--jobs must be a positive whole number of checks to run at once; got "${jobs}"\n`,
+        `--jobs must be a positive whole number of checks to run at once; got "${jobs}".\n`,
       ]);
     }
   });
@@ -616,7 +629,7 @@ describe('7. a CI job: check --tier fast --all, then --tier heavy --all', () => 
       args: ['check', '--tier', 'fast'],
       env: GHA,
       status: 0,
-      out: ['::notice title=specwarden::3 gate(s) passed'],
+      out: ['::notice title=specwarden::3 check(s) passed'],
       err: [reason],
     });
     // `--relevance` answers from the same derivation, so a workflow keeps an expensive setup…
@@ -635,8 +648,8 @@ describe('7. a CI job: check --tier fast --all, then --tier heavy --all', () => 
 
   it("this repository's own workflow runs exactly those two commands, one job per tier, no --reporter", () => {
     const ci = read('.github', 'workflows', 'ci.yml');
-    expect(ci).toContain('node core/bin/warden.mjs check --tier fast --all');
-    expect(ci).toContain('node core/bin/warden.mjs check --tier heavy --all');
+    expect(ci).toContain('node core/bin/specwarden.mjs check --tier fast --all');
+    expect(ci).toContain('node core/bin/specwarden.mjs check --tier heavy --all');
     expect(ci).not.toContain('--reporter');
   });
 
@@ -663,9 +676,9 @@ describe('8. doctor', () => {
     ]);
   });
 
-  it('marks a denied capability, lists denyCapabilities, adds the harness roster and rule coverage when rules exist', () => {
+  it('marks a denied capability, lists denyCapabilities, adds the self-checks and rule coverage when rules exist', () => {
     const strict = withFile(
-      '.specwarden/warden.config.mjs',
+      '.specwarden/config.mjs',
       `import { defineConfig } from 'specwarden';
 export default defineConfig({ tiers: ['fast', 'heavy', 'nightly', 'smoke'], denyCapabilities: ['exec'], rules: [] });
 `,
@@ -684,7 +697,7 @@ export default defineConfig({ tiers: ['fast', 'heavy', 'nightly', 'smoke'], deny
     ])
       expect(r.stdout).toMatch(new RegExp(`^${id}\\tfast\\tproduct\\t`, 'm'));
     // The count names the engine's own rule — it was "declared: 1" over an empty register.
-    expect(r.stdout).toContain("rule coverage:\n  declared: 1 (the engine's own: harness-integrity)\n  enforced: 1\n");
+    expect(r.stdout).toContain("rule coverage:\n  declared: 1 (the engine's own: self-checks-hold)\n  enforced: 1\n");
     expect(r.stdout).toContain('checks enforcing no rule (orphans): 5');
     const refused = 'declares capability exec, which this repository denies (denyCapabilities). It was not run.';
     probe({ on: () => strict, args: ['check', '--all', '--id', 'node-says-hi'], status: 1, out: [refused] });
@@ -708,20 +721,20 @@ export default defineConfig({ tiers: ['fast', 'heavy', 'nightly', 'smoke'], deny
     probe({
       args: ['check', '--all', '--id', 'no-tod'],
       status: 2,
-      err: ["unknown check id 'no-tod' — did you mean 'no-todo'?"],
+      err: ["unknown check id 'no-tod' (did you mean 'no-todo'?)"],
     });
     probe({
       args: ['check', '--list', '--id', 'readme-presnt'],
       status: 2,
-      err: ["readme-presnt — did you mean 'readme-present'?"],
+      err: ["readme-presnt (did you mean 'readme-present'?)"],
     });
     probe({
       args: ['check', '--all'],
       env: { SPECWARDEN_SKIP: 'style-advise' },
       status: 2,
-      err: ["style-advise — did you mean 'style-advice'?"],
+      err: ["style-advise (did you mean 'style-advice'?)"],
     });
-    probe({ args: ['doctr'], status: 2, err: [`unknown command "doctr" — did you mean 'doctor'?`] });
+    probe({ args: ['doctr'], status: 2, err: [`unknown command "doctr" (did you mean 'doctor'?)`] });
   });
 });
 
@@ -729,7 +742,7 @@ export default defineConfig({ tiers: ['fast', 'heavy', 'nightly', 'smoke'], deny
 
 describe('9. a command check from PowerShell and from bash', () => {
   const viaShell = (shell: string, flag: string, env: TEnv = {}): unknown => {
-    const line = `node "${WARDEN}" check --all --id node-says-hi --id db-migrate --json`;
+    const line = `node "${ENGINE}" check --all --id node-says-hi --id db-migrate --json`;
     const opts = { cwd: green, encoding: 'utf8' as const, env: { ...process.env, NO_COLOR: '1', ...env } };
     const r = spawnSync(shell, [flag, line], opts);
     expect(r.status, r.stderr).toBe(0);

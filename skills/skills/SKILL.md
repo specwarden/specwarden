@@ -27,6 +27,13 @@ Its frontmatter carries `name` and `description`. The description is what decide
 the skill is loaded at all, so it names the **situations** that should trigger it, not the
 package.
 
+Every shipped skill has the same sections, in this order: **when to reach for it**, **the
+wiring** (the smallest check file that works, writing no `id` or `title` the engine can
+derive), **what it refuses** (each verdict a consumer will meet, and what to do about it),
+and **Refuse to** (what an agent must not do with it). Eight skills with eight shapes made an
+agent read each one from the top; one shape lets it find the wiring in any of them. The
+words are the glossary's — an installed skill ships `glossary.md` beside the engine's.
+
 ## 3. What is generated around it
 
 - `<pkg>/.claude-plugin/plugin.json` — the manifest that makes the package directory an

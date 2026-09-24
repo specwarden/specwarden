@@ -169,9 +169,9 @@ describe('specwarden — the engine, assembled', () => {
       id: 'no-todo',
       title: 'no TODO',
       tier: 'fast',
-      in: 'src/**/*.ts',
+      files: 'src/**/*.ts',
       pattern: /TODO/,
-      ratchetId: 'no-todo',
+      ratchet: { id: 'no-todo' },
     });
 
     const tree = { ...TREE, 'src/thing.ts': '// TODO: later\nexport const thing = 1;\n' };
@@ -193,21 +193,21 @@ describe('specwarden — the engine, assembled', () => {
     const check = defineCheck({
       id: 'summarises',
       title: 'summarises',
-      ratchetId: 'summarises',
+      ratchet: { id: 'summarises' },
       run: () => ({
         findings: [{ severity: 'info' as const, message: '17 violations across the tree' }],
         measured: 17,
       }),
     });
 
-    const harness = engine([check], { ratchets: { summarises: 40 } });
-    await harness.run({ all: true, tighten: true }, ENV);
+    const run = engine([check], { ratchets: { summarises: 40 } });
+    await run.run({ all: true, tighten: true }, ENV);
 
-    expect(harness.ratchets.values.get('summarises')).toBe(17);
+    expect(run.ratchets.values.get('summarises')).toBe(17);
   });
 
   it('SPECWARDEN_SKIP is honoured locally and IGNORED under CI', async () => {
-    // A skip that reaches the arbiter is a hole, not a skip.
+    // A skip that reaches CI is a hole, not a skip.
     const local = await engine([passing('a')]).run({ all: true }, { ci: false, skip: 'a' });
     expect(local.results[0]?.skipped).toBe('by-request');
 
@@ -219,8 +219,8 @@ describe('specwarden — the engine, assembled', () => {
     // A consumer's first checks are these one-liners, and they go through exactly the
     // same registration, gating, relevance and verdict path as a hand-written body.
     const checks = [
-      forbidImport({ id: 'layers', title: 'layers', tier: 'fast', from: 'src/**', to: 'node:fs' }),
-      pathContract({ id: 'placement', title: 'placement', tier: 'fast', kind: '**/*.md', allowedIn: ['**'] }),
+      forbidImport({ id: 'layers', title: 'layers', tier: 'fast', files: 'src/**', to: 'node:fs' }),
+      pathContract({ id: 'placement', title: 'placement', tier: 'fast', files: '**/*.md', allowedIn: ['**'] }),
     ];
 
     const outcome = await engine(checks).run({ all: true }, ENV);
@@ -230,19 +230,19 @@ describe('specwarden — the engine, assembled', () => {
   });
 
   it('a command pointed at a directory that is not there is refused, and nothing is spawned', async () => {
-    const harness = engine([commandCheck({ id: 'api-unit', cmd: 'pnpm test', cwd: 'packages/api' })]);
-    const outcome = await harness.run({ all: true }, ENV);
+    const run = engine([commandCheck({ id: 'api-unit', cmd: 'pnpm test', cwd: 'packages/api' })]);
+    const outcome = await run.run({ all: true }, ENV);
 
     expect(outcome.exitCode).toBe(1);
     expect(outcome.results[0].verdict.findings[0].message).toContain('runs in packages/api, which is not a directory');
-    expect(harness.commands).toEqual([]);
+    expect(run.commands).toEqual([]);
   });
 
   it('a sibling rule over every source file leaves the tests it names out of its subjects', async () => {
     const tree = { 'src/a.ts': '', 'src/a.test.ts': '', 'src/b.ts': '' };
     const check = siblingRequired({
       id: 'has-test',
-      subjects: 'src/**/*.ts',
+      files: 'src/**/*.ts',
       require: '{name}.test.ts',
       except: ['**/*.test.ts'],
     });

@@ -115,14 +115,14 @@ describe('buildContext', () => {
 
     expect(ctx.changed).toEqual(['a.ts', 'b.ts']);
     expect(ctx.shard).toBe('2/4');
-    expect(ctx.ratchet).toBe(9);
+    expect(ctx.threshold).toBe(9);
   });
 
   it('leaves shard and ratchet undefined when the run supplies none', () => {
     const ctx = buildContext(meta('c', ['read']), adapters(), []);
 
     expect(ctx.shard).toBeUndefined();
-    expect(ctx.ratchet).toBeUndefined();
+    expect(ctx.threshold).toBeUndefined();
   });
 
   /**

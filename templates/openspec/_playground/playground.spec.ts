@@ -51,7 +51,7 @@ describe('sync-invariants over the OpenSpec tree the template wired', () => {
   );
 
   it('reads every requirement and proposes each for deposit, writing nothing', () => {
-    const run = inScratchRepository('openspec', {}, ({ warden }) => warden(['sync-invariants']));
+    const run = inScratchRepository('openspec', {}, ({ specwarden }) => specwarden(['sync-invariants']));
 
     expect(requirements.length).toBeGreaterThan(0);
     expect(run.status).toBe(0);
@@ -61,8 +61,8 @@ describe('sync-invariants over the OpenSpec tree the template wired', () => {
   }, 60_000);
 
   it('says it found nothing — not "in sync" — when the specs directory is gone', () => {
-    const run = inScratchRepository('openspec', { edits: { 'openspec/specs': null } }, ({ warden }) =>
-      warden(['sync-invariants']),
+    const run = inScratchRepository('openspec', { edits: { 'openspec/specs': null } }, ({ specwarden }) =>
+      specwarden(['sync-invariants']),
     );
 
     expect(run.stdout).toContain('found nothing');
@@ -81,7 +81,7 @@ describe('sync-invariants over the OpenSpec tree the template wired', () => {
           'openspec/specs/refunds/spec.md': reworded('openspec/specs/refunds/spec.md'),
         },
       },
-      ({ warden }) => warden(['sync-invariants']),
+      ({ specwarden }) => specwarden(['sync-invariants']),
     );
 
     expect(run.stdout).toContain('holds no requirements');

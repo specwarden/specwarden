@@ -47,7 +47,7 @@ export function adopt(files: IFileSource, io: ICliIo, vcs?: IVcs): number {
   io.out(`  compose         : ${listOr(shape.composeFiles, 'none')}\n`);
   io.out(`  proxy configs   : ${listOr(shape.proxyConfigs, 'none')}\n`);
   io.out(`  shell scripts   : ${shape.hasShellScripts ? 'present' : 'none'}\n\n`);
-  // Never "copy into warden.config.mjs": a check is a FILE under .specwarden/checks/, and
+  // Never "copy into config.mjs": a check is a FILE under .specwarden/checks/, and
   // before `init` the config this pointed at did not exist.
   io.out('Next: `specwarden init` writes .specwarden/, one check per file under its checks folder.\n');
   io.out('`specwarden suggest` measures conventions this repository already follows and prints\n');

@@ -16,7 +16,7 @@ describe('siblingRequired — `except`', () => {
   it('leaves the excepted files out of the subjects', async () => {
     const check = siblingRequired({
       id: 'has-test',
-      subjects: 'src/**/*.ts',
+      files: 'src/**/*.ts',
       require: '{name}.test.ts',
       except: ['**/*.test.ts', '**/*.d.ts'],
     });
@@ -28,7 +28,7 @@ describe('siblingRequired — `except`', () => {
   it('refuses a run where `except` exempted every subject, naming it', async () => {
     const check = siblingRequired({
       id: 'x',
-      subjects: 'src/**/*.test.ts',
+      files: 'src/**/*.test.ts',
       require: '{name}.snap',
       except: ['**/*.ts'],
     });
@@ -37,7 +37,7 @@ describe('siblingRequired — `except`', () => {
 
   it('is an option checked by name', () => {
     expect(() =>
-      siblingRequired({ id: 'x', subjects: 's', require: 'r', except: '**/*.test.ts' as unknown as string[] }),
+      siblingRequired({ id: 'x', files: 's', require: 'r', except: '**/*.test.ts' as unknown as string[] }),
     ).toThrow(/`except` must be/);
   });
 });

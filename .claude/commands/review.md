@@ -1,5 +1,5 @@
 ---
-description: Read-only review of finished work against the request, the canon and the gates.
+description: Read-only review of finished work against the request, the canon and the checks.
 argument-hint: '[what to review — defaults to the working tree and the last commit]'
 allowed-tools: Read, Grep, Glob, Bash
 ---
@@ -10,7 +10,7 @@ Review, do not edit. Target: `$ARGUMENTS` (empty → the working tree and the la
 
 `git status`, `git diff`, `git log -1 --stat`, every pending `.changeset/*.md`, then the
 `SKILL.md` that owns each changed area. If a template changed, its
-`_playground/repository/.specwarden/` diff IS the review of what a stranger receives — read
+`_playground/repository/.specwarden/` diff IS the review of what a consumer receives — read
 it line by line.
 
 ## The six questions
@@ -31,7 +31,7 @@ it line by line.
 pnpm build && pnpm gate
 ```
 
-If the caller says the gates passed, run them anyway, and read the counts.
+If the caller says the checks passed, run them anyway, and read the counts.
 
 ## Report
 

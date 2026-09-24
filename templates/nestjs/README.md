@@ -1,6 +1,6 @@
 # @specwarden/template-nestjs
 
-⚒ **template** — A NestJS backend — the plugin wired, plus what a backend needs.
+⚒ **template** — A NestJS backend — module conventions via the plugin, credential scan, env pairing, migration guard.
 
 The module-decomposition plugin, the credential scan and the operational checks a service carries.
 
@@ -11,7 +11,7 @@ A starting tree for one kind of repository, so day one is one command rather tha
 ## Install
 
 ```bash
-npm install @specwarden/template-nestjs specwarden
+pnpm add -D specwarden @specwarden/template-nestjs @specwarden/plugin-nestjs @specwarden/security @specwarden/ops
 ```
 
 It depends on [`specwarden`](https://github.com/specwarden/specwarden/tree/main/core#readme), [`@specwarden/scaffold-parts`](https://github.com/specwarden/specwarden/tree/main/templates/_parts#readme), [`@specwarden/plugin-nestjs`](https://github.com/specwarden/specwarden/tree/main/plugins/nestjs#readme), [`@specwarden/security`](https://github.com/specwarden/specwarden/tree/main/modules/security#readme), [`@specwarden/ops`](https://github.com/specwarden/specwarden/tree/main/modules/ops#readme).

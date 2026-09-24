@@ -22,7 +22,14 @@
  * runs — not a check body called in-process, which would pass over a generated file that
  * cannot even be imported.
  */
-import { TEMPLATED, removeScratch, scratchRepository, verdictsIn, warden, writtenByTemplate } from './playgrounds.mjs';
+import {
+  TEMPLATED,
+  removeScratch,
+  scratchRepository,
+  verdictsIn,
+  specwarden,
+  writtenByTemplate,
+} from './playgrounds.mjs';
 import { pkgName } from './registry.mjs';
 
 /** A CLI run over a scratch repository is seconds, not milliseconds. */
@@ -100,7 +107,7 @@ export function inScratchRepository(slug, setup, scene) {
   if (!pkg) throw new Error(`no template called ${slug} in the registry`);
   const dir = scratchRepository(pkg, { edits: setup.edits ?? {}, branches: setup.branches ?? [] });
   try {
-    return scene({ dir, warden: (args, options) => warden(dir, args, options) });
+    return scene({ dir, specwarden: (args, options) => specwarden(dir, args, options) });
   } finally {
     removeScratch(dir);
   }

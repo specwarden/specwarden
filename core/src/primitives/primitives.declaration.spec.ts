@@ -42,33 +42,33 @@ describe('every factory checks its options by name when the file loads', () => {
   it.each<[string, () => unknown, string]>([
     [
       'forbidPattern, no pattern',
-      () => forbidPattern({ id: 'x', in: 'src/**' } as never),
+      () => forbidPattern({ id: 'x', files: 'src/**' } as never),
       "forbidPattern 'x': `pattern` is required",
     ],
     [
       'forbidPattern, a string pattern',
-      () => forbidPattern({ in: 'a', pattern: 'TODO' } as never),
+      () => forbidPattern({ files: 'a', pattern: 'TODO' } as never),
       '`pattern` must be a RegExp',
     ],
     [
       'forbidPattern, a misspelled except',
-      () => forbidPattern({ in: 'a', pattern: /x/, excpet: [] } as never),
+      () => forbidPattern({ files: 'a', pattern: /x/, excpet: [] } as never),
       '`excpet` is not an option of forbidPattern',
     ],
-    ['forbidImport, no to', () => forbidImport({ from: 'src/**' } as never), '`to` is required'],
+    ['forbidImport, no to', () => forbidImport({ files: 'src/**' } as never), '`to` is required'],
     [
       'pathContract, a string allowedIn',
-      () => pathContract({ kind: '**/*.md', allowedIn: 'docs/**' } as never),
+      () => pathContract({ files: '**/*.md', allowedIn: 'docs/**' } as never),
       '`allowedIn` must be an array',
     ],
-    ['siblingRequired, no require', () => siblingRequired({ subjects: 'src/*.ts' } as never), '`require` is required'],
+    ['siblingRequired, no require', () => siblingRequired({ files: 'src/*.ts' } as never), '`require` is required'],
     ['mustDeclare, no fields', () => mustDeclare({ files: 'docs/*.md' } as never), '`fields` is required'],
     [
       'referencesResolve, a string extract',
-      () => referencesResolve({ in: 'a', extract: 'x' } as never),
+      () => referencesResolve({ files: 'a', extract: 'x' } as never),
       '`extract` must be a RegExp',
     ],
-    ['regenerable, no by', () => regenerable({ artifact: 'a.md' } as never), '`by` is required'],
+    ['regenerable, no cmd', () => regenerable({ artifact: 'a.md' } as never), '`cmd` is required'],
     ['sourcesAgree, no b', () => sourcesAgree({ a: { name: 'a', extract: () => [] } } as never), '`b` is required'],
     ['defineCheck, no run', () => defineCheck({ id: 'x' } as never), "defineCheck 'x': `run` is required"],
     ['fromResult, no run', () => fromResult({ hint: 'h' } as never), '`run` is required'],
@@ -85,7 +85,7 @@ describe('every factory checks its options by name when the file loads', () => {
     ],
     [
       'a `when` that is a string',
-      () => forbidPattern({ in: 'a', pattern: /x/, when: 'docs/' } as never),
+      () => forbidPattern({ files: 'a', pattern: /x/, when: 'docs/' } as never),
       '`when` must be a function or an object',
     ],
   ])('%s', (_name, build, message) => {
@@ -100,7 +100,7 @@ describe('every factory checks its options by name when the file loads', () => {
     ],
     [
       'a referencesResolve extract with no capture group',
-      () => referencesResolve({ in: 'a', extract: /Owner/ }),
+      () => referencesResolve({ files: 'a', extract: /Owner/ }),
       '`extract` /Owner/ has no capture group',
     ],
     [
@@ -123,7 +123,7 @@ describe('every factory checks its options by name when the file loads', () => {
   });
 
   it('accepts a check written with only what it knows — the one-line check', async () => {
-    const check = forbidPattern({ in: 'src/**/*.ts', pattern: /TODO/, rule: 'no TODO in shipped source' });
+    const check = forbidPattern({ files: 'src/**/*.ts', pattern: /TODO/, rule: 'no TODO in shipped source' });
     expect([check.tier, check.title, check.rule]).toEqual([
       'fast',
       'no TODO in shipped source',
@@ -140,12 +140,12 @@ describe('the primitives read TRACKED files, their exemptions included', () => {
   const TRACKED = ['docs/a.md'];
 
   it.each<[string, ICheck]>([
-    ['forbidPattern', forbidPattern({ id: 'p', in: '**/*.md', pattern: /TODO/ })],
-    ['forbidImport', forbidImport({ id: 'i', from: '**/*.md', to: 'x' })],
-    ['pathContract', pathContract({ id: 'c', kind: '**/*.md', allowedIn: ['nowhere/**'] })],
+    ['forbidPattern', forbidPattern({ id: 'p', files: '**/*.md', pattern: /TODO/ })],
+    ['forbidImport', forbidImport({ id: 'i', files: '**/*.md', to: 'x' })],
+    ['pathContract', pathContract({ id: 'c', files: '**/*.md', allowedIn: ['nowhere/**'] })],
     ['mustDeclare', mustDeclare({ id: 'm', files: '**/*.md', fields: [{ name: 'Owner', pattern: /Owner/ }] })],
-    ['siblingRequired', siblingRequired({ id: 's', subjects: '**/*.md', require: '{name}.spec.ts' })],
-    ['referencesResolve', referencesResolve({ id: 'r', in: '**/*.md', extract: /\]\(([^)]+)\)/ })],
+    ['siblingRequired', siblingRequired({ id: 's', files: '**/*.md', require: '{name}.spec.ts' })],
+    ['referencesResolve', referencesResolve({ id: 'r', files: '**/*.md', extract: /\]\(([^)]+)\)/ })],
   ])('%s never sees node_modules/ or dist/ — the working-tree glob found both', async (_name, check) => {
     const verdict = await runCheck(check, { tree: TREE, tracked: TRACKED });
     expect(verdict.findings.map((f) => f.file).filter(Boolean)).not.toContainEqual(
@@ -154,7 +154,7 @@ describe('the primitives read TRACKED files, their exemptions included', () => {
   });
 
   it('pathContract judges exactly the tracked file of its kind', async () => {
-    const verdict = await runCheck(pathContract({ id: 'c', kind: '**/*.md', allowedIn: ['nowhere/**'] }), {
+    const verdict = await runCheck(pathContract({ id: 'c', files: '**/*.md', allowedIn: ['nowhere/**'] }), {
       tree: TREE,
       tracked: TRACKED,
     });
@@ -162,7 +162,7 @@ describe('the primitives read TRACKED files, their exemptions included', () => {
   });
 
   it('an `except` is a pathspec over the tracked set too', async () => {
-    const check = forbidPattern({ id: 'p', in: '**/*.md', pattern: /TODO/, except: ['docs/**'] });
+    const check = forbidPattern({ id: 'p', files: '**/*.md', pattern: /TODO/, except: ['docs/**'] });
     const verdict = await runCheck(check, {
       tree: { ...TREE, 'guide/b.md': 'TODO' },
       tracked: [...TRACKED, 'guide/b.md'],
@@ -171,14 +171,14 @@ describe('the primitives read TRACKED files, their exemptions included', () => {
   });
 
   it('an `except` that exempts everything says so — the refusal blamed the glob', async () => {
-    const check = forbidPattern({ id: 'p', in: 'docs/**', pattern: /TODO/, except: ['docs/**'] });
+    const check = forbidPattern({ id: 'p', files: 'docs/**', pattern: /TODO/, except: ['docs/**'] });
     expect(errorsOf(await runCheck(check, { tree: TREE, tracked: TRACKED }))[0]).toMatch(
       /^examined 0 file\(s\) — `docs\/\*\*` matched 1 file\(s\), and `except` exempted all of them — below the floor of 1\./,
     );
   });
 
   it('a tracked file deleted from the working tree is skipped, not a crash', async () => {
-    const check = forbidPattern({ id: 'p', in: '**/*.md', pattern: /TODO/ });
+    const check = forbidPattern({ id: 'p', files: '**/*.md', pattern: /TODO/ });
     const verdict = await runCheck(check, { tree: { 'docs/a.md': 'fine' }, tracked: ['docs/a.md', 'docs/gone.md'] });
     expect(infos(verdict.findings)).toEqual(['✓ p — 1 file(s) examined, clean']);
   });
@@ -199,10 +199,10 @@ describe('the primitives read TRACKED files, their exemptions included', () => {
 
 describe('pathContract, siblingRequired and mustDeclare carry the corpus floor and the examined line', () => {
   const cases: [string, ICheck, Record<string, string>][] = [
-    ['pathContract', pathContract({ id: 'c', kind: 'pc/**/*.md', allowedIn: ['pc/**'] }), { 'pc/a.md': 'x' }],
+    ['pathContract', pathContract({ id: 'c', files: 'pc/**/*.md', allowedIn: ['pc/**'] }), { 'pc/a.md': 'x' }],
     [
       'siblingRequired',
-      siblingRequired({ id: 's', subjects: 'sr/*.service.ts', require: '{name}.spec.ts' }),
+      siblingRequired({ id: 's', files: 'sr/*.service.ts', require: '{name}.spec.ts' }),
       { 'sr/a.service.ts': 'x', 'sr/a.service.spec.ts': 'x' },
     ],
     [
@@ -255,15 +255,15 @@ describe('sourcesAgree and regenerable honour `ratchet`', () => {
   });
 
   it('regenerable tolerates a stale artifact under a ratchet of 1, and a stored ratchet wins', async () => {
-    const build = (ratchet?: number) => regenerable({ id: 'x', ratchet, artifact: 'gen.md', by: 'gen' });
+    const build = (ratchet?: number) => regenerable({ id: 'x', ratchet, artifact: 'gen.md', cmd: 'gen' });
     const exec = () => ({ status: 0, stdout: 'fresh\n', stderr: '' });
     expect((await runCheck(build(1), { tree: { 'gen.md': 'edited\n' }, exec })).ok).toBe(true);
-    expect((await runCheck(build(1), { tree: { 'gen.md': 'edited\n' }, exec, ratchet: 0 })).ok).toBe(false);
+    expect((await runCheck(build(1), { tree: { 'gen.md': 'edited\n' }, exec, threshold: 0 })).ok).toBe(false);
     expect((await runCheck(build(), { tree: { 'gen.md': 'edited\n' }, exec })).ok).toBe(false);
   });
 
   it('regenerable says what a clean pass examined', async () => {
-    const check = regenerable({ id: 'x', artifact: 'gen.md', by: 'gen' });
+    const check = regenerable({ id: 'x', artifact: 'gen.md', cmd: 'gen' });
     const verdict = await runCheck(check, {
       tree: { 'gen.md': 'fresh\n' },
       exec: () => ({ status: 0, stdout: 'fresh\n', stderr: '' }),
@@ -274,7 +274,7 @@ describe('sourcesAgree and regenerable honour `ratchet`', () => {
 
 describe('forbidImport with a target written as a prefix', () => {
   it('`@db/` bans everything under `@db/` — it matched nothing', async () => {
-    const check = forbidImport({ id: 'x', from: 'src/**', to: '@db/' });
+    const check = forbidImport({ id: 'x', files: 'src/**', to: '@db/' });
     const tree = { 'src/a.ts': "import { q } from '@db/core';\nimport { r } from '@dbx';\n" };
     expect(errorsOf(await runCheck(check, { tree }))).toEqual([
       'src/a.ts imports `@db/core`, which is forbidden from src/**.',
@@ -310,6 +310,16 @@ describe('fromResult — a corpus, a count, and a return it understands', () => 
     );
     expect(errorsOf(why)[0]).toBe('examined 0 items, below the declared floor of 3. three packages exist.');
     expect((await runCheck(build(() => ({ examined: 3 }), { corpus: { atLeast: 3 } }))).ok).toBe(true);
+  });
+
+  it('reads `corpus: {}` as a floor of one, the one ICorpusFloor every factory takes', async () => {
+    expect(errorsOf(await runCheck(build(() => ({ examined: 0 }), { corpus: {} })))[0]).toMatch(
+      /^examined 0 items, below the declared floor of 1\./,
+    );
+    expect(errorsOf(await runCheck(build(() => ({ errors: [] }), { corpus: {} })))[0]).toContain(
+      'x declares `corpus: { atLeast: 1 }`',
+    );
+    expect((await runCheck(build(() => ({ examined: 1 }), { corpus: {} }))).ok).toBe(true);
   });
 
   it.each([
@@ -348,9 +358,9 @@ describe('defineCheck — what a body returns', () => {
 
 describe('the edges of a tracked corpus', () => {
   it.each<[string, ICheck]>([
-    ['forbidImport', forbidImport({ id: 'i', from: 'd/**', to: 'x' })],
+    ['forbidImport', forbidImport({ id: 'i', files: 'd/**', to: 'x' })],
     ['mustDeclare', mustDeclare({ id: 'm', files: 'd/**', fields: [{ name: 'O', pattern: /O/ }] })],
-    ['referencesResolve', referencesResolve({ id: 'r', in: 'd/**', extract: /\]\(([^)]+)\)/ })],
+    ['referencesResolve', referencesResolve({ id: 'r', files: 'd/**', extract: /\]\(([^)]+)\)/ })],
     ['zoneBoundary', zoneBoundary({ id: 'z', productSources: 'd/**', forbiddenLiterals: [] })],
   ])('%s skips a tracked file the working tree no longer has', async (_name, check) => {
     const verdict = await runCheck(check, { tree: { 'd/a.md': 'O' }, tracked: ['d/a.md', 'd/gone.md'] });
@@ -358,12 +368,14 @@ describe('the edges of a tracked corpus', () => {
   });
 
   it('referencesResolve looks up nothing for an optional group that did not take part', async () => {
-    const check = referencesResolve({ id: 'r', in: 'd/**', extract: /see(?: \[([^\]]+)\])?/ });
+    const check = referencesResolve({ id: 'r', files: 'd/**', extract: /see(?: \[([^\]]+)\])?/ });
     expect((await runCheck(check, { tree: { 'd/a.md': 'see here' } })).ok).toBe(true);
   });
 
   it('names the check in a nested refusal when it has an id, and the factory alone when not', () => {
-    expect(refusal(() => referencesResolve({ id: 'r', in: 'a', extract: /x/ }))).toContain("referencesResolve 'r': ");
+    expect(refusal(() => referencesResolve({ id: 'r', files: 'a', extract: /x/ }))).toContain(
+      "referencesResolve 'r': ",
+    );
     expect(refusal(() => mustDeclare({ id: 'm', files: 'a', fields: [{}] } as never))).toContain("mustDeclare 'm': ");
     expect(refusal(() => sourcesAgree({ id: 's', a: {}, b: {} } as never))).toContain("sourcesAgree 's': ");
     expect(refusal(() => sourcesAgree({ a: {}, b: {} } as never))).toMatch(/^sourcesAgree: /);

@@ -2,10 +2,10 @@ import { pathToFileURL } from 'node:url';
 
 import type { ICheck, IFileSource, IRule } from '../../../domain';
 import { declarationCandidates } from '../../cli/_shared/resolve-declaration/resolve-declaration.util';
-import type { IWardenConfig } from '../../config/config.model';
+import type { ISpecwardenConfig } from '../../config/config.model';
 import { loadPlugins } from '../../plugin-loader/plugin-loader.util';
 import { CheckDiscoveryError, discoverChecks } from '../discover-checks/discover-checks.util';
-import { type IHarnessOptions, harnessChecks } from '../harness-checks/harness-checks.factory';
+import { type ISelfCheckOptions, selfChecks } from '../self-checks/self-checks.factory';
 import {
   type IPerimeterModule,
   perimeterDeclaration,
@@ -13,7 +13,7 @@ import {
 
 export interface ILoadedTree {
   /** Every check the run will consider, in a stable order: discovered, then
-   * declared in the config, then plugins, then the harness's own. */
+   * declared in the config, then plugins, then the self-checks. */
   readonly checks: readonly ICheck[];
   readonly rules: readonly IRule[];
   /** What the loader decided and why — files swept, self-checks disabled. */
@@ -32,14 +32,14 @@ export interface ILoadedTree {
  * ORDER, AND WHY IT IS THIS ORDER. Discovered checks come first because they are the
  * repository's own and a reader expects the tree's order in the report. Declared
  * checks (`config.checks`) follow — the place for something that cannot be a file, a
- * check built from another check's result, say. Plugins next. The harness's own
+ * check built from another check's result, say. Plugins next. The engine's
  * self-checks last: they audit everything before them, and a reader who sees the
- * harness complain wants to have already seen what it is complaining about.
+ * engine complain wants to have already seen what it is complaining about.
  *
- * The self-checks read the roster LAZILY. Their `checkIds` thunk is evaluated when
+ * The self-checks read the roster LAZILY. Their `roster` thunk is evaluated when
  * they run, not when they are built, so the list they audit includes themselves —
  * which matters, because a rule may legitimately name `orphan-check` as its enforcer
- * and a roster read too early reports the harness's own check as missing.
+ * and a roster read too early reports the engine’s own check as missing.
  *
  * Nothing here knows a check's id or a repository's layout beyond the one directory
  * name it was handed. That is the boundary: the engine loads what it finds; the
@@ -49,7 +49,7 @@ export interface ILoadedTree {
  * The rules the checks declare about themselves, assembled into register entries.
  *
  * A rule and the check enforcing it are one fact in two places, joined by a string.
- * The gate list already stopped being maintained that way — a check is a file, and
+ * The check list already stopped being maintained that way — a check is a file, and
  * the engine reads the folder — while the rule register stayed a hand-kept list
  * beside it — mostly entries naming exactly one check, many naming a check whose id was
  * their own.
@@ -61,7 +61,7 @@ export interface ILoadedTree {
  * dropped, which is the same precedence a register with a duplicate entry would have.
  */
 function rulesDeclaredOnChecks(checks: readonly ICheck[], register: readonly IRule[]): readonly IRule[] {
-  const byId = new Map<string, { rule: IRule; checkIds: string[] }>();
+  const byId = new Map<string, { rule: IRule; enforcedBy: string[] }>();
   for (const check of checks) {
     if (check.rule === undefined) continue;
     const id = check.rule.id ?? check.id;
@@ -71,7 +71,7 @@ function rulesDeclaredOnChecks(checks: readonly ICheck[], register: readonly IRu
     if (check.rule.implied && register.some((r) => r.id === id || enforces(r, check.id))) continue;
     const existing = byId.get(id);
     if (existing) {
-      existing.checkIds.push(check.id);
+      existing.enforcedBy.push(check.id);
       continue;
     }
     byId.set(id, {
@@ -83,55 +83,55 @@ function rulesDeclaredOnChecks(checks: readonly ICheck[], register: readonly IRu
         owner: check.rule.owner as string,
         zone: check.rule.zone ?? check.zone,
         irreversible: check.rule.irreversible,
-        enforcement: { checkIds: [] },
+        enforcement: { enforcedBy: [] },
       },
-      checkIds: [check.id],
+      enforcedBy: [check.id],
     });
   }
-  return [...byId.values()].map(({ rule, checkIds }) => ({ ...rule, enforcement: { checkIds } }));
+  return [...byId.values()].map(({ rule, enforcedBy }) => ({ ...rule, enforcement: { enforcedBy } }));
 }
 
 const enforces = (rule: IRule, checkId: string): boolean =>
-  'checkIds' in rule.enforcement && rule.enforcement.checkIds.includes(checkId);
+  'enforcedBy' in rule.enforcement && rule.enforcement.enforcedBy.includes(checkId);
 
 /**
- * The harness's options, with its tier taken from the repository's vocabulary when the
+ * The self-checks’ options, with their tier taken from the repository's vocabulary when the
  * built-in `fast` is not in it. A tier is now held to the vocabulary at registration, and
- * a repository whose rhythm is `pre-commit` / `pr` would otherwise meet its own harness
+ * a repository whose rhythm is `pre-commit` / `pr` would otherwise meet its own self-checks
  * refused for naming a tier it never declared.
  */
-function harnessOptions(config: IWardenConfig): IHarnessOptions {
-  const declared = typeof config.harness === 'object' ? config.harness : {};
+function selfCheckOptions(config: ISpecwardenConfig): ISelfCheckOptions {
+  const declared = typeof config.selfChecks === 'object' ? config.selfChecks : {};
   if (declared.tier !== undefined || config.tiers === undefined || config.tiers.includes('fast')) return declared;
   return { ...declared, tier: config.tiers[0] };
 }
 
 /**
- * The rule ids the repository's perimeter declares, or none when it has no perimeter.
+ * The policy ids the repository's perimeter declares, or none when it has no perimeter.
  *
- * A perimeter rule is an enforcer the registry never holds: the hook runs it, not the
+ * A perimeter policy is an enforcer the roster never holds: the hook runs it, not the
  * runner. A rule in the register naming one — `no-force-push` — was red on
  * `enforcement-resolves` until the config repeated the perimeter's ids by hand
- * (`otherEnforcerIds: () => perimeterRules.map((r) => r.id)`), a line every repository
+ * (`enforcers: () => perimeterPolicies.map((p) => p.id)`), a line every repository
  * with a perimeter had to write and nothing but the engine could know. The engine reads
- * the same file the hook reads, so the two cannot disagree about which rules exist.
+ * the same file the hook reads, so the two cannot disagree about which policies exist.
  *
  * A perimeter that does not load fails `enforcement-resolves`, naming the file — not the
  * whole run. The hook fails open on it, and should; an audit that shrugged would vouch for
- * rules the hook cannot load either.
+ * policies the hook cannot load either.
  */
-async function perimeterRuleIds(files: IFileSource, consumerDir: string): Promise<() => readonly string[]> {
+async function perimeterPolicyIds(files: IFileSource, consumerDir: string): Promise<() => readonly string[]> {
   try {
     const found = await importDeclaration<IPerimeterModule>(files, consumerDir, 'perimeter.mjs');
-    const ids = found === undefined ? [] : perimeterDeclaration(found.mod).rules.map((rule) => rule.id);
+    const ids = found === undefined ? [] : perimeterDeclaration(found.mod).policies.map((policy) => policy.id);
     return () => ids;
   } catch (error) {
     // Not a load error for the whole run: the hook fails open on this file, and a check
     // that never reads it should not stop over it. The one audit that does read it fails,
-    // with the reason — a perimeter that does not load enforces none of its rules.
+    // with the reason — a perimeter that does not load enforces none of its policies.
     const reason = (error as Error).message;
     return () => {
-      throw new Error(`${reason} — its rules enforce nothing until it loads`);
+      throw new Error(`${reason} — its policies enforce nothing until it loads`);
     };
   }
 }
@@ -175,14 +175,14 @@ async function registerFromFile(
   return { path: found.path, rules: rules as readonly IRule[] };
 }
 
-/** Who owns the harness's rule when the consumer directory has no README to own it: the
+/** Who owns the self-checks’ rule when the consumer directory has no README to own it: the
  * engine, named rather than pointed at — not a path, so there is no document to miss. */
-const HARNESS_RULE_OWNER = 'the specwarden engine';
+const SELF_CHECK_RULE_OWNER = 'the specwarden engine';
 
 export async function loadConsumerTree(
   files: IFileSource,
   consumerDir: string,
-  config: IWardenConfig,
+  config: ISpecwardenConfig,
 ): Promise<ILoadedTree> {
   const notes: string[] = [];
   const fromFile = config.rules === undefined ? await registerFromFile(files, consumerDir) : undefined;
@@ -191,7 +191,7 @@ export async function loadConsumerTree(
   // and "none" still switches the four rule audits off, as it always did.
   const register = config.rules ?? fromFile?.rules;
   const declaredRules = register ?? [];
-  // Filled once the harness is built: it brings the rule its own checks enforce, and
+  // Filled once the self-checks are built: it brings the rule its own checks enforce, and
   // the audits read `rules` through a thunk, so the list they see includes it.
   let rules: readonly IRule[] = declaredRules;
 
@@ -207,51 +207,52 @@ export async function loadConsumerTree(
   const declared = config.checks ?? [];
   const fromPlugins = loadPlugins(config.plugins ?? []).checks;
 
-  // Filled after the harness checks exist, read through the thunk they hold.
+  // Filled after the self-checks exist, read through the thunk they hold.
   let roster: ICheck[] = [];
-  const perimeterIds = config.harness === false ? () => [] : await perimeterRuleIds(files, consumerDir);
-  const declaredHarness = harnessOptions(config);
-  const configured = declaredHarness.otherEnforcerIds;
-  const harness =
-    config.harness === false
-      ? { checks: [], rules: [], notes: ['harness self-checks disabled entirely (config.harness = false)'] }
-      : harnessChecks(
+  const perimeterIds = config.selfChecks === false ? () => [] : await perimeterPolicyIds(files, consumerDir);
+  const declaredSelfChecks = selfCheckOptions(config);
+  const configured = declaredSelfChecks.enforcers;
+  const engine =
+    config.selfChecks === false
+      ? { checks: [], rules: [], notes: ['self-checks disabled entirely (config.selfChecks = false)'] }
+      : selfChecks(
           {
             rules: () => rules,
             rulesDeclared: register !== undefined,
-            checkIds: () => roster.map((c) => c.id),
+            roster: () => roster.map((c) => c.id),
             consumerDir,
           },
           {
-            ...declaredHarness,
-            // The harness's own rule is owned by the README `init` writes — and a tree
+            ...declaredSelfChecks,
+            // The self-checks’ own rule is owned by the README `init` writes — and a tree
             // written by hand has none, so `rules: []` met a red rule-owner-resolves over
             // machinery the consumer never declared. Without that README the engine owns
             // its own rule; an explicit `ruleOwner` wins over both.
             ruleOwner:
-              declaredHarness.ruleOwner ?? (files.exists(`${consumerDir}/README.md`) ? undefined : HARNESS_RULE_OWNER),
+              declaredSelfChecks.ruleOwner ??
+              (files.exists(`${consumerDir}/README.md`) ? undefined : SELF_CHECK_RULE_OWNER),
             // The perimeter's ids always count; a config naming more adds to them.
-            otherEnforcerIds: () => [...perimeterIds(), ...(configured?.() ?? [])],
+            enforcers: () => [...perimeterIds(), ...(configured?.() ?? [])],
           },
         );
-  notes.push(...harness.notes);
+  notes.push(...engine.notes);
 
   // A consumer that still declares a self-check by hand — the shape every config had
-  // before the harness assembled them — would meet a bare "duplicate id" from the
-  // registry, which names the symptom and not the fix. Say the fix.
-  const harnessIds = new Set(harness.checks.map((c) => c.id));
+  // before the engine assembled them — would meet a bare "duplicate id" from the
+  // roster, which names the symptom and not the fix. Say the fix.
+  const selfCheckIds = new Set(engine.checks.map((c) => c.id));
   const redeclared = [...discovered.checks, ...declared, ...fromPlugins]
-    .filter((c) => harnessIds.has(c.id))
+    .filter((c) => selfCheckIds.has(c.id))
     .map((c) => c.id);
   if (redeclared.length > 0) {
     throw new CheckDiscoveryError(
       `${redeclared.join(', ')}: the engine now builds this check from convention, and the config declares it too. ` +
         `Remove the declaration — or, to keep a hand-tuned one, switch the built-in off with ` +
-        `\`harness: { disable: [{ id: '${redeclared[0]}', why: '…' }] }\`.`,
+        `\`selfChecks: { disable: [{ id: '${redeclared[0]}', why: '…' }] }\`.`,
     );
   }
 
-  roster = [...discovered.checks, ...declared, ...fromPlugins, ...harness.checks];
+  roster = [...discovered.checks, ...declared, ...fromPlugins, ...engine.checks];
   const colocated = rulesDeclaredOnChecks(roster, declaredRules);
 
   /**
@@ -274,9 +275,9 @@ export async function loadConsumerTree(
     );
   }
   if (colocated.length) notes.push(`${colocated.length} rule(s) declared on the checks that enforce them`);
-  // The harness's own rule joins the declared ones only when the consumer declared a
-  // registry at all: with no `rules` key the audits are off, and a rule nothing reads
+  // The self-checks’ own rule joins the declared ones only when the consumer declared a
+  // register at all: with no `rules` key the audits are off, and a rule nothing reads
   // would be a declaration for its own sake.
-  rules = register === undefined ? declaredRules : [...declaredRules, ...colocated, ...harness.rules];
+  rules = register === undefined ? declaredRules : [...declaredRules, ...colocated, ...engine.rules];
   return { checks: roster, rules, notes, origins: discovered.origins, rulesDeclared: register !== undefined };
 }

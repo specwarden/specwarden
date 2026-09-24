@@ -3,7 +3,7 @@ name: release-manager
 description: >
   Prepares and cuts a release — reads the pending changesets against the diff, folds them
   into versions, verifies what actually ships in each tarball, and runs the publish-readiness
-  gates. Trigger before cutting a version, when a package's manifest, `files` list or exports
+  checks. Trigger before cutting a version, when a package's manifest, `files` list or exports
   change, or when a changeset needs writing for a user-visible change. Do NOT trigger for
   ordinary code changes.
 tools: Read, Write, Edit, Bash, Grep, Glob
@@ -57,7 +57,7 @@ and a folder link picks up files a tarball never contains. The engine's `bin/` a
 built from different sources is the one case that refusal cannot catch.
 
 Private packages — the playgrounds — never version: `privatePackages.version` is off, and
-the changesets gate refuses a config that turns it back on.
+the `changesets` check refuses a config that turns it back on.
 
 # Report
 

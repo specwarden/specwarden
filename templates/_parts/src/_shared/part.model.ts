@@ -1,11 +1,14 @@
 import type { IRule, ITemplateFile } from 'specwarden';
 
 /**
- * A PART — one check, the file that configures it, and the rule it enforces.
+ * A PART — the file or files a template writes for one decision, and the rule they enforce.
  *
  * The reusable piece a template is assembled from, so a template is a LIST OF DECISIONS:
- * which parts a repository of its kind wants on day one, and what to say about each. A
- * part emits strings nothing typechecks, which is why one copy of each lives here.
+ * which parts a repository of its kind wants on day one, and what to say about each. Most
+ * parts write one check; a lifecycle of several checks that only make sense together
+ * (`planLifecyclePart`) or a repository's own scripts wrapped one file per script
+ * (`scriptWrappersPart`) write more than one. A part emits strings nothing typechecks,
+ * which is why one copy of each lives here.
  *
  * WHERE THE RULE GOES. A live check declares its own rule (`rule: '…'`), owned by the
  * check file, so the check and the rule cannot drift apart. `rules` holds only what the

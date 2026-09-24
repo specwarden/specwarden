@@ -1,6 +1,6 @@
 ---
 name: gates
-description: How this repository checks itself, where a gate lives, and what makes one worth running.
+description: How this repository checks itself, where one of its checks lives, and what makes one worth running.
 ---
 
 # gates
@@ -13,7 +13,8 @@ those arguments while keeping its own guards as loose scripts in a shell chain w
 making them from a position it had not tested.
 
 So the guards are **checks**, under `.specwarden/checks/`, run by the engine this
-repository publishes. `pnpm gate` is the list. There is no second place to add one.
+repository publishes. `pnpm gate` is the gate — the one run that decides whether a change
+may proceed — and what it runs is the list. There is no second place to add a check.
 
 ## 2. Where the logic lives
 
@@ -21,21 +22,21 @@ The pure logic stays in `scripts/`, where a person can run it directly and where
 its own test. `.specwarden/checks/` **wraps** it.
 
 That split is deliberate: a contributor debugging the scaffolder wants
-`node scripts/scaffold.mjs`, not a gate runner — and a gate whose logic is inline is a
-gate whose logic cannot be unit-tested. Every script a gate wraps has
+`node scripts/scaffold.mjs`, not a check runner — and a check whose logic is inline is a
+check whose logic cannot be unit-tested. Every script a check wraps has
 `scripts/<script>.test.mjs` beside it, run by `scripts-unit`.
 
-**Where a published module already has the opinion, the gate IS that module.**
+**Where a published module already has the opinion, the check IS that module.**
 `.specwarden/checks/repository/dogfood.check.mjs` runs `@specwarden/agents` over the roster,
 `@specwarden/plans` over `_plans/` and `@specwarden/docs` over the documentation. A script
 of our own beside a module that ships the same check would make the module the one
-documentation check this repository does not run — and the docs gate found a path to a
+documentation check this repository does not run — and the `docs` check found a path to a
 file that had never existed, and a link to a folder that had moved, on its first run.
 
 ## 2a. One list
 
 `pnpm gate` is the list; `pnpm check` and `pnpm release` call the same engine. `check` was a
-hand-kept chain of scripts beside it once, and had already fallen behind: two gates existed
+hand-kept chain of scripts beside it once, and had already fallen behind: two checks existed
 that the chain did not run, so a release could ship over both.
 
 ## 3. Two tiers
@@ -46,9 +47,9 @@ that the chain did not run, so a release could ship over both.
 | `heavy` | building, packing, installing, the full suites                       | a push, and CI |
 
 There is no `nightly`. The one thing slow enough to want one is mutation testing, and it
-has its own command in the engine's package rather than a schedule nobody watches.
+has its own command in the engine's package rather than a tier nobody watches.
 
-## 4. A gate declares how it can fail
+## 4. A check declares how it can fail
 
 See `skills/checks/SKILL.md` §3. In this repository specifically: every wrapped `pnpm -r`
 command carries a refusal for `No projects matched the filters`, because pnpm reports an
@@ -62,5 +63,5 @@ tool it is run with.
 3. the rule it enforces, declared on the check;
 4. **show it red before believing it.**
 
-Nothing else. A file under `checks/` is a gate the moment it exists, and a file there
+Nothing else. A file under `checks/` is a check the moment it exists, and a file there
 that exports no check is a load error rather than a silent skip.

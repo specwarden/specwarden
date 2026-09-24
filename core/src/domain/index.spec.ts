@@ -6,10 +6,8 @@ import {
   FileNotFoundError,
   PLAN_STATUSES,
   SEVERITIES,
-  SpecwardenZoneError,
   TIERS,
   ZONES,
-  assertZoneMatchesLocation,
 } from './index';
 
 /**
@@ -25,9 +23,7 @@ describe('domain barrel value exports', () => {
     expect(CAPABILITIES).toEqual(['read', 'exec', 'write', 'net']);
     expect(SEVERITIES).toEqual(['error', 'warning', 'info']);
     expect(PLAN_STATUSES).toEqual(['draft', 'active', 'done']);
-    expect(typeof assertZoneMatchesLocation).toBe('function');
     expect(typeof FileNotFoundError).toBe('function');
-    expect(typeof SpecwardenZoneError).toBe('function');
   });
 
   it('states a contract version the load-gate can compare against', () => {

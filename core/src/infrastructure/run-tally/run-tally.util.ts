@@ -14,7 +14,7 @@ export interface IRunTally {
  * One count of a run, for every reporter.
  *
  * Each reporter counted for itself, and they disagreed about the same run: the terminal
- * left a passing advisory check out ("4 gate(s) passed" for five), the GitHub notice
+ * left a passing advisory check out (four passed, of five), the GitHub notice
  * counted a FAILED advisory check as passed. A summary that differs between the shell and
  * the CI log is one of them lying, and nobody can tell which.
  */

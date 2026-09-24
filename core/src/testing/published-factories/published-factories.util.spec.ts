@@ -63,7 +63,7 @@ describe('factories that check their options', () => {
    * factory became a helper, the audit found none, and reported none uncovered.
    */
   const strict = (id: string) => (options: Record<string, unknown>) => {
-    checkOptions(id, options, { in: { kind: 'string', required: true } });
+    checkOptions(id, options, { files: { kind: 'string', required: true } });
     return { id, run: () => ({ ok: true, findings: [] }) };
   };
   const STRICT = {
@@ -77,7 +77,7 @@ describe('factories that check their options', () => {
     parseThing: (text: string) => text.split(','),
     emptyList: () => [],
   };
-  const UNION = { id: 'probe', title: 'probe', tier: 'fast', in: 'x', somethingOnlyAnotherFactoryTakes: 1 };
+  const UNION = { id: 'probe', title: 'probe', tier: 'fast', files: 'x', somethingOnlyAnotherFactoryTakes: 1 };
 
   it('counts a factory that refuses the probe by name as a factory, not a helper', () => {
     expect(publishedFactories(STRICT, UNION)).toContain('forbidThing');

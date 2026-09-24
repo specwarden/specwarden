@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { join, posix, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { PACKAGES, pkgDir, pkgName } from './registry.mjs';
+import { PACKAGES, pkgDeps, pkgDir, pkgName } from './registry.mjs';
 import {
   PACKAGE_TABLE_END,
   PACKAGE_TABLE_START,
@@ -86,6 +86,41 @@ describe('what the scaffolder generates', () => {
 
       expect(existsSync(join(pkgDir(pkg), base)), `${pkgDir(pkg)} extends ${base}`).toBe(true);
     }
+  });
+});
+
+describe("a template's README, and the parts it is assembled from", () => {
+  const templates = PACKAGES.filter((p) => p.kind === 'template');
+  const scaffold = PACKAGES.find((p) => p.kind === 'scaffold');
+
+  it('installs with -D, names the template, and never the scaffold-parts it never installs on its own', () => {
+    // It used to read `npm install @specwarden/template-x specwarden` — no `-D`, and
+    // silent about the modules the generated tree actually imports. `@specwarden/scaffold-parts`
+    // still shows up in the "It depends on" sentence below the command — that one names a
+    // real dependency of the PACKAGE, not something to type on a command line.
+    for (const pkg of templates) {
+      const readme = FILES.get(`${pkgDir(pkg)}/README.md`);
+      expect(readme, pkgName(pkg)).toContain(`pnpm add -D specwarden ${pkgName(pkg)}`);
+      const command = readme.slice(readme.indexOf('```bash'), readme.indexOf('```', readme.indexOf('```bash') + 1));
+      expect(command, pkgName(pkg)).not.toContain('@specwarden/scaffold-parts');
+    }
+  });
+
+  it("names every module the generated tree imports, so a consumer's first run does not fail on one it never installed", () => {
+    for (const pkg of templates) {
+      const readme = FILES.get(`${pkgDir(pkg)}/README.md`);
+      const install = readme.slice(readme.indexOf('pnpm add'), readme.indexOf('```', readme.indexOf('pnpm add')));
+      for (const dep of pkgDeps(pkg).filter((d) => d !== '@specwarden/scaffold-parts')) {
+        expect(install, `${pkgName(pkg)}: ${dep}`).toContain(dep);
+      }
+    }
+  });
+
+  it('says scaffold-parts is a build-time dependency, installed automatically, never a command of its own', () => {
+    const readme = FILES.get(`${pkgDir(scaffold)}/README.md`);
+    expect(readme).toContain('build-time dependency');
+    const install = readme.slice(readme.indexOf('## Install'), readme.indexOf('## Documentation'));
+    expect(install).not.toContain('```bash');
   });
 });
 

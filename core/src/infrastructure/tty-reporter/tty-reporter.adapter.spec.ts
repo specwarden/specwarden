@@ -130,8 +130,8 @@ describe('TtyReporter — one check', () => {
    * verdict, so a change to the framing is caught here too.
    */
   it('renders a pass tolerated by a ratchet with the tolerance note above the tolerated lines', async () => {
-    const check = forbidPattern({ id: 'banned', title: 'banned', tier: 'fast', in: '**/*.ts', pattern: /BANNED/ });
-    const verdict = await runCheck(check, { tree: { 'a.ts': 'BANNED\n' }, ratchet: 1 });
+    const check = forbidPattern({ id: 'banned', title: 'banned', tier: 'fast', files: '**/*.ts', pattern: /BANNED/ });
+    const verdict = await runCheck(check, { tree: { 'a.ts': 'BANNED\n' }, threshold: 1 });
     const { reporter, out } = capture();
     reporter.checkFinished(result('banned', { verdict }));
 
@@ -206,17 +206,17 @@ describe('TtyReporter — the run summary', () => {
     const { reporter, out } = capture();
     reporter.runFinished([result('a'), result('b')], 2000);
 
-    expect(out()).toBe('\n✅ 2 gate(s) passed in 2.0s\n');
+    expect(out()).toBe('\n✅ 2 check(s) passed in 2.0s\n');
   });
 
-  it('counts a passing advisory check as passed — "4 gate(s) passed" was printed for five', () => {
+  it('counts a passing advisory check as passed — "4 check(s) passed" was printed for five', () => {
     const { reporter, out } = capture();
     reporter.runFinished([result('a'), result('advice', {}, { advisory: true })], 1000);
 
-    expect(out()).toBe('\n✅ 2 gate(s) passed in 1.0s\n');
+    expect(out()).toBe('\n✅ 2 check(s) passed in 1.0s\n');
   });
 
-  it('says nothing ran when every check was skipped — "✅ 0 gate(s) passed" was a tick over nothing', () => {
+  it('says nothing ran when every check was skipped — "✅ 0 check(s) passed" was a tick over nothing', () => {
     const { reporter, out } = capture();
     reporter.runFinished([result('a', { skipped: 'by-request' })], 100);
 
@@ -228,7 +228,7 @@ describe('TtyReporter — the run summary', () => {
     const { reporter, out } = capture();
     reporter.runFinished([result('a'), result('b'), result('c', { verdict: failed() })], 1000);
 
-    expect(out()).toContain('❌ 1 gate(s) FAILED, 2 passed in 1.0s');
+    expect(out()).toContain('❌ 1 check(s) FAILED, 2 passed in 1.0s');
     expect(out()).not.toContain('✅');
   });
 
@@ -243,7 +243,7 @@ describe('TtyReporter — the run summary', () => {
       500,
     );
 
-    expect(out()).toContain('❌ 1 gate(s) FAILED, 0 passed (1 warned, 1 skipped) in 0.5s');
+    expect(out()).toContain('❌ 1 check(s) FAILED, 0 passed (1 warned, 1 skipped) in 0.5s');
   });
 
   /**
@@ -254,7 +254,7 @@ describe('TtyReporter — the run summary', () => {
     const { reporter, out } = capture();
     reporter.runFinished([result('a'), result('s', { skipped: 'not-relevant', verdict: failed() })], 0);
 
-    expect(out()).toContain('✅ 1 gate(s) passed (1 skipped) in 0.0s');
+    expect(out()).toContain('✅ 1 check(s) passed (1 skipped) in 0.0s');
   });
 
   it('names the skipped ids compactly, because the count alone leaves WHICH unanswerable', () => {
@@ -317,7 +317,7 @@ describe('TtyReporter — where the time went', () => {
     const { reporter, out } = capture({ slowest: 1 });
     reporter.runFinished(three, 0);
 
-    expect(out().indexOf('slowest:')).toBeLessThan(out().indexOf('gate(s) passed'));
+    expect(out().indexOf('slowest:')).toBeLessThan(out().indexOf('check(s) passed'));
   });
 
   it('is silent for a run too small to have a profile', () => {

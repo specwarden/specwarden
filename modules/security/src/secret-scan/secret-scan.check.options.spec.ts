@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { CheckOptionsError, errorsOf, runCheck } from 'specwarden';
 import { secretScan } from './secret-scan.check';
 
-const ID = { id: 'secret-scan', title: 't' };
+const ID = { id: 'secret-scan' };
 /** Assembled, so this spec's own source never carries the shape it plants. */
 const ACME = `acme_${'a'.repeat(32)}`;
 const ACME_PATTERN = { id: 'acme-key', label: 'Acme API key', re: /\bacme_[a-z0-9]{32}\b/ };
@@ -57,5 +57,14 @@ describe('secretScan — its options', () => {
   it('refuses a top-level option it does not have, and runs in the fast tier when none is said', () => {
     expect(() => secretScan({ ...ID, skip: ['dist/'] } as never)).toThrow('`skip` is not an option of secretScan');
     expect(secretScan(ID).tier).toBe('fast');
+  });
+
+  it('is named `secret-scan` with nothing said, and refuses `zone` and an empty corpus list by name', () => {
+    expect(secretScan().id).toBe('secret-scan');
+    expect(() => secretScan({ zone: 'consumer' } as never)).toThrow('`zone` is not an option of secretScan');
+    expect(() => secretScan({ files: [] })).toThrow('`files` is empty');
+    expect(() => secretScan({ placeholderMarkers: 'EXAMPLE' } as never)).toThrow(
+      '`placeholderMarkers` must be a RegExp',
+    );
   });
 });

@@ -74,17 +74,39 @@ describe('requirements', () => {
   });
 
   it('takes a different heading grammar rather than memorising one', () => {
-    const result = openspec({ requirementHeading: /^##\s+REQ\s+—\s*(.+?)\s*$/ }).requirements(
+    const result = openspec({ requirementPattern: /^##\s+REQ\s+—\s*(.+?)\s*$/ }).requirements(
       new InMemoryFileSource({ 'openspec/specs/x/spec.md': '## REQ — the fork words it this way\n' }),
     );
     expect(result.items).toEqual([{ id: 'x#the-fork-words-it-this-way', statement: 'the fork words it this way' }]);
   });
 
-  it('reads a relocated root, so a layout change is a config edit rather than a silence', () => {
-    const result = openspec({ root: 'spec-tree' }).requirements(
-      new InMemoryFileSource({ 'spec-tree/specs/x/spec.md': '### Requirement: moved\n' }),
+  it('reads relocated folders and renamed files — every path is an option, as the source says', () => {
+    // `specs/`, `changes/` and `tasks.md` were written into the source while its docblock
+    // said every path was an option: a moved layout found nothing, with nothing to set.
+    const source = openspec({
+      specsDir: 'spec-tree/capabilities',
+      changesDir: 'spec-tree/proposals',
+      specFile: 'requirements.md',
+      tasksFile: 'todo.md',
+    });
+    const files = new InMemoryFileSource({
+      'spec-tree/capabilities/x/requirements.md': '### Requirement: moved\n',
+      'spec-tree/proposals/p/todo.md': '- [ ] a task\n',
+    });
+
+    expect(source.requirements(files).items).toEqual([{ id: 'x#moved', statement: 'moved' }]);
+    expect(source.tasks(files).items).toEqual([{ id: 'p#1', title: 'a task', done: false }]);
+  });
+
+  it('names the option to set when the folder it looked in is not there', () => {
+    const files = new InMemoryFileSource({});
+
+    expect(openspec().requirements(files).note).toBe(
+      'openspec/specs not found — is OpenSpec installed here? Set `specsDir` if its capabilities live elsewhere.',
     );
-    expect(result.items).toEqual([{ id: 'x#moved', statement: 'moved' }]);
+    expect(openspec().tasks(files).note).toBe(
+      'openspec/changes not found — is OpenSpec installed here? Set `changesDir` if its changes live elsewhere.',
+    );
   });
 });
 
@@ -131,7 +153,7 @@ describe('what the source could see', () => {
     // `exec` on a global regex resumes from `lastIndex`; carried from one line into the
     // next it made alternate headings invisible — and an invisible requirement is one the
     // reconciliation never proposes an invariant for.
-    const result = openspec({ requirementHeading: /^###\s+Requirement:\s*(.+?)\s*$/g }).requirements(
+    const result = openspec({ requirementPattern: /^###\s+Requirement:\s*(.+?)\s*$/g }).requirements(
       new InMemoryFileSource({
         'openspec/specs/x/spec.md': ['### Requirement: one', '### Requirement: two', '### Requirement: three'].join(
           '\n',
@@ -152,9 +174,20 @@ describe('openspec — its options', () => {
     expect(() => openspec({ specsFile: 'spec.md' } as never)).toThrow('`specsFile` is not an option of openspec');
   });
 
-  it('refuses a heading given as a string', () => {
-    expect(() => openspec({ requirementHeading: '### Requirement:' } as never)).toThrow(
-      '`requirementHeading` must be a RegExp',
+  it('refuses a pattern given as a string, and the old `root` and `requirementHeading` by name', () => {
+    expect(() => openspec({ requirementPattern: '### Requirement:' } as never)).toThrow(
+      '`requirementPattern` must be a RegExp',
     );
+    expect(() => openspec({ root: 'openspec' } as never)).toThrow('`root` is not an option of openspec');
+    expect(() => openspec({ requirementHeading: /x/ } as never)).toThrow('`requirementHeading` is not an option');
+  });
+
+  it('refuses the identity a check takes — a source is not a check, and a `tier` here would be dropped', () => {
+    expect(() => openspec({ tier: 'fast' } as never)).toThrow('`tier` is not an option of openspec');
+    expect(() => openspec({ id: 'x' } as never)).toThrow('`id` is not an option of openspec');
+  });
+
+  it('refuses an empty path — it would read the repository root as the tool’s folder', () => {
+    expect(() => openspec({ specsDir: '' })).toThrow('`specsDir` is empty');
   });
 });

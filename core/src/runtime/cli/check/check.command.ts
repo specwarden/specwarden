@@ -15,9 +15,10 @@ import {
 import { CheckRunner, RunnerUsageError } from '../../runner';
 import { selectChecks } from '../../runner/check-runner/check-runner.service';
 import { didYouMean } from '../../_shared/did-you-mean/did-you-mean.util';
-import type { CheckRegistry, IEngineAdapters } from '../../container';
-import type { IWardenConfig } from '../../config/config.model';
-import type { ICliIo } from '../_shared/cli-io/cli-io.model';
+import type { CheckRoster, IEngineAdapters } from '../../container';
+import type { ISpecwardenConfig } from '../../config/config.model';
+import { type ICliIo, refusal } from '../_shared/cli-io/cli-io.model';
+import { OUTPUT_VERSION } from '../../../contracts/version/version.constant';
 import { CONFIG_DIR } from '../_shared/find-config/find-config.util';
 import type { IParsedArgs } from '../_shared/parse-args/parse-args.util';
 
@@ -54,10 +55,10 @@ function jobsProblem(jobs: string | undefined): string | undefined {
 }
 
 /**
- * Whether this process is running under CI — the arbiter, where a skip is a hole.
+ * Whether this process is running under CI, where a skip is a hole.
  *
  * `CI` is set by nearly every CI service, in several spellings: `true`, `1`, `True`. Only
- * `true` counted, so under `CI=1` a `SPECWARDEN_SKIP` reached the arbiter and a red gate
+ * `true` counted, so under `CI=1` a `SPECWARDEN_SKIP` reached CI and a red check
  * exited 0. Anything but empty, `false` or `0` is CI now. `GITHUB_ACTIONS` is read as the
  * reporter reads it — `true` — where ANY value used to count, `false` included.
  */
@@ -90,7 +91,7 @@ function builtInReporter(args: IParsedArgs, env: NodeJS.ProcessEnv, io: ICliIo):
 /**
  * `check` — the command the whole engine exists for, plus the two questions asked
  * ABOUT a run rather than by one: `--list` (what would be selected) and
- * `--relevance` (would this one gate run at all).
+ * `--relevance` (would this one check run at all).
  *
  * All three share the same selection inputs, which is why they live together: split
  * apart, a change to how a tier or an id is resolved has to be made three times, and
@@ -101,33 +102,31 @@ function builtInReporter(args: IParsedArgs, env: NodeJS.ProcessEnv, io: ICliIo):
  */
 export async function check(
   args: IParsedArgs,
-  config: IWardenConfig,
-  registry: CheckRegistry,
+  config: ISpecwardenConfig,
+  roster: CheckRoster,
   root: string,
   env: NodeJS.ProcessEnv,
   io: ICliIo,
 ): Promise<number> {
   // `--list` answers from the same selection a run uses — `--tier` with `--id` included —
   // and before any flag it does not use is validated: a query is not refused over a shard.
-  // `--json` is honoured; it printed the tab-separated list.
+  // `--json` is honoured — one document with its `version`; it printed the tab-separated list.
   if (args.list) {
     // An id that names nothing is refused here exactly as a run refuses it. It was dropped
     // in silence, so `--list --id typo` printed nothing and exited 0 — a listing that
     // could not tell a missing check from an empty selection.
-    const unknown = args.ids.filter((id) => registry.byId(id) === undefined);
+    const unknown = args.ids.filter((id) => roster.byId(id) === undefined);
     if (unknown.length > 0) {
-      const ids = registry.all().map((check) => check.id);
-      io.err(`unknown check id(s): ${unknown.map((id) => `${id}${didYouMean(id, ids)}`).join(', ')}
-`);
+      const ids = roster.all().map((check) => check.id);
+      io.err(refusal(`unknown check id(s): ${unknown.map((id) => `${id}${didYouMean(id, ids)}`).join(', ')}`));
       return 2;
     }
     let selected: readonly ICheck[];
     try {
-      selected = selectChecks(registry, { ids: args.ids, tier: args.tier });
+      selected = selectChecks(roster, { ids: args.ids, tier: args.tier });
     } catch (err) {
       if (!(err instanceof RunnerUsageError)) throw err;
-      io.err(`${err.message}
-`);
+      io.err(refusal(err.message));
       return 2;
     }
     if (args.json) {
@@ -138,8 +137,8 @@ export async function check(
         advisory: Boolean(c.advisory),
         exclusive: Boolean(c.exclusive),
       }));
-      io.out(`${JSON.stringify(rows)}
-`);
+      // One document, versioned like every other the command line prints.
+      io.out(`${JSON.stringify({ version: OUTPUT_VERSION, checks: rows })}\n`);
     } else
       for (const c of selected)
         io.out(`${c.id}	${c.title}
@@ -149,16 +148,16 @@ export async function check(
 
   const shardError = shardProblem(args.shard);
   if (shardError !== undefined) {
-    io.err(`${shardError}\n`);
+    io.err(refusal(shardError));
     return 2;
   }
   const jobsError = jobsProblem(args.jobs);
   if (jobsError !== undefined) {
-    io.err(`${jobsError}\n`);
+    io.err(refusal(jobsError));
     return 2;
   }
   if (args.reporter !== undefined && !REPORTERS.includes(args.reporter)) {
-    io.err(`unknown reporter "${args.reporter}" — expected one of: ${REPORTERS.join(', ')}\n`);
+    io.err(refusal(`unknown reporter "${args.reporter}" — expected one of: ${REPORTERS.join(', ')}`));
     return 2;
   }
 
@@ -181,7 +180,9 @@ export async function check(
   // was indistinguishable from a shallow clone. The environment's base stays fail-safe:
   // it is set once for a whole job, and the value is never printed.
   if (args.base !== undefined && !adapters.vcs.refExists(args.base)) {
-    io.err(`--base ${args.base} does not resolve to a commit here — name a branch, a tag or a commit that exists.\n`);
+    io.err(
+      refusal(`--base ${args.base} does not resolve to a commit here — name a branch, a tag or a commit that exists`),
+    );
     return 2;
   }
 
@@ -189,7 +190,7 @@ export async function check(
   // prose would corrupt. A consumer's own reporter is treated as one — its stdout is its own.
   const machine = config.reporter !== undefined || reporterName(args, env) !== 'tty';
   const reporter = config.reporter ? config.reporter({ json: args.json, out: io.out }) : builtInReporter(args, env, io);
-  const runner = new CheckRunner(registry, adapters, reporter);
+  const runner = new CheckRunner(roster, adapters, reporter);
 
   const runnerOptions = {
     tier: args.tier,
@@ -201,7 +202,7 @@ export async function check(
     tighten: args.tighten,
     ifRelevant: args.ifRelevant,
     // The flag wins over the config, and both are ignored by a writing run.
-    concurrency: args.jobs !== undefined ? Number(args.jobs) : config.concurrency,
+    jobs: args.jobs !== undefined ? Number(args.jobs) : config.jobs,
     sharedBuildInputs: config.sharedBuildInputs,
     fullRunTriggers: config.fullRunTriggers,
     denyCapabilities: config.denyCapabilities,
@@ -213,11 +214,11 @@ export async function check(
     base: env.SPECWARDEN_BASE,
   };
 
-  // `--relevance` answers "would this gate run?" and nothing else, so a workflow can
-  // skip an expensive setup step for a gate the diff cannot affect.
+  // `--relevance` answers "would this check run?" and nothing else, so a workflow can
+  // skip an expensive setup step for a check the diff cannot affect.
   if (args.relevance) {
     if (args.ids.length !== 1) {
-      io.err('--relevance requires exactly one --id\n');
+      io.err(refusal('--relevance answers for exactly one check — name one id'));
       return 2;
     }
     try {
@@ -225,7 +226,7 @@ export async function check(
       return 0;
     } catch (err) {
       if (err instanceof RunnerUsageError) {
-        io.err(`${err.message}\n`);
+        io.err(refusal(err.message));
         return 2;
       }
       throw err;
@@ -250,7 +251,7 @@ export async function check(
     return outcome.exitCode;
   } catch (err) {
     if (err instanceof RunnerUsageError) {
-      io.err(`${err.message}\n`);
+      io.err(refusal(err.message));
       return 2;
     }
     throw err;

@@ -12,7 +12,7 @@ const rule = (id: string, statement: string, over: Partial<IRule> = {}): IRule =
   id,
   statement,
   owner: 'AGENTS.md',
-  enforcement: { checkIds: [id] },
+  enforcement: { enforcedBy: [id] },
   ...over,
 });
 
@@ -20,7 +20,7 @@ const irreversible = (id: string, card: string): IRule =>
   rule(id, `declarative form of ${id}`, { irreversible: true, card });
 
 describe('generateConstraintCard', () => {
-  it('emits only the irreversible rules, in registry order', () => {
+  it('emits only the irreversible rules, in roster order', () => {
     const card = generateConstraintCard([
       irreversible('a', 'Never delete a volume'),
       rule('b', 'lint passes'), // not irreversible → excluded
@@ -59,7 +59,7 @@ describe('generateConstraintCard', () => {
     expect(() => generateConstraintCard(rules)).toThrow(/a, b/);
   });
 
-  it('is deterministic — an unchanged registry regenerates byte-identically', () => {
+  it('is deterministic — an unchanged roster regenerates byte-identically', () => {
     const rules = [irreversible('a', 'Never x'), irreversible('b', 'Never y')];
 
     expect(generateConstraintCard(rules)).toBe(generateConstraintCard(rules));

@@ -2,7 +2,7 @@ import type { ICheck } from '../check/check.model';
 
 /**
  * A plugin — a package that contributes DECLARATIONS: checks, and (as those gain
- * contracts) rules, perimeter rules, presets, instruments, reporters. It declares
+ * contracts) rules, perimeter policies, presets, instruments, reporters. It declares
  * WHAT to check; the engine owns HOW.
  *
  * The boundary is load-bearing: a plugin NEVER supplies a port adapter. The file
@@ -15,5 +15,5 @@ export interface IPlugin {
   readonly checks?: readonly ICheck[];
 }
 
-/** A plugin is usually a factory taking options — `nestjs({ modulesRoot })`. */
+/** A plugin is usually a factory taking options — `nestjs({ modulesDir })`. */
 export type TPluginFactory<O> = (options: O) => IPlugin;

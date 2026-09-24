@@ -1,6 +1,15 @@
-import { type ICheck, type IVerdict, buildCheck, checkOptions } from 'specwarden';
-import { type IDocCheckIdentity, optionsError } from '../_shared/identity/identity.model';
-import { DEFAULT_DOCS, nothingExamined } from '../_shared/nothing-examined/nothing-examined.util';
+import {
+  CheckOptionsError,
+  type ICheck,
+  type ICorpusFloor,
+  type IFinding,
+  type IModuleCheckDeclaration,
+  type TPathspecs,
+  buildCheck,
+  checkOptions,
+  thresholdOf,
+} from 'specwarden';
+import { DEFAULT_DOCS, DOCS_CORPUS_OPTIONS, corpusOf, debtVerdict, refusedCorpus } from '../_shared/corpus/corpus.util';
 
 /**
  * Documentation does not restate what the repository already owns — a count, or a bare
@@ -15,9 +24,9 @@ import { DEFAULT_DOCS, nothingExamined } from '../_shared/nothing-examined/nothi
  * WHAT IS EXEMPT, and why the exemptions are so specific. Three classes are legitimate and
  * each was found by the check's own false positives: a NORMATIVE threshold (a budget the
  * repository enforces, not an inventory it describes), a DATED measurement (a study that
- * says what was true on a day, which is the honest form), and a HEDGE ("about 70 gates" is
+ * says what was true on a day, which is the honest form), and a HEDGE ("about 70 checks" is
  * an order of magnitude, not a claim). Ordinals — "step 3", "§5" — are not counts at all,
- * and without that the check reports every numbered list in the corpus, which is how a gate
+ * and without that the check reports every numbered list in the corpus, which is how a check
  * gets ignored.
  *
  * THE SECOND HALF: a menu number written without the item's name. Measured over one
@@ -31,29 +40,31 @@ import { DEFAULT_DOCS, nothingExamined } from '../_shared/nothing-examined/nothi
  * items. None of those is a fact about the rule.
  */
 
-export interface IDocCountsOptions extends IDocCheckIdentity {
+export interface IDocCountsOptions extends IModuleCheckDeclaration {
   /** Nouns whose "how many" lives in the repository rather than in a document. Required,
    * and never empty: an empty list matches every number, not none. */
   readonly countableNouns: readonly string[];
-  /** git pathspec for the documents read. Default: `**\/*.md`. */
-  readonly docs?: string;
-  /** Paths where a frozen number is correct by construction — generated trees, studies,
-   * plans. Default: none. */
-  readonly skipped?: readonly RegExp[];
+  /** git pathspec(s) for the documents read. Default: `**\/*.md`. */
+  readonly docs?: TPathspecs;
+  /** Pathspecs where a frozen number is correct by construction — generated trees,
+   * studies, plans. Default: none. */
+  readonly except?: readonly string[];
+  /** How many documents a run must read for its verdict to count. Default: one. */
+  readonly corpus?: ICorpusFloor;
   /** Declared normative thresholds: a claim, and the paths where it is legitimate.
    * Default: none. */
   readonly allowlist?: (read: (path: string) => string | undefined) => readonly IAllowedClaim[];
-  /** How many count claims are tolerated. Only ever lowered. */
-  readonly countRatchet?: number;
   /** The menu half. Omit it entirely in a repository that has no such menu. */
   readonly menu?: IMenuOptions;
   /** Words that turn a count into an estimate. Replaces `DEFAULT_HEDGE` — a regex
    * SOURCE fragment, not a RegExp, because it is spliced into a larger pattern. */
   readonly hedge?: string;
-  /** Words that make a number a reference rather than a claim ("step 3"). */
+  /** Words that make a number a reference rather than a claim ("step 3"). Replaces
+   * `DEFAULT_ORDINAL_LEAD`. */
   readonly ordinalLead?: string;
-  /** How a number is written, including this locale's digit grouping. */
-  readonly numberPattern?: string;
+  /** How a number is written, including this locale's digit grouping. Replaces
+   * `DEFAULT_NUMBER`. */
+  readonly number?: string;
   /** Marks a figure as dated, and therefore honest. Replaces `DEFAULT_DATED`. */
   readonly dated?: RegExp;
 }
@@ -72,7 +83,6 @@ export interface IMenuOptions {
   readonly reference: RegExp;
   /** Matches a dispatch arm, capturing the number — two arms mean one is unreachable. */
   readonly dispatch: RegExp;
-  readonly ordinalRatchet?: number;
 }
 
 /**
@@ -102,7 +112,7 @@ export const DEFAULT_DATED = /\b20\d\d-\d\d-\d\d\b|\bmeasured\b|\bre-measured\b|
  * an `exec` loop over one never advances — a menu `reference` written without `/g` hung
  * the whole run on the first line that matched. `asStateless` for a pattern that is TESTED: a
  * `/g` regex keeps `lastIndex` between calls, so the second dated line of a document read
- * as undated and every other skipped path was scanned.
+ * as undated.
  */
 const asGlobal = (re: RegExp): RegExp => (re.global ? re : new RegExp(re.source, `${re.flags}g`));
 const asStateless = (re: RegExp): RegExp =>
@@ -118,13 +128,13 @@ export interface ICountHit {
 export interface IClaimGrammar {
   readonly hedge?: string;
   readonly ordinalLead?: string;
-  readonly numberPattern?: string;
+  readonly number?: string;
 }
 
 export function claimPattern(countableNouns: readonly string[], grammar: IClaimGrammar = {}): RegExp {
   const ordinalLead = grammar.ordinalLead ?? DEFAULT_ORDINAL_LEAD;
   const hedge = grammar.hedge ?? DEFAULT_HEDGE;
-  const numberPattern = grammar.numberPattern ?? DEFAULT_NUMBER;
+  const numberPattern = grammar.number ?? DEFAULT_NUMBER;
   // The `of` lookbehind is the RATIO guard: in "269 of 510 files" the second number is a
   // denominator. It must be a lookbehind rather than a group, because the engine reaches the
   // second number first and would otherwise report it. `(?<!\d:)` excludes "1:1 tables",
@@ -142,18 +152,15 @@ export function scanCounts(input: {
   readonly files: readonly string[];
   readonly read: (file: string) => string | undefined;
   readonly allowed: readonly { readonly match: RegExp; readonly paths: readonly string[] }[];
-  readonly skipped: readonly RegExp[];
   readonly claim: RegExp;
   /** What marks a figure as dated, and so exempt. Defaults to `DEFAULT_DATED`. */
   readonly dated?: RegExp;
 }): ICountHit[] {
   const hits: ICountHit[] = [];
   const dated = asStateless(input.dated ?? DEFAULT_DATED);
-  const skipped = input.skipped.map(asStateless);
   const claim = asGlobal(input.claim);
 
   for (const file of input.files) {
-    if (skipped.some((re) => re.test(file))) continue;
     const source = input.read(file);
     if (source === undefined) continue;
 
@@ -209,22 +216,25 @@ export function menuLabels(source: string, item: RegExp): Map<string, string> {
  *
  * The LISTING is deliberately not checked. One arm may render different labels in different
  * contexts — a prod branch and an off-prod branch of one `if` — and the operator sees
- * exactly one. Flagging that makes a gate somebody switches off, which takes the real
+ * exactly one. Flagging that makes a check somebody switches off, which takes the real
  * finding with it.
  */
 export function duplicateMenuNumbers(source: string, dispatch: RegExp): string[] {
-  const problems: string[] = [];
-  const seen = new Map<string, number>();
+  return duplicateArms(source, dispatch)
+    .map((arm) => `option ${arm.number} has ${arm.arms} dispatch arms — only the first can run`)
+    .sort();
+}
 
+/** Every number claimed by more than one arm, with the line of the first arm that can never run. */
+function duplicateArms(source: string, dispatch: RegExp): { number: string; arms: number; line: number }[] {
+  const seen = new Map<string, { arms: number; line: number }>();
   for (const match of source.matchAll(asGlobal(dispatch))) {
     const number = match[1] as string;
-    seen.set(number, (seen.get(number) ?? 0) + 1);
+    const line = source.slice(0, match.index).split('\n').length;
+    const known = seen.get(number);
+    seen.set(number, known ? { arms: known.arms + 1, line: known.arms === 1 ? line : known.line } : { arms: 1, line });
   }
-  for (const [number, n] of seen) {
-    if (n > 1) problems.push(`option ${number} has ${n} dispatch arms — only the first can run`);
-  }
-
-  return problems.sort();
+  return [...seen].filter(([, arm]) => arm.arms > 1).map(([number, arm]) => ({ number, ...arm }));
 }
 
 export interface IOrdinalHit {
@@ -248,15 +258,12 @@ export function scanOrdinals(input: {
   readonly files: readonly string[];
   readonly read: (file: string) => string | undefined;
   readonly labels: ReadonlyMap<string, string>;
-  readonly skipped: readonly RegExp[];
   readonly reference: RegExp;
 }): IOrdinalHit[] {
   const hits: IOrdinalHit[] = [];
-  const skipped = input.skipped.map(asStateless);
   const reference = asGlobal(input.reference);
 
   for (const file of input.files) {
-    if (skipped.some((re) => re.test(file))) continue;
     const source = input.read(file);
     if (source === undefined) continue;
 
@@ -286,54 +293,76 @@ export function scanOrdinals(input: {
   return hits;
 }
 
+/**
+ * THE RATCHET, and why there is one. Two classes of finding are debt a repository may
+ * carry while it pays it down: a restated count, and a menu number written without its
+ * label. They were two ratchets — `countRatchet` and `menu.ordinalRatchet` — and neither
+ * was the engine's, so the stored threshold never reached either and `--tighten` could
+ * not move them. Now `ratchet` counts both together: each is prose repeating what a file
+ * the repository owns already says. A number the menu does not have at all, two dispatch
+ * arms for one number, and a menu that cannot be read are never tolerated.
+ */
 export function docCounts(options: IDocCountsOptions): ICheck {
   checkOptions('docCounts', options, {
-    countableNouns: { kind: 'array', required: true },
-    docs: { kind: 'string' },
-    skipped: { kind: 'array' },
+    ...DOCS_CORPUS_OPTIONS,
+    countableNouns: { kind: 'array', required: true, nonEmpty: true },
     allowlist: { kind: 'function' },
-    countRatchet: { kind: 'number' },
     menu: { kind: 'object' },
     hedge: { kind: 'string' },
     ordinalLead: { kind: 'string' },
-    numberPattern: { kind: 'string' },
+    number: { kind: 'string' },
     dated: { kind: 'regexp' },
   });
-  // EMPTY IS NOT INERT. The nouns are an alternation, and an alternation of nothing matches
-  // the empty string — so `[]` reported every number followed by a space, the opposite of
-  // "nothing to look for", which is what the scaffolds' comment promised.
-  if (options.countableNouns.length === 0 || options.countableNouns.includes('')) {
-    throw optionsError(
-      'docCounts',
-      options.id,
-      '`countableNouns` is empty — an empty list matches every number, not none. ' +
-        "Name the nouns whose count the repository owns, e.g. ['services', 'modules'].",
+  // The menu's own four keys, checked as the top level is: a key inside it was never read,
+  // so a misspelled pattern — or a bar written there — was dropped without a word.
+  if (options.menu !== undefined) {
+    checkOptions(
+      'docCounts `menu`',
+      options.menu,
+      {
+        source: { kind: 'string', required: true, nonEmpty: true },
+        item: { kind: 'regexp', required: true },
+        reference: { kind: 'regexp', required: true },
+        dispatch: { kind: 'regexp', required: true },
+      },
+      { identity: false },
     );
   }
-  const countRatchet = options.countRatchet ?? 0;
+  // EMPTY IS NOT INERT. The nouns are an alternation, and an alternation of nothing matches
+  // the empty string — so `[]` reported every number followed by a space, the opposite of
+  // "nothing to look for", which is what the scaffolds' comment promised. `nonEmpty`
+  // refuses the list; an empty string inside it widens the match the same way.
+  if (options.countableNouns.includes('')) {
+    throw new CheckOptionsError(
+      `docCounts${options.id ? ` '${options.id}'` : ''}: \`countableNouns\` holds an empty string, which matches every ` +
+        "number, not none. Name the nouns whose count the repository owns, e.g. ['services', 'modules'].",
+    );
+  }
   const docs = options.docs ?? DEFAULT_DOCS;
-  const skipped = (options.skipped ?? []).map(asStateless);
   const allowlist = options.allowlist ?? ((): readonly IAllowedClaim[] => []);
 
   return buildCheck(
     {
       ...options,
+      id: options.id ?? 'doc-counts',
       rule: options.rule ?? {
         statement: 'a count the documentation states is the count the code has',
         owner: '@specwarden/docs',
         implied: true,
       },
-      tier: options.tier ?? 'fast',
       zone: 'product',
     },
     ['read'],
-    (ctx): IVerdict => {
+    (ctx, self) => {
       const read = (file: string): string | undefined => ctx.files.tryRead(file);
-      // What is READ, after the skipped trees. None is a failure like every other check in
-      // this package: a count check over no documents finds no restated count, forever.
-      const files = ctx.vcs.trackedFiles(docs).filter((file) => !skipped.some((re) => re.test(file)));
-      if (files.length === 0) return nothingExamined(options.id, docs);
-      const failures: string[] = [];
+      // What is READ, after `except`. Too few is a failure like every other check in this
+      // package: a count check over no documents finds no restated count, forever.
+      const corpus = corpusOf(ctx.vcs, docs, options.except);
+      const short = refusedCorpus(self.id, docs, corpus, options.corpus);
+      if (short) return short;
+      const files = corpus.files;
+      const hard: IFinding[] = [];
+      const soft: IFinding[] = [];
 
       const allowed = allowlist(read).map((entry) => ({
         paths: entry.paths,
@@ -344,55 +373,67 @@ export function docCounts(options: IDocCountsOptions): ICheck {
         files,
         read,
         allowed,
-        skipped: [],
         claim: claimPattern(options.countableNouns, {
           hedge: options.hedge,
           ordinalLead: options.ordinalLead,
-          numberPattern: options.numberPattern,
+          number: options.number,
         }),
         dated: options.dated,
       });
-
-      if (hits.length > countRatchet) {
-        for (const hit of hits) failures.push(`${hit.file}:${hit.line}  "${hit.claim}"  ${hit.text}`);
+      for (const hit of hits) {
+        soft.push({
+          severity: 'error',
+          file: hit.file,
+          line: hit.line,
+          message: `${hit.file}:${hit.line} restates "${hit.claim}" — a count the repository owns goes stale in prose. Say how to count it, date it, or hedge it.`,
+        });
       }
 
       if (options.menu) {
-        const menuSource = read(options.menu.source);
+        const { source } = options.menu;
+        const menuSource = read(source);
         if (menuSource === undefined) {
-          failures.push(`${options.menu.source} cannot be read — the menu half of this check compared nothing.`);
+          hard.push({
+            severity: 'error',
+            file: source,
+            message: `${source} cannot be read, so the menu half of this check compared nothing. Point \`menu.source\` at the file whose items are the menu.`,
+          });
         } else {
-          failures.push(...duplicateMenuNumbers(menuSource, options.menu.dispatch));
+          for (const arm of duplicateArms(menuSource, options.menu.dispatch)) {
+            hard.push({
+              severity: 'error',
+              file: source,
+              line: arm.line,
+              message: `${source}:${arm.line} is a second dispatch arm for option ${arm.number} (${arm.arms} in all), and only the first can run. Renumber one of them.`,
+            });
+          }
 
           const labels = menuLabels(menuSource, options.menu.item);
-          const ordinals = scanOrdinals({
-            files,
-            read,
-            labels,
-            skipped: [],
-            reference: options.menu.reference,
-          });
-
-          for (const hit of ordinals.filter((h) => h.kind === 'dead')) {
-            failures.push(`${hit.file}:${hit.line}  option ${hit.number}  ${hit.text}`);
-          }
-          if (ordinals.length > (options.menu.ordinalRatchet ?? 0)) {
-            for (const hit of ordinals.filter((h) => h.kind !== 'dead')) {
-              failures.push(`${hit.file}:${hit.line}  option ${hit.number} = "${hit.label}"  ||  ${hit.text}`);
+          for (const hit of scanOrdinals({ files, read, labels, reference: options.menu.reference })) {
+            if (hit.kind === 'dead') {
+              hard.push({
+                severity: 'error',
+                file: hit.file,
+                line: hit.line,
+                message: `${hit.file}:${hit.line} names option ${hit.number}, which the menu in ${source} does not have. Point it at the item it meant, by number and label.`,
+              });
+            } else {
+              soft.push({
+                severity: 'error',
+                file: hit.file,
+                line: hit.line,
+                message: `${hit.file}:${hit.line} names option ${hit.number} without its label, "${hit.label}" — a renumbered menu would point it elsewhere. Write the label beside the number.`,
+              });
             }
           }
         }
       }
 
-      return failures.length > 0
-        ? {
-            ok: false,
-            findings: failures.map((message) => ({ severity: 'error', message, ruleId: options.id })),
-          }
-        : {
-            ok: true,
-            findings: [{ severity: 'info', message: `✓ ${files.length} document(s), no restated counts` }],
-          };
+      return debtVerdict({ hard, soft }, thresholdOf(ctx, self), {
+        id: self.id,
+        examined: files.length,
+        unit: 'document',
+      });
     },
   );
 }

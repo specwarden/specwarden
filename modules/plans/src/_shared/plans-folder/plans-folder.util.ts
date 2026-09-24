@@ -43,5 +43,5 @@ export function plansFolder(files: IFileSource, dir: string, ruleId: string, opt
 /** The line a folder holding no plan yet reports — a pass, and says what it saw. */
 export const nothingInFlight = (dir: string): IFinding => ({
   severity: 'info',
-  message: `no plan in ${dir} — nothing in flight`,
+  message: `no plan in ${dir} — nothing in flight.`,
 });

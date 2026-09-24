@@ -38,7 +38,7 @@ export function generateLlmsIndex() {
   const lines = [
     '# specwarden',
     '',
-    '> A quality-gate engine. A repository declares its rules; the warden proves which',
+    '> A quality-gate engine. A repository declares its rules; specwarden proves which',
     '> hold — and the failure it is built against is the one nobody sees: a check that',
     '> cannot fail reports success.',
     `> ${PACKAGES.length} packages, versioned independently; each document names the version it describes.`,
@@ -63,6 +63,9 @@ export function generateLlmsIndex() {
     '',
     link(`${skillDir(core)}/SKILL.md`, 'writing, running and reasoning about a check'),
     ...(has(`${pkgDir(core)}/GUIDE.md`) ? [link(`${pkgDir(core)}/GUIDE.md`, 'the engine end to end')] : []),
+    ...(has(`${pkgDir(core)}/GLOSSARY.md`)
+      ? [link(`${pkgDir(core)}/GLOSSARY.md`, 'every term the product uses, defined once')]
+      : []),
     '',
     '## Packages',
     '',

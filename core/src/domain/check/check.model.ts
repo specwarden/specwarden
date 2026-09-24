@@ -21,15 +21,15 @@ export interface ICheckContext {
    * its work (a test suite); `undefined` for an unsharded run. Most checks ignore it. */
   readonly shard?: string;
   /** The stored ratchet threshold for this check (from its ratchet file), or
-   * `undefined` when it has no ratchet. A `down` ratchet holds while the measured
+   * `undefined` when none is stored. A `down` ratchet holds while the measured
    * count does not EXCEED this; an `up` ratchet holds while the measured score does
-   * not FALL BELOW it. */
-  readonly ratchet?: number;
+   * not FALL BELOW it. With nothing stored, the check's declared ceiling applies. */
+  readonly threshold?: number;
   /**
    * The run's manifest — every registered check's identity, this one included.
    *
    * For the checks that audit the roster itself: a CI-coverage check reconciling jobs
-   * against gates, a plan check validating the ids an acceptance names. They used to
+   * against checks, a plan check validating the ids an acceptance names. They used to
    * be handed the list by the consumer, which meant the consumer BUILT the list —
    * seventy lines of imports and a map — and any check the consumer forgot to add was
    * invisible to the very audit meant to catch it. Read through the engine, the list
@@ -106,12 +106,12 @@ export interface ICheckMeta {
   readonly timeoutSec?: number;
   /**
    * When set, the check's measurement is ratcheted: its threshold lives in a file
-   * (`<consumerDir>/ratchets/<id>.json`), is read into `ICheckContext.ratchet`, and
+   * (`<consumerDir>/ratchets/<id>.json`), is read into `ICheckContext.threshold`, and
    * `specwarden check --tighten` walks it towards the target.
    *
    * `direction` says which way "towards the target" runs. It defaults to `down`,
-   * the debt counter — but a floor that only rises is the same mechanism, and while
-   * it could not be declared, a floor — a coverage number, a mutation score — had to be
+   * the debt counter — but a score that only rises is the same mechanism, and while
+   * it could not be declared, a rising score — a coverage number, a mutation score — had to be
    * kept OUTSIDE the ratchet system entirely, reading and validating its own JSON by
    * hand, where the at-rest audit that catches a hand-edited threshold never reaches it.
    *
@@ -131,11 +131,11 @@ export interface ICheckMeta {
    *
    * The rule register and the check roster are two descriptions of one fact, joined
    * only by a string id. That is the shape this engine already refused once for the
-   * gate list: a hand-maintained list beside a tree that the engine can read, kept in
+   * check list: a hand-maintained list beside a tree that the engine can read, kept in
    * step by whoever remembers. Most rules in a register name exactly one check, and
    * many name a check whose id is their own.
    *
-   * A rule declared here joins the register with `enforcement: { checkIds: [<this
+   * A rule declared here joins the register with `enforcement: { enforcedBy: [<this
    * check>] }` and an id defaulting to the check's own. Rules that belong to no check
    * — the ones declared not mechanizable, and the enforcers that are not checks —
    * stay in the register, which is the only place they can live.

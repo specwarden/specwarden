@@ -14,8 +14,8 @@ export const docCountsExamplePart = (ctx: ITemplateContext): IPart => ({
       path: 'checks/docs/doc-counts.check.mjs.example',
       body: `${header(
         '`doc-counts` — a bare count in prose is a claim, and claims rot: "seven services" beside nine.',
-        `OFF until \`countableNouns\` names what THIS repository owns the count of — the three below
-are a guess. Its grammar is English: \`hedge\`, \`ordinalLead\`, \`numberPattern\`, \`dated\` replace it.
+        `Switched off until \`countableNouns\` names what THIS repository owns the count of — the three
+below are a guess. Its grammar is English: \`hedge\`, \`ordinalLead\`, \`number\`, \`dated\` replace it.
 ${switchOn('doc-counts')}`,
       )}
 import { docCounts } from '@specwarden/docs';

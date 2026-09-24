@@ -1,8 +1,8 @@
 # @specwarden/template-node-ts
 
-⚒ **template** — An ordinary TypeScript repository.
+⚒ **template** — An ordinary TypeScript repository — credential scan, doc paths and symbols, lint and tests.
 
-The smallest tree worth having on day one: documentation paths, a credential scan, and the harness auditing itself.
+The smallest tree worth having on day one: a credential scan, documentation paths, a symbol check as an example, and the linter and test suite wrapped where the manifest already has them.
 
 ## What a template is
 
@@ -11,7 +11,7 @@ A starting tree for one kind of repository, so day one is one command rather tha
 ## Install
 
 ```bash
-npm install @specwarden/template-node-ts specwarden
+pnpm add -D specwarden @specwarden/template-node-ts @specwarden/docs @specwarden/security
 ```
 
 It depends on [`specwarden`](https://github.com/specwarden/specwarden/tree/main/core#readme), [`@specwarden/scaffold-parts`](https://github.com/specwarden/specwarden/tree/main/templates/_parts#readme), [`@specwarden/docs`](https://github.com/specwarden/specwarden/tree/main/modules/docs#readme), [`@specwarden/security`](https://github.com/specwarden/specwarden/tree/main/modules/security#readme).

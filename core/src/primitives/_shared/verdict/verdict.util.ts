@@ -1,4 +1,11 @@
-import { type IFinding, type IVerdict, satisfiesRatchet } from '../../../domain';
+import {
+  type ICheck,
+  type ICheckContext,
+  type IFinding,
+  type IVerdict,
+  type TRatchetDirection,
+  satisfiesRatchet,
+} from '../../../domain';
 
 /**
  * Frame a verdict so a check that PASSES but still carries `error`-severity findings
@@ -26,8 +33,9 @@ export function frameTolerated(ok: boolean, findings: readonly IFinding[], ratch
 }
 
 /**
- * A verdict from a finding list under an inline ratchet: it holds while the count
- * of ERROR findings does not exceed `ratchet` (default 0, i.e. strict). The ratchet
+ * A verdict from a finding list under a ratchet: it holds while the count of ERROR
+ * findings does not exceed the threshold (default 0, i.e. strict) — or, for an `up`
+ * ratchet, does not fall below it. The ratchet
  * is how a rule is armed against a live repository — set to the current count of
  * violations, it passes today and fails on any increase. Info/warning findings
  * never fail it. Delegates to `frameTolerated` so a tolerated pass is framed.
@@ -39,8 +47,29 @@ export function frameTolerated(ok: boolean, findings: readonly IFinding[], ratch
  * channel to the ratchet store, which is exactly what three checks did before this
  * field existed, and their thresholds would have been reset to zero for it.
  */
-export function verdictFrom(findings: readonly IFinding[], ratchet = 0): IVerdict {
+export function verdictFrom(findings: readonly IFinding[], ratchet: number | IThreshold = 0): IVerdict {
+  const { threshold, direction = 'down' } = typeof ratchet === 'number' ? { threshold: ratchet } : ratchet;
   const errors = findings.filter((f) => f.severity === 'error').length;
-  const framed = frameTolerated(satisfiesRatchet(errors, ratchet), findings, `ratchet ${ratchet}`);
-  return { ...framed, ratchet: { value: errors } };
+  // The direction is honoured here, where it used to be dropped: an `up` ratchet read as a
+  // debt ceiling passed any count at or BELOW its bar — a score that fell was a green run.
+  const framed = frameTolerated(satisfiesRatchet(errors, threshold, direction), findings, `ratchet ${threshold}`);
+  return { ...framed, measured: errors };
+}
+
+/** The bar a run is held to, and which way it may move. */
+export interface IThreshold {
+  readonly threshold: number;
+  readonly direction?: TRatchetDirection;
+}
+
+/**
+ * The bar this run is held to: the stored threshold when there is one, else the ceiling
+ * the check declares, else strict (0) — and the direction the check declares.
+ *
+ * The one reading every body shares. Each wrote `ctx.ratchet ?? options.ratchet` for
+ * itself, which read the inline ceiling off the options the body closed over and never
+ * the direction at all.
+ */
+export function thresholdOf(ctx: Pick<ICheckContext, 'threshold'>, check: Pick<ICheck, 'ratchet'>): IThreshold {
+  return { threshold: ctx.threshold ?? check.ratchet?.ceiling ?? 0, direction: check.ratchet?.direction ?? 'down' };
 }

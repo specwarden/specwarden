@@ -43,13 +43,13 @@ describe('TtyReporter', () => {
     expect(out).toContain('💡 do the thing');
   });
 
-  it('the run summary is red and names both counts when a gate failed', () => {
+  it('the run summary is red and names both counts when a check failed', () => {
     let out = '';
     const r = new TtyReporter((t) => (out += t));
     const pass = result({ meta: meta('a') });
     const fail = result({ meta: meta('b'), verdict: { ok: false, findings: [] } });
     r.runFinished([pass, fail], 500);
-    expect(out).toContain('❌ 1 gate(s) FAILED, 1 passed in 0.5s');
+    expect(out).toContain('❌ 1 check(s) FAILED, 1 passed in 0.5s');
     expect(out).not.toContain('✅');
   });
 
@@ -60,7 +60,7 @@ describe('TtyReporter', () => {
     const warn = result({ meta: meta('orphan', { advisory: true }), verdict: { ok: false, findings: [] } });
     const skip = result({ meta: meta('c'), skipped: 'not-relevant' });
     r.runFinished([pass, warn, skip], 500);
-    expect(out).toContain('✅ 1 gate(s) passed (1 warned, 1 skipped) in 0.5s');
+    expect(out).toContain('✅ 1 check(s) passed (1 warned, 1 skipped) in 0.5s');
   });
 });
 

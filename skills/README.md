@@ -9,13 +9,14 @@ in its own folder as `SKILL.md`.
 | [`checks/`](./checks/SKILL.md)               | How a check is written, and the declarations that stop it going silent |
 | [`testing/`](./testing/SKILL.md)             | The six kinds of test, what each must assert, and the coverage ratchet |
 | [`documentation/`](./documentation/SKILL.md) | Comments, READMEs, guides: what each carries and what it must not      |
-| [`gates/`](./gates/SKILL.md)                 | How this repository checks itself, and what makes a gate worth running |
+| [`gates/`](./gates/SKILL.md)                 | How this repository checks itself, and what makes a check worth running |
 | [`publishing/`](./publishing/SKILL.md)       | Versions, changesets, what ships in a tarball, how a release is cut    |
 | [`skills/`](./skills/SKILL.md)               | The three things called a skill here, and which one ships              |
 | [`playgrounds/`](./playgrounds/SKILL.md)     | One playground per package and template, one at the root, and why      |
 | [`plans/`](./plans/SKILL.md)                 | Where unfinished work is written down, its shape, and when it dies     |
 | [`typescript/`](./typescript/SKILL.md)       | The language settings in force, and what each one forbids              |
 | [`commits/`](./commits/SKILL.md)             | What the log has to carry that the diff cannot                         |
+| [`vocabulary/`](./vocabulary/SKILL.md)       | One name per concept: the glossary is the contract, names inherit it   |
 
 ## Versus a package README
 

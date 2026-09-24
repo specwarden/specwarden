@@ -6,4 +6,4 @@
  * resolves to the proxy itself, `local` at the top level of a deploy script. All three
  * are invisible in review and decidable from the files.
  */
-export { ops } from './ops/ops.template';
+export { opsTemplate } from './ops/ops.template';

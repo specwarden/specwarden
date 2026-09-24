@@ -64,11 +64,11 @@ export class ConstraintCardMissingLineError extends Error {
 }
 
 /**
- * Generate the constraint card from the rule registry — the rules marked
+ * Generate the constraint card from the rule register — the rules marked
  * `irreversible`.
  *
  * WHAT THIS ENDS. The same prohibitions live in three places: the rule register, the
- * enforcement that implements them (a perimeter rule, a check), and the card that is
+ * enforcement that implements them (a perimeter policy, a check), and the card that is
  * re-injected into every session. Three registers of one fact, and only the first two
  * had anything reconciling them. Unreconciled, they drift in BOTH directions: a rule the
  * register marks irreversible never reaches the card, and a card line survives with no
@@ -77,8 +77,8 @@ export class ConstraintCardMissingLineError extends Error {
  * The card is the one of the three that is read while acting. It is also the only one
  * nothing was generating.
  *
- * Deterministic: rules are emitted in registry order, so regenerating an unchanged
- * registry produces a byte-identical card (a regenerable check depends on this).
+ * Deterministic: rules are emitted in roster order, so regenerating an unchanged
+ * roster produces a byte-identical card (a regenerable check depends on this).
  */
 export function generateConstraintCard(rules: readonly IRule[], options: IConstraintCardOptions = {}): string {
   const title = options.title ?? 'Irreversible constraints — re-injected after every compaction';

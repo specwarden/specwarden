@@ -1,6 +1,6 @@
 # @specwarden/template-ops
 
-⚒ **template** — Infrastructure — env files, proxy upstreams, shell scoping, runbooks.
+⚒ **template** — Infrastructure — env pairing, proxy upstreams, shell scoping, runbooks — credential scan and documentation paths always on.
 
 For a repository whose product is the operation of something else.
 
@@ -11,7 +11,7 @@ A starting tree for one kind of repository, so day one is one command rather tha
 ## Install
 
 ```bash
-npm install @specwarden/template-ops specwarden
+pnpm add -D specwarden @specwarden/template-ops @specwarden/security @specwarden/docs @specwarden/ops
 ```
 
 It depends on [`specwarden`](https://github.com/specwarden/specwarden/tree/main/core#readme), [`@specwarden/scaffold-parts`](https://github.com/specwarden/specwarden/tree/main/templates/_parts#readme), [`@specwarden/security`](https://github.com/specwarden/specwarden/tree/main/modules/security#readme), [`@specwarden/docs`](https://github.com/specwarden/specwarden/tree/main/modules/docs#readme), [`@specwarden/ops`](https://github.com/specwarden/specwarden/tree/main/modules/ops#readme).

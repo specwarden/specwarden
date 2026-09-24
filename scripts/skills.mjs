@@ -155,6 +155,17 @@ export function generatedSkillFiles() {
         `<!-- GENERATED from ${pkgDir(pkg)}/GUIDE.md. Edit the guide. -->\n\n${absoluteLinks(guide, pkgDir(pkg))}`,
       );
     }
+
+    // The glossary travels the same way, for the same reason: an agent in somebody else's
+    // repository reads the words this repository is written in, not a paraphrase of them.
+    const glossaryPath = join(ROOT, pkgDir(pkg), 'GLOSSARY.md');
+    if (existsSync(glossaryPath)) {
+      const glossary = readFileSync(glossaryPath, 'utf8');
+      out.set(
+        `${skillDir(pkg)}/glossary.md`,
+        `<!-- GENERATED from ${pkgDir(pkg)}/GLOSSARY.md. Edit the glossary. -->\n\n${absoluteLinks(glossary, pkgDir(pkg))}`,
+      );
+    }
   }
 
   out.set(MARKETPLACE_PATH, `${JSON.stringify(marketplace(), null, 2)}\n`);

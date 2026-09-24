@@ -4,10 +4,10 @@ This repository's own checks and rules. The engine is the package; everything he
 
 ```
 .specwarden/
-  warden.config.mjs   the entry — only what the tree cannot say for itself
-  rules.mjs           the rules no single check states, and each example's rule, commented out
-  README.md           this file
-  checks/             one file per check, by family; the engine discovers every *.check.mjs
+  config.mjs   the entry — only what the tree cannot say for itself
+  rules.mjs    the rules no single check states, and each example's rule, commented out
+  README.md    this file
+  checks/      one file per check, by family; the engine discovers every *.check.mjs
 ```
 
 A check states the rule it enforces (`rule: '…'`), and its file owns that rule.
