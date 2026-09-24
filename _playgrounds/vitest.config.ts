@@ -11,6 +11,8 @@ export default defineConfig({
   test: {
     include: ['*.spec.ts', 'journeys/*.spec.ts'],
     environment: 'node',
+    // A scene is a laptop unless it says it is CI: the runner's own variables are removed.
+    setupFiles: ['./laptop.setup.ts'],
     // The CLI scenes spawn the engine over a scratch repository: seconds, not milliseconds.
     testTimeout: 120_000,
     // A `beforeAll` runs those scenes too — `cli.spec.ts` runs two whole-workspace scenes in
